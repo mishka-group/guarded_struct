@@ -7,6 +7,67 @@ The creation of this macro will allow you to build `Structs` that provide you w
 3. Constructor
 4. It provides the capacity to operate in a nested style simultaneously.
 
+## Example:
+
+```elixir
+defmodule ConditionalFieldComplexTest do
+  use GuardedStruct
+  alias ConditionalFieldValidatorTestValidators, as: VAL
+
+  guardedstruct do
+    field(:provider, String.t())
+
+    sub_field(:profile, struct()) do
+      field(:name, String.t(), enforce: true)
+      field(:family, String.t(), enforce: true)
+
+      conditional_field(:address, any()) do
+        field(:address, String.t(), hint: "address1", validator: {VAL, :is_string_data})
+
+        sub_field(:address, struct(), hint: "address2", validator: {VAL, :is_map_data}) do
+          field(:location, String.t(), enforce: true)
+          field(:text_location, String.t(), enforce: true)
+        end
+
+        sub_field(:address, struct(), hint: "address3", validator: {VAL, :is_map_data}) do
+          field(:location, String.t(), enforce: true, derive: "validate(string, location)")
+          field(:text_location, String.t(), enforce: true)
+          field(:email, String.t(), enforce: true)
+        end
+      end
+    end
+
+    conditional_field(:product, any()) do
+      field(:product, String.t(), hint: "product1", validator: {VAL, :is_string_data})
+
+      sub_field(:product, struct(), hint: "product2", validator: {VAL, :is_map_data}) do
+        field(:name, String.t(), enforce: true)
+        field(:price, integer(), enforce: true)
+
+        sub_field(:information, struct()) do
+          field(:creator, String.t(), enforce: true)
+          field(:company, String.t(), enforce: true)
+
+          conditional_field(:inventory, integer() | struct(), enforce: true) do
+            field(:inventory, integer(),
+              hint: "inventory1",
+              validator: {VAL, :is_int_data},
+              derive: "validate(integer, max_len=33)"
+            )
+
+            sub_field(:inventory, struct(), hint: "inventory2", validator: {VAL, :is_map_data}) do
+              field(:count, integer(), enforce: true)
+              field(:expiration, integer(), enforce: true)
+            end
+          end
+        end
+      end
+    end
+  end
+end
+```
+
+
 Suppose you are going to collect a number of pieces of information from the user, and before doing anything else, you are going to sanitize them.
 After that, you are going to validate each piece of data, and if there are no issues, you will either display it in a proper output or save it somewhere else.
 All of the characteristics that are associated with this macro revolve around cleaning and validating the data.
