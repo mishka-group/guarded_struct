@@ -122,4 +122,44 @@ end
 
 
 
-The docs can be found at https://hexdocs.pm/guarded_struct.
+> The docs can be found at https://hexdocs.pm/guarded_struct.
+
+
+---
+
+# Donate
+
+If the project was useful for you, the only way you can donate to me is the following ways
+
+| **BTC**                                                                                                                            | **ETH**                                                                                                                            | **DOGE**                                                                                                                           | **TRX**                                                                                                                            |
+| ---------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| <img src="https://mishka.tools/images/donate/BTC.png" width="200"> | <img src="https://mishka.tools/images/donate/ETH.png" width="200"> | <img src="https://mishka.tools/images/donate/DOGE.png" width="200"> | <img src="https://mishka.tools/images/donate/TRX.png" width="200"> |
+
+<details>
+  <summary>Donate addresses</summary>
+
+**BTC**:‌
+
+```
+bc1q24pmrpn8v9dddgpg3vw9nld6hl9n5dkw5zkf2c
+```
+
+**ETH**:
+
+```
+0xD99feB9db83245dE8B9D23052aa8e62feedE764D
+```
+
+**DOGE**:
+
+```
+DGGT5PfoQsbz3H77sdJ1msfqzfV63Q3nyH
+```
+
+**TRX**:
+
+```
+TBamHas3wAxSEvtBcWKuT3zphckZo88puz
+```
+
+</details>
