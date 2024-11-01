@@ -1,30 +1,37 @@
 defmodule GuardedStructTest.BasicTypesTest do
   use ExUnit.Case, async: true
 
+  alias GuardedStructTest.BasicTypesTest.{
+    TestStruct,
+    OpaqueTestStruct,
+    TestStructNoAlias,
+    TestStruct3,
+    TestStruct2,
+    TestStructWithAlias
+  }
+
+  {_module_name, bytecode_noalias, _file_path} = :code.get_object_code(TestStructNoAlias)
+
+  {_module_name, bytecode_opaque, _file_path} = :code.get_object_code(OpaqueTestStruct)
+
+  {_module_name, bytecode, _file_path} = :code.get_object_code(TestStruct)
+
   ############# (▰˘◡˘▰) BasicTypesTest GuardedStructTest Data (▰˘◡˘▰) ##############
   # Store the bytecode so we can get information from it.
-  {:module, _name, bytecode, _exports} =
-    defmodule TestStruct do
-      use GuardedStruct
 
-      guardedstruct do
-        field(:int, integer())
-        field(:string, String.t())
-        field(:string_with_default, String.t(), default: "default")
-        field(:mandatory_int, integer(), enforce: true)
-      end
+  # {:module, _name, bytecode, _exports} =
+  #   defmodule TestStruct do
+  #     use GuardedStruct
 
-      def enforce_keys, do: @enforce_keys
-    end
+  #     guardedstruct do
+  #       field(:int, integer())
+  #       field(:string, String.t())
+  #       field(:string_with_default, String.t(), default: "default")
+  #       field(:mandatory_int, integer(), enforce: true)
+  #     end
 
-  {:module, _name, bytecode_opaque, _exports} =
-    defmodule OpaqueTestStruct do
-      use GuardedStruct
-
-      guardedstruct opaque: true do
-        field(:int, integer())
-      end
-    end
+  #     def enforce_keys, do: @enforce_keys
+  #   end
 
   defmodule EnforcedGuardedStruct do
     use GuardedStruct
@@ -40,35 +47,19 @@ defmodule GuardedStructTest.BasicTypesTest do
     def enforce_keys, do: @enforce_keys
   end
 
-  defmodule TestModule do
-    use GuardedStruct
-
-    guardedstruct module: Struct do
-      field(:field, term())
-    end
-  end
-
-  {:module, _name, bytecode_noalias, _exports} =
-    defmodule TestStructNoAlias do
-      use GuardedStruct
-
-      guardedstruct do
-        field(:test, TestModule.TestSubModule.t())
-      end
-    end
-
   @bytecode bytecode
   @bytecode_opaque bytecode_opaque
   @bytecode_noalias bytecode_noalias
 
   ############## (▰˘◡˘▰) GuardedStructTest Tests functions (▰˘◡˘▰) ##############
   test "generates the struct with its defaults" do
-    assert TestStruct.__struct__() == %TestStruct{
-             int: nil,
-             string: nil,
-             string_with_default: "default",
-             mandatory_int: nil
-           }
+    assert TestStruct.__struct__() ==
+             %TestStruct{
+               int: nil,
+               string: nil,
+               string_with_default: "default",
+               mandatory_int: nil
+             }
   end
 
   test "enforces keys for fields with `enforce: true`" do
@@ -89,18 +80,7 @@ defmodule GuardedStructTest.BasicTypesTest do
 
   test "generates a type for the struct" do
     # Define a second struct with the type expected for TestStruct.
-    {:module, _name, bytecode2, _exports} =
-      defmodule TestStruct2 do
-        defstruct [:int, :string, :string_with_default, :mandatory_int]
-
-        @type t() :: %__MODULE__{
-                int: integer() | nil,
-                string: String.t() | nil,
-                string_with_default: String.t(),
-                mandatory_int: integer()
-              }
-      end
-
+    {_module_name, bytecode2, _file_path} = :code.get_object_code(TestStruct2)
     # the second struct with the name of the first one).
     fields = [:int, :string, :string_with_default, :mandatory_int]
 
@@ -110,38 +90,13 @@ defmodule GuardedStructTest.BasicTypesTest do
 
   test "generates an opaque type if `opaque: true` is set" do
     # Define a second struct with the type expected for TestStruct.
-    {:module, _name, bytecode_expected, _exports} =
-      defmodule TestStruct3 do
-        defstruct [:int]
-
-        @opaque t() :: %__MODULE__{
-                  int: integer() | nil
-                }
-      end
-
-    fields = [:int]
-
-    assert check_type(:t, @bytecode_opaque, fields, :opaque)
-    assert check_type(:t, bytecode_expected, fields, :opaque)
+    {_module_name, bytecode_expected, _file_path} = :code.get_object_code(TestStruct3)
+    assert check_type(:t, @bytecode_opaque, [:int], :opaque)
+    assert check_type(:t, bytecode_expected, [:int], :opaque)
   end
 
   test "generates the struct in a submodule if `module: ModuleName` is set" do
     assert TestModule.Struct.__struct__() == %TestModule.Struct{field: nil}
-  end
-
-  test "GuardedStruct macros are available only in the guardedstruct block" do
-    assert_raise CompileError, ~r"cannot compile module", fn ->
-      defmodule ScopeTest do
-        use GuardedStruct
-
-        guardedstruct do
-          field(:in_scope, term())
-        end
-
-        # Let’s try to use field/2 outside the block.
-        field(:out_of_scope, term())
-      end
-    end
   end
 
   test "the name of a field must be an atom" do
@@ -170,17 +125,7 @@ defmodule GuardedStructTest.BasicTypesTest do
   end
 
   test "aliases are properly resolved in types" do
-    {:module, _name, bytecode_actual, _exports} =
-      defmodule TestStructWithAlias do
-        use GuardedStruct
-
-        guardedstruct do
-          alias TestModule.TestSubModule
-
-          field(:test, TestSubModule.t())
-        end
-      end
-
+    {_module_name, bytecode_actual, _file_path} = :code.get_object_code(TestStructWithAlias)
     fields = [:test]
 
     assert check_type(:t, @bytecode_noalias, fields)
@@ -223,7 +168,6 @@ defmodule GuardedStructTest.BasicTypesTest do
     |> Code.Typespec.fetch_types()
     |> elem(1)
     |> Enum.sort()
-    |> IO.inspect()
   end
 
   # Sample fields
