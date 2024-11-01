@@ -29,8 +29,8 @@ defmodule GuardedStructTest.DeriveTest do
   end
 
   test "sanitize(:markdown_html, input)" do
-    "[Mishka Group](https://mishka.group)" =
-      assert SanitizerDerive.sanitize(:markdown_html, "[Mishka Group](https://mishka.group)")
+    "[Mishka Group](https://mishka.tools)" =
+      assert SanitizerDerive.sanitize(:markdown_html, "[Mishka Group](https://mishka.tools)")
   end
 
   test "sanitize(:strip_tags, input)" do

@@ -4,8 +4,8 @@ defmodule GuardedStructTest.NestedConditionalFieldTest do
   # ----------------------------------------------------------
   # | Unfortunately, this macro does not support the nested mode in the conditional_field macro.
   # | If you can add this feature I would be very happy to send a PR.
-  # | More information: https://github.com/mishka-group/mishka_developer_tools/issues/25
-  # | Parent Issue: https://github.com/mishka-group/mishka_developer_tools/issues/23
+  # | More information: https://github.com/mishka-group/guarded_struct/issues/25
+  # | Parent Issue: https://github.com/mishka-group/guarded_struct/issues/23
   # ----------------------------------------------------------
 
   ######### (▰˘◡˘▰) NestedConditionalFieldTest GuardedStructTest Data (▰˘◡˘▰) ##########

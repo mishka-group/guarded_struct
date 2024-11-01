@@ -52,12 +52,18 @@ defmodule GuardedStruct.MixProject do
 
   defp deps do
     [
-      {:html_sanitize_ex, "~> 1.4.3", optional: true},
-      {:email_checker, "~> 0.2.4", optional: true},
-      {:ex_url, "~> 2.0", optional: true},
-      {:ex_phone_number, "~> 0.4.5", optional: true},
-      {:sweet_xml, github: "kbrw/sweet_xml", branch: "master", override: true, optional: true},
-      {:ex_doc, "~> 0.34.2", only: :dev, runtime: false}
+      # necessary
+      {:html_sanitize_ex, "~> 1.4.3"},
+
+      # document
+      {:ex_doc, "~> 0.34.2", only: :dev, runtime: false},
+
+      # test env
+      {:email_checker, "~> 0.2.4", optional: true, only: :test},
+      {:ex_url, "~> 2.0", optional: true, only: :test},
+      {:ex_phone_number, "~> 0.4.5", optional: true, only: :test},
+      {:sweet_xml,
+       github: "kbrw/sweet_xml", branch: "master", override: true, optional: true, only: :test}
     ]
   end
 end

@@ -928,7 +928,7 @@ defmodule GuardedStructTest.CoreKeysTest do
     # TODO: check the error of :edit
     {:ok,
      %__MODULE__.AllowedParentCustomDomain{
-       id: "https://github.com/mishka-group/mishka_developer_tools",
+       id: "https://github.com/mishka-group/guarded_struct",
        auth: %__MODULE__.AllowedParentCustomDomain.Auth{
          action: "ok"
        },
@@ -939,7 +939,7 @@ defmodule GuardedStructTest.CoreKeysTest do
                 %{
                   username: "mishka",
                   auth: %{action: "ok"},
-                  id: "https://github.com/mishka-group/mishka_developer_tools"
+                  id: "https://github.com/mishka-group/guarded_struct"
                 }, :edit}
              )
 

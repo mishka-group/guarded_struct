@@ -637,7 +637,7 @@ defmodule GuardedStruct do
           status: %{status: 2}
         },
         identity_provider: "google",
-        server: "users@mishka.group"
+        server: "users@mishka.tools"
       },
       age: 18,
       family: "Group",
@@ -1185,7 +1185,7 @@ defmodule GuardedStruct do
       address: %{
         location: "geo:48.198634,-16.371648,3.4;crs=wgs84;u=40.0",
         text_location: "Nowhere",
-        email: "shahryar@mishka.group"
+        email: "shahryar@mishka.tools"
       }
     },
     product: %{
