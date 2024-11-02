@@ -45,7 +45,8 @@ defmodule GuardedStruct.MixProject do
       links: %{
         "Mishka" => "https://mishka.tools",
         "GitHub" => @source_url,
-        "Changelog" => "#{@source_url}/blob/master/CHANGELOG.md"
+        "Changelog" => "#{@source_url}/blob/master/CHANGELOG.md",
+        "LiveBook document" => "#{@source_url}/blob/master/guidance/guarded-struct.livemd"
       }
     ]
   end
