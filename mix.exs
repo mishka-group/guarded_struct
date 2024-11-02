@@ -15,7 +15,6 @@ defmodule GuardedStruct.MixProject do
       deps: deps(),
       description: description(),
       package: package(),
-      homepage_url: "https://github.com/mishka-group",
       source_url: @source_url,
       docs: [
         main: "readme",
