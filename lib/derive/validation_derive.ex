@@ -392,6 +392,16 @@ defmodule GuardedStruct.Derive.ValidationDerive do
     _ -> {:error, field, :regex, "Invalid format in the #{field} field"}
   end
 
+  def validate({:regex, pattern_str}, input, field)
+      when is_binary(input) and is_binary(pattern_str) do
+    case regex_match?(pattern_str, input) do
+      true -> input
+      _ -> {:error, field, :regex, "Invalid format in the #{field} field"}
+    end
+  rescue
+    _ -> {:error, field, :regex, "Invalid format in the #{field} field"}
+  end
+
   def validate(:ipv4, input, field) when is_binary(input) do
     segments = String.split(input, ".")
 

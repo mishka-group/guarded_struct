@@ -39,8 +39,8 @@ defmodule GuardedStruct.Derive.Parser do
         \n ----------------------------------------------------------\n
         Unfortunately, this macro does not support the nested mode in the conditional_field macro.
         If you can add this feature I would be very happy to send a PR.
-        More information: https://github.com/mishka-group/guarded_struct/issues/25
-        Parent Issue: https://github.com/mishka-group/guarded_struct/issues/23
+        More information: https://github.com/mishka-group/guarded_struct/issues/7
+        Parent Issue: https://github.com/mishka-group/guarded_struct/issues/8
         \n ----------------------------------------------------------\n
         """)
 
@@ -62,8 +62,8 @@ defmodule GuardedStruct.Derive.Parser do
         \n ----------------------------------------------------------\n
         Unfortunately, this macro does not support the nested mode in the conditional_field macro.
         If you can add this feature I would be very happy to send a PR.
-        More information: https://github.com/mishka-group/guarded_struct/issues/25
-        Parent Issue: https://github.com/mishka-group/guarded_struct/issues/23
+        More information: https://github.com/mishka-group/guarded_struct/issues/7
+        Parent Issue: https://github.com/mishka-group/guarded_struct/issues/8
         \n ----------------------------------------------------------\n
         """)
 
@@ -165,6 +165,9 @@ defmodule GuardedStruct.Derive.Parser do
         {:=, _, [{key, _, nil}, {_, _, [{:__aliases__, _, [type]} | _t]} = value]}
         when is_tuple(value) and is_atom(type) ->
           {key, Macro.to_string(value)}
+
+        {:=, _, [{key, _, nil}, value]} when is_binary(value) ->
+          {key, value}
 
         _ ->
           nil
