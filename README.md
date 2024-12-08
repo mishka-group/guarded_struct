@@ -11,6 +11,10 @@ The creation of this macro will allow you to build `Structs` that provide you w
 3. Constructor
 4. It provides the capacity to operate in a nested style simultaneously.
 
+##### Blog post:
+
+- [Consolidating Input and Output Validation and Sanitization in Elixir with GuardedStruct library](https://mishka.tools/blog/guardedstruct-advanced-elixir-struct-data-validation-and-sanitization)
+
 ## Example:
 
 ```elixir
