@@ -372,7 +372,10 @@ defmodule GuardedStructTest.GlobalTest do
          }
        }
      ]} =
-      assert TestAuthorizeKeys.builder(%{name: "Shahryar", auth: %{action: "admin", test: "test"}})
+      assert TestAuthorizeKeys.builder(%{
+               name: "Shahryar",
+               auth: %{action: "admin", test: "test"}
+             })
   end
 
   test "auto generate value nested and root map" do

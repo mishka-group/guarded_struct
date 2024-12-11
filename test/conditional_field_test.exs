@@ -52,7 +52,11 @@ defmodule GuardedStructTest.ConditionalFieldTest do
       end
 
       conditional_field(:auth, any()) do
-        sub_field(:auth, struct(), hint: "auth1", structs: true, validator: {VAL, :is_list_data}) do
+        sub_field(:auth, struct(),
+          hint: "auth1",
+          structs: true,
+          validator: {VAL, :is_list_data}
+        ) do
           field(:username, String.t(), enforce: true)
           field(:provider, String.t(), enforce: true)
         end
@@ -177,7 +181,10 @@ defmodule GuardedStructTest.ConditionalFieldTest do
       end
 
       conditional_field(:extera_auth2, any(), structs: true) do
-        sub_field(:extera_auth2, struct(), validator: {VAL, :is_map_data}, hint: "extera_auth1") do
+        sub_field(:extera_auth2, struct(),
+          validator: {VAL, :is_map_data},
+          hint: "extera_auth1"
+        ) do
           field(:username, String.t(),
             enforce: true,
             validator: {VAL, :is_string_data},
@@ -299,7 +306,10 @@ defmodule GuardedStructTest.ConditionalFieldTest do
         structs: true,
         domain: "?identity.type=Atom[female]"
       ) do
-        sub_field(:information2, struct(), validator: {VAL, :is_map_data}, hint: "information1") do
+        sub_field(:information2, struct(),
+          validator: {VAL, :is_map_data},
+          hint: "information1"
+        ) do
           field(:name, String.t())
           field(:gender, String.t(), domain: "!identity.action=String[admin, user]")
         end
