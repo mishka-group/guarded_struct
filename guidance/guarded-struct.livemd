@@ -2,7 +2,7 @@
 
 ```elixir
 Mix.install([
-  {:guarded_struct, "~> 0.0.3"}
+  {:guarded_struct, "~> 0.0.3"},
   {:html_sanitize_ex, "~> 1.4.3"},
 
   # Optional dependencies, It’s recommended to create your own
