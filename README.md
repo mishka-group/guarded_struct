@@ -96,7 +96,7 @@ Before explaining the copyright, I must point out that the primary library, whic
 ```elixir
 def deps do
   [
-    {:guarded_struct, "~> 0.0.3"}
+    {:guarded_struct, "~> 0.0.4"}
   ]
 end
 ```
