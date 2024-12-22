@@ -46,7 +46,7 @@ defmodule GuardedStruct do
   ####################################################################
   ################ (▰˘◡˘▰) initializing (▰˘◡˘▰) ################
   ####################################################################
-
+  import GuardedStruct.Messages, only: [translated_message: 1, translated_message: 2]
   alias GuardedStruct.{Derive, Derive.Parser, Derive.ValidationDerive}
   defexception [:term]
 
@@ -66,9 +66,7 @@ defmodule GuardedStruct do
   ]
 
   @impl true
-  def message(exception) do
-    "There is at least one validation problem with your data: #{inspect(exception.term)}"
-  end
+  def message(exception), do: translated_message(:message_exception, exception)
 
   defmacro __using__(_) do
     quote do
@@ -1266,7 +1264,7 @@ defmodule GuardedStruct do
         @impl true
         def message(exception) do
           """
-          There is at least one validation problem with your data:
+          #{translated_message(:message_exception)}
            Term: #{inspect(exception.term)}
            Errors: #{inspect(exception.errors)}
           """
@@ -1370,7 +1368,7 @@ defmodule GuardedStruct do
       end
 
       def builder(_attrs, _error) do
-        err = %{message: "Your input must be a map or list of maps", action: :bad_parameters}
+        err = %{message: translated_message(:builder), action: :bad_parameters}
 
         {:error, err}
       end
@@ -1531,10 +1529,7 @@ defmodule GuardedStruct do
       end
 
       if !is_nil(main_validator) && (!is_tuple(main_validator) or tuple_size(main_validator) != 2) do
-        raise(
-          ArgumentError,
-          "Main validator is came as a tuple and includes {module, function_name}, noted the function_name should be atom."
-        )
+        raise(ArgumentError, translated_message(:register_struct))
       end
 
       @before_compile {unquote(__MODULE__), :create_builder}
@@ -1564,7 +1559,7 @@ defmodule GuardedStruct do
 
     # We check if this field is already set and it is not conditional type, so should send error to user
     if Keyword.has_key?(gs_fields, name) and !Keyword.has_key?(gs_conditional, name) do
-      raise ArgumentError, "the field #{inspect(name)} is already set"
+      raise ArgumentError, translated_message(:field, name)
     end
 
     # If for this name, there is no record which be submitted
@@ -1581,7 +1576,7 @@ defmodule GuardedStruct do
   end
 
   def __field__(name, _type, _opts, _env, _sub_field, _cond?) do
-    raise ArgumentError, "a field name must be an atom, got #{inspect(name)}"
+    raise ArgumentError, translated_message(:field_type, name)
   end
 
   @spec builder(
@@ -1657,7 +1652,7 @@ defmodule GuardedStruct do
 
       {_, false, filtered} ->
         err = %{
-          message: "Unauthorized keys are present in the sent data.",
+          message: translated_message(:authorized_fields),
           fields: filtered,
           action: :authorized_fields
         }
@@ -1677,7 +1672,7 @@ defmodule GuardedStruct do
     else
       {:missing_keys, false, missing_keys} ->
         err = %{
-          message: "Please submit required fields.",
+          message: translated_message(:required_fields),
           fields: missing_keys,
           action: :required_fields
         }
@@ -2269,13 +2264,7 @@ defmodule GuardedStruct do
   defp list_builder(attrs, module, field, key, type, cond_list \\ nil)
 
   defp list_builder(_attrs, nil, field, _key, _type, _cond_list) do
-    err = %{
-      message:
-        "Unfortunately, the appropriate settings have not been applied to the desired field.",
-      field: field,
-      action: :bad_parameters
-    }
-
+    err = %{message: translated_message(:list_builder), field: field, action: :bad_parameters}
     {:error, err}
   end
 
@@ -2300,9 +2289,7 @@ defmodule GuardedStruct do
 
     # An alternative course of action is to update the library. Remember to send PR to this lib :)
     # **That is why we should construct a builder that verifies this key exclusively from the root path.**
-    raise(
-      "Oh no!, We do not currently support using a normal field as a list without an extra module."
-    )
+    raise(translated_message(:list_builder_field_exception))
   end
 
   defp list_builder(attrs, module, field, key, type, cond_list) do
@@ -2337,7 +2324,7 @@ defmodule GuardedStruct do
            item -> elem(item, 1)
          end)}
     else
-      error = %{message: "Your input must be a list of items", field: field, action: :type}
+      error = %{message: translated_message(:list_builder_type), field: field, action: :type}
       {:error, error}
     end
   end
@@ -2390,10 +2377,7 @@ defmodule GuardedStruct do
                if(h == :root, do: get_in(full_attrs, t), else: get_in(attrs, splited_pattern)),
              {:get_value, false} <- {:get_value, !is_nil(get_value)} do
           %{
-            message: """
-            The required dependency for field #{Atom.to_string(key)} has not been submitted.
-            You must have field #{List.last(splited_pattern) |> Atom.to_string()} in your input
-            """,
+            message: translated_message(:check_dependent_keys, {key, splited_pattern}),
             field: key,
             action: :dependent_keys
           }
@@ -2433,7 +2417,7 @@ defmodule GuardedStruct do
       |> case do
         data when is_tuple(data) and elem(data, 0) == :error ->
           %{
-            message: "Based on field #{key} input you have to send authorized data",
+            message: translated_message(:domain_field_status, key),
             field_path: field,
             field: key,
             action: :domain_parameters
@@ -2446,8 +2430,7 @@ defmodule GuardedStruct do
       if is_nil(force),
         do: nil,
         else: %{
-          message:
-            "Based on field #{key} input you have to send authorized data and required key",
+          message: translated_message(:force_domain_field_status, key),
           field_path: field,
           field: key,
           action: :domain_parameters

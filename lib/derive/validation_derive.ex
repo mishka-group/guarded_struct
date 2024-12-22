@@ -1,5 +1,6 @@
 defmodule GuardedStruct.Derive.ValidationDerive do
   alias GuardedStruct.Helper.Extra
+  import GuardedStruct.Messages, only: [translated_message: 2]
 
   @family_alphabet Enum.concat([?a..?z, ~c" "])
 
@@ -113,41 +114,41 @@ defmodule GuardedStruct.Derive.ValidationDerive do
 
   def validate(:not_empty, input, field) when is_binary(input) do
     if input == "",
-      do: {:error, field, :not_empty, "The #{field} field must not be empty"},
+      do: {:error, field, :not_empty, translated_message(:not_empty_binary, field)},
       else: input
   end
 
   def validate(:not_empty, input, field) when is_list(input) do
     if input == [],
-      do: {:error, field, :not_empty, "The #{field} field must not be empty"},
+      do: {:error, field, :not_empty, translated_message(:not_empty_list, field)},
       else: input
   end
 
   def validate(:not_empty, input, field) when is_map(input) do
     if input == %{},
-      do: {:error, field, :not_empty, "The #{field} field must not be empty"},
+      do: {:error, field, :not_empty, translated_message(:not_empty_map, field)},
       else: input
   end
 
-  def validate(:not_empty, _, field) do
-    {:error, field, :not_empty,
-     "Invalid NotEmpty format in the #{field} field, you must pass data which is string, list or map."}
-  end
+  def validate(:not_empty, _, field),
+    do: {:error, field, :not_empty, translated_message(:not_empty, field)}
 
   def validate(:not_flatten_empty, input, field) when is_list(input) do
     if List.flatten(input) == [],
-      do: {:error, field, :not_flatten_empty, "The #{field} field must not be empty"},
+      do: {:error, field, :not_flatten_empty, translated_message(:not_flatten_empty, field)},
       else: input
   end
 
   def validate(:not_flatten_empty_item, input, field) when is_list(input) do
     case List.flatten(input) do
       [] ->
-        {:error, field, :not_flatten_empty_item, "The #{field} field item must not be empty"}
+        {:error, field, :not_flatten_empty_item,
+         translated_message(:not_flatten_empty_item, field)}
 
       _data ->
         if Enum.find(input, &(&1 == [])) do
-          {:error, field, :not_flatten_empty_item, "The #{field} field item must not be empty"}
+          {:error, field, :not_flatten_empty_item,
+           translated_message(:not_flatten_empty_item, field)}
         else
           input
         end
@@ -155,94 +156,74 @@ defmodule GuardedStruct.Derive.ValidationDerive do
   end
 
   def validate(:queue, input, field) do
-    if :queue.is_queue(input) do
-      input
-    else
-      {:error, field, :queue, "The #{field} field must be a queue format"}
-    end
+    if :queue.is_queue(input),
+      do: input,
+      else: {:error, field, :queue, translated_message(:queue, field)}
   end
 
   def validate({:max_len, len}, input, field) when is_binary(input) do
     if String.length(input) <= len,
       do: input,
-      else:
-        {:error, field, :max_len,
-         "The maximum number of characters in the #{field} field is #{len} and you have sent more than this number of entries"}
+      else: {:error, field, :max_len, translated_message(:max_len_binary, {field, len})}
   end
 
   def validate({:max_len, len}, input, field) when is_integer(input) or is_float(input) do
     if input <= len,
       do: input,
-      else:
-        {:error, field, :max_len,
-         "The maximum number the #{field} field is #{len} and you have sent more than this number of entries"}
+      else: {:error, field, :max_len, translated_message(:max_len_integer, {field, len})}
   end
 
   def validate({:max_len, len}, %{__struct__: Range, first: _first, last: last} = input, field) do
     if is_integer(last) and last <= len,
       do: input,
-      else:
-        {:error, field, :max_len,
-         "The minimum range the #{field} field is #{len} and you have sent less than this number of entries"}
+      else: {:error, field, :max_len, translated_message(:max_len_range, {field, len})}
   end
 
   def validate({:max_len, len}, input, field) when is_list(input) do
     if length(input) <= len,
       do: input,
-      else:
-        {:error, field, :max_len,
-         "The maximum number of items in the #{field} field list is #{len} and you have sent more than this number of entries"}
+      else: {:error, field, :max_len, translated_message(:max_len_list, {field, len})}
   end
 
   def validate(:max_len, _, field) do
-    {:error, field, :max_len,
-     "Invalid Max length format in the #{field} field, you must pass data which is integer, range or string."}
+    {:error, field, :max_len, translated_message(:max_len, field)}
   end
 
   def validate({:min_len, len}, input, field) when is_binary(input) do
     if String.length(input) < len,
-      do:
-        {:error, field, :min_len,
-         "The minimum number of characters in the #{field} field is #{len} and you have sent less than this number of entries"},
+      do: {:error, field, :min_len, translated_message(:min_len_binary, {field, len})},
       else: input
   end
 
   def validate({:min_len, len}, input, field) when is_integer(input) or is_float(input) do
     if input < len,
-      do:
-        {:error, field, :min_len,
-         "The minimum number the #{field} field is #{len} and you have sent less than this number of entries"},
+      do: {:error, field, :min_len, translated_message(:min_len_integer, {field, len})},
       else: input
   end
 
   def validate({:min_len, len}, %{__struct__: Range, first: first, last: _last} = input, field) do
     if is_integer(first) and first >= len,
       do: input,
-      else:
-        {:error, field, :min_len,
-         "The minimum range the #{field} field is #{len} and you have sent less than this number of entries"}
+      else: {:error, field, :min_len, translated_message(:min_len_range, {field, len})}
   end
 
   def validate({:min_len, len}, input, field) when is_list(input) do
     if length(input) < len,
-      do:
-        {:error, field, :min_len,
-         "The minimum number of items in the #{field} field list is #{len} and you have sent less than this number of entries"},
+      do: {:error, field, :min_len, translated_message(:min_len_list, {field, len})},
       else: input
   end
 
   def validate(:min_len, _, field) do
-    {:error, field, :min_len,
-     "Invalid Min length format in the #{field} field, you must pass data which is integer, range or string."}
+    {:error, field, :min_len, translated_message(:min_len, field)}
   end
 
   def validate(:url, input, field) do
     case URI.parse(input) do
       %URI{scheme: nil} ->
-        {:error, field, :url, "Is missing a url scheme (e.g. https) in the #{field} field"}
+        {:error, field, :url, translated_message(:url_scheme, field)}
 
       %URI{host: nil} ->
-        {:error, field, :url, "Is missing a url host in the #{field} field"}
+        {:error, field, :url, translated_message(:url_host, field)}
 
       %URI{port: port, scheme: scheme, host: host}
       when port in [80, 443] and scheme in ["https", "http"] ->
@@ -251,14 +232,14 @@ defmodule GuardedStruct.Derive.ValidationDerive do
             input
 
           _ ->
-            {:error, field, :url, "Invalid url host in the #{field} field"}
+            {:error, field, :url, translated_message(:url_gethostbyname, field)}
         end
 
       _ ->
-        {:error, field, :url, "Invalid url format in the #{field} field"}
+        {:error, field, :url, translated_message(:url, field)}
     end
   rescue
-    _ -> {:error, field, :url, "Invalid url format in the #{field} field"}
+    _ -> {:error, field, :url, translated_message(:url, field)}
   end
 
   if Code.ensure_loaded?(ExPhoneNumber) do
@@ -270,17 +251,17 @@ defmodule GuardedStruct.Derive.ValidationDerive do
               input
 
             _ ->
-              {:error, field, :tell, "Invalid tell format in the #{field} field"}
+              {:error, field, :tell, translated_message(:tell, field)}
           end
 
         {:error, {URL.Parser.ParseError, _msg}} ->
-          {:error, field, :tell, "Invalid tell format in the #{field} field"}
+          {:error, field, :tell, translated_message(:tell, field)}
 
         _ ->
-          {:error, field, :tell, "Invalid tell format in the #{field} field"}
+          {:error, field, :tell, translated_message(:tell, field)}
       end
     rescue
-      _ -> {:error, field, :tell, "Invalid tell format in the #{field} field"}
+      _ -> {:error, field, :tell, translated_message(:tell, field)}
     end
   end
 
@@ -291,14 +272,14 @@ defmodule GuardedStruct.Derive.ValidationDerive do
           input
 
         {:error, {URL.Parser.ParseError, _msg}} ->
-          {:error, field, :tell, "Invalid tell format in the #{field} field"}
+          {:error, field, :tell, translated_message(:tell, field)}
 
         _ ->
-          {:error, field, :tell, "Invalid tell format in the #{field} field"}
+          {:error, field, :tell, translated_message(:tell, field)}
       end
     rescue
       _ ->
-        {:error, field, :tell, "Invalid tell format in the #{field} field"}
+        {:error, field, :tell, translated_message(:tell, field)}
     end
   end
 
@@ -313,20 +294,20 @@ defmodule GuardedStruct.Derive.ValidationDerive do
       EmailChecker.valid?(input)
       |> case do
         true -> input
-        _ -> {:error, field, :email, "Incorrect email in the #{field} field."}
+        _ -> {:error, field, :email, translated_message(:email, field)}
       end
     rescue
-      _ -> {:error, field, :email, "Invalid email format in the #{field} field"}
+      _ -> {:error, field, :email, translated_message(:email, field)}
     end
   end
 
   def validate(:email_r, input, field) do
     case Regex.match?(~r/^[A-Za-z0-9\._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,6}$/, input) do
       true -> input
-      _ -> {:error, field, :email_r, "Invalid email format in the #{field} field"}
+      _ -> {:error, field, :email_r, translated_message(:email_r, field)}
     end
   rescue
-    _ -> {:error, field, :email_r, "Invalid email format in the #{field} field"}
+    _ -> {:error, field, :email_r, translated_message(:email_r, field)}
   end
 
   if Code.ensure_loaded?(URL) do
@@ -339,28 +320,28 @@ defmodule GuardedStruct.Derive.ValidationDerive do
 
       location("geo:#{converted}", field, :location)
     rescue
-      _ -> {:error, field, :email, "Invalid location format in the #{field} field"}
+      _ -> {:error, field, :email, translated_message(:location, field)}
     end
   end
 
   def validate(:string_boolean, input, field) do
     case input in ["true", "false"] do
       true -> input
-      false -> {:error, field, :string_boolean, "Invalid boolean format in the #{field} field"}
+      false -> {:error, field, :string_boolean, translated_message(:string_boolean, field)}
     end
   end
 
   def validate(:datetime, input, field) do
     case DateTime.from_iso8601(input) do
       {:error, _msg} ->
-        {:error, field, :datetime, "Invalid DateTime format in the #{field} field"}
+        {:error, field, :datetime, translated_message(:datetime, field)}
 
       _ ->
         input
     end
   rescue
     _ ->
-      {:error, field, :datetime, "Invalid DateTime format in the #{field} field"}
+      {:error, field, :datetime, translated_message(:datetime, field)}
   end
 
   def validate(:range, input, field) do
@@ -368,17 +349,17 @@ defmodule GuardedStruct.Derive.ValidationDerive do
     input
   rescue
     _ ->
-      {:error, field, :range, "Invalid Range format in the #{field} field"}
+      {:error, field, :range, translated_message(:range, field)}
   end
 
   def validate(:date, input, field) when is_binary(input) do
     case Date.from_iso8601(input) do
-      {:error, _msg} -> {:error, field, :date, "Invalid Date format in the #{field} field"}
+      {:error, _msg} -> {:error, field, :date, translated_message(:date_binary, field)}
       _ -> input
     end
   rescue
     _ ->
-      {:error, field, :date, "Invalid Date format in the #{field} field"}
+      {:error, field, :date, translated_message(:date_binary, field)}
   end
 
   # All the regex that you want to use should put inside '' and see the result before using.
@@ -386,48 +367,48 @@ defmodule GuardedStruct.Derive.ValidationDerive do
       when is_binary(input) and is_list(pattern_str) do
     case regex_match?(to_string(pattern_str), input) do
       true -> input
-      _ -> {:error, field, :regex, "Invalid format in the #{field} field"}
+      _ -> {:error, field, :regex, translated_message(:regex, field)}
     end
   rescue
-    _ -> {:error, field, :regex, "Invalid format in the #{field} field"}
+    _ -> {:error, field, :regex, translated_message(:regex, field)}
   end
 
   def validate({:regex, pattern_str}, input, field)
       when is_binary(input) and is_binary(pattern_str) do
     case regex_match?(pattern_str, input) do
       true -> input
-      _ -> {:error, field, :regex, "Invalid format in the #{field} field"}
+      _ -> {:error, field, :regex, translated_message(:regex, field)}
     end
   rescue
-    _ -> {:error, field, :regex, "Invalid format in the #{field} field"}
+    _ -> {:error, field, :regex, translated_message(:regex, field)}
   end
 
   def validate(:ipv4, input, field) when is_binary(input) do
     segments = String.split(input, ".")
 
     if length(segments) != 4 do
-      {:error, field, :ipv4, "Invalid format in the #{field} field"}
+      {:error, field, :ipv4, translated_message(:ipv4, field)}
     else
       Enum.all?(segments, &(String.to_integer(&1) in 0..255))
       |> case do
         true -> input
-        false -> {:error, field, :ipv4, "Invalid format in the #{field} field"}
+        false -> {:error, field, :ipv4, translated_message(:ipv4, field)}
       end
     end
   rescue
     _ ->
-      {:error, field, :ipv4, "Invalid format in the #{field} field"}
+      {:error, field, :ipv4, translated_message(:ipv4, field)}
   end
 
   def validate(:ipv4, _input, field) do
-    {:error, field, :ipv4, "Invalid format in the #{field} field"}
+    {:error, field, :ipv4, translated_message(:ipv4, field)}
   end
 
   def validate(:not_empty_string, input, field) do
     if is_binary(input) and input != "" do
       input
     else
-      {:error, field, :not_empty_string, "Invalid format in the #{field} field"}
+      {:error, field, :not_empty_string, translated_message(:not_empty_string, field)}
     end
   end
 
@@ -437,7 +418,7 @@ defmodule GuardedStruct.Derive.ValidationDerive do
     if is_binary(input) and Regex.match?(uuid_regex, String.downcase(input)) do
       input
     else
-      {:error, field, :uuid, "Invalid UUID format in the #{field} field"}
+      {:error, field, :uuid, translated_message(:uuid, field)}
     end
   end
 
@@ -445,7 +426,7 @@ defmodule GuardedStruct.Derive.ValidationDerive do
     if is_binary(input) and Extra.validated_user?(input) do
       input
     else
-      {:error, field, :username, "Invalid username format in the #{field} field"}
+      {:error, field, :username, translated_message(:username, field)}
     end
   end
 
@@ -458,12 +439,12 @@ defmodule GuardedStruct.Derive.ValidationDerive do
     if formated? and !String.starts_with?(input, " ") do
       input
     else
-      {:error, field, :full_name, "Invalid family format in the #{field} field"}
+      {:error, field, :full_name, translated_message(:full_name, field)}
     end
   end
 
   def validate(:full_name, _input, field) do
-    {:error, field, :full_name, "Invalid family format in the #{field} field"}
+    {:error, field, :full_name, translated_message(:full_name, field)}
   end
 
   def validate({:enum, "String" <> list}, input, field) when is_binary(input) do
@@ -502,7 +483,7 @@ defmodule GuardedStruct.Derive.ValidationDerive do
   end
 
   def validate({:enum, _}, _input, field) do
-    {:error, field, :enum, "Invalid format in the #{field} field"}
+    {:error, field, :enum, translated_message(:enum, field)}
   end
 
   def validate({:equal, "String::" <> value}, input, field) do
@@ -544,7 +525,7 @@ defmodule GuardedStruct.Derive.ValidationDerive do
     if is_boolean(executed) and executed, do: input, else: raise(ArgumentError, "")
   rescue
     _e ->
-      {:error, field, :custom, "The condition for checking the #{field} field is not correct"}
+      {:error, field, :custom, translated_message(:custom, field)}
   end
 
   def validate({:custom, value}, input, field) do
@@ -554,7 +535,7 @@ defmodule GuardedStruct.Derive.ValidationDerive do
     if is_boolean(executed) and executed, do: input, else: raise(ArgumentError, "")
   rescue
     _e ->
-      {:error, field, :custom, "The condition for checking the #{field} field is not correct"}
+      {:error, field, :custom, translated_message(:custom, field)}
   end
 
   def validate(%{either: list}, input, field) do
@@ -567,13 +548,11 @@ defmodule GuardedStruct.Derive.ValidationDerive do
         input
 
       _ ->
-        {:error, field, :either,
-         "None of the conditions for checking the #{field} field is not correct"}
+        {:error, field, :either, translated_message(:either, field)}
     end
   rescue
     _ ->
-      {:error, field, :either,
-       "None of the conditions for checking the #{field} field isn not correct"}
+      {:error, field, :either, translated_message(:either, field)}
   end
 
   def validate(:string_float, input, field) do
@@ -582,7 +561,7 @@ defmodule GuardedStruct.Derive.ValidationDerive do
     input
   rescue
     _ ->
-      {:error, field, :string_float, "The output of the #{field} field cannot be Float"}
+      {:error, field, :string_float, translated_message(:string_float, field)}
   end
 
   def validate(:string_integer, input, field) do
@@ -591,7 +570,7 @@ defmodule GuardedStruct.Derive.ValidationDerive do
     input
   rescue
     _ ->
-      {:error, field, :string_integer, "The output of the #{field} field cannot be Integer"}
+      {:error, field, :string_integer, translated_message(:string_integer, field)}
   end
 
   # it should be noted, the string_float can be an issue if you would not sanitize before.
@@ -600,35 +579,34 @@ defmodule GuardedStruct.Derive.ValidationDerive do
     Float.parse(input)
     |> case do
       :error ->
-        {:error, field, :some_string_float, "The output of the #{field} field cannot be Float"}
+        {:error, field, :some_string_float, translated_message(:some_string_float, field)}
 
       {_converted_float, _} ->
         input
     end
   rescue
     _ ->
-      {:error, field, :some_string_float, "The output of the #{field} field cannot be Float"}
+      {:error, field, :some_string_float, translated_message(:some_string_float, field)}
   end
 
   def validate(:some_string_integer, input, field) do
     Integer.parse(input)
     |> case do
       :error ->
-        {:error, field, :some_string_integer,
-         "The output of the #{field} field cannot be Integer"}
+        {:error, field, :some_string_integer, translated_message(:some_string_integer, field)}
 
       {_converted_integer, _} ->
         input
     end
   rescue
     _ ->
-      {:error, field, :some_string_integer, "The output of the #{field} field cannot be Integer"}
+      {:error, field, :some_string_integer, translated_message(:some_string_integer, field)}
   end
 
   def validate(action, input, field) do
     case Application.get_env(:guarded_struct, :validate_derive) do
       nil ->
-        {:error, field, :type, "Unexpected type error in #{field} field"}
+        {:error, field, :type, translated_message(:validate_unexpected, field)}
 
       derive_module when is_list(derive_module) ->
         custom_derive(derive_module, action, input, field)
@@ -638,7 +616,7 @@ defmodule GuardedStruct.Derive.ValidationDerive do
     end
   rescue
     _ ->
-      {:error, field, :type, "Unexpected type error in #{field} field"}
+      {:error, field, :type, translated_message(:validate_unexpected, field)}
   end
 
   if Code.ensure_loaded?(URL) do
@@ -649,18 +627,18 @@ defmodule GuardedStruct.Derive.ValidationDerive do
           geo_link
 
         _ ->
-          {:error, field, action,
-           "Invalid geo url format in the #{field} field, you should send latitude and longitude"}
+          {:error, field, action, translated_message(:location_url, field)}
       end
     rescue
       _ ->
-        {:error, field, action,
-         "Invalid geo url format in the #{field} field, you should send latitude and longitude"}
+        {:error, field, action, translated_message(:location_url, field)}
     end
   end
 
   defp is_type(field, status, type, input) do
-    if status, do: input, else: {:error, field, type, "The #{field} field must be #{type}"}
+    if status,
+      do: input,
+      else: {:error, field, type, translated_message(:is_type, {field, type})}
   end
 
   defp regex_match?(pattern_str, subject) do
@@ -680,7 +658,7 @@ defmodule GuardedStruct.Derive.ValidationDerive do
       end
     end)
     |> case do
-      nil -> {:error, field, :type, "Unexpected type error in #{field} field"}
+      nil -> {:error, field, :type, translated_message(:validate_unexpected, field)}
       data -> data
     end
   end
@@ -703,7 +681,7 @@ defmodule GuardedStruct.Derive.ValidationDerive do
     |> Enum.find(&(&1 == input))
     |> case do
       nil ->
-        {:error, field, :enum, "Your sent data form #{field} field is not in the allowed list"}
+        {:error, field, :enum, translated_message(:convert_enum_output, field)}
 
       data ->
         data
@@ -721,6 +699,6 @@ defmodule GuardedStruct.Derive.ValidationDerive do
   defp vlidate_equal(validator, input, field) do
     if validator === input,
       do: input,
-      else: {:error, field, :equal, "Invalid value in the #{field} field"}
+      else: {:error, field, :equal, translated_message(:equal, field)}
   end
 end

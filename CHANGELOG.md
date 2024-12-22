@@ -1,3 +1,8 @@
+# Changelog for GuardedStruct 0.0.4
+
+- Fix deprecated code from Elixir 1.18
+- Support overridable messages for the `GuardedStruct` module with support for multiple languages
+
 # Changelog for GuardedStruct 0.0.3
 
 - Fix deprecated code from Elixir 1.18.0-rc.0

@@ -1,7 +1,7 @@
 defmodule GuardedStruct.MixProject do
   use Mix.Project
 
-  @version "0.0.3"
+  @version "0.0.4"
   @source_url "https://github.com/mishka-group/guarded_struct"
 
   def project do
@@ -54,9 +54,8 @@ defmodule GuardedStruct.MixProject do
     [
       # necessary
       {:html_sanitize_ex, "~> 1.4.3"},
-
       # document
-      {:ex_doc, "~> 0.34.2", only: :dev, runtime: false},
+      {:ex_doc, "~> 0.35.1", only: :dev, runtime: false},
 
       # test env
       {:email_checker, "~> 0.2.4", optional: true, only: :test},

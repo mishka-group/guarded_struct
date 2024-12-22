@@ -1,4 +1,6 @@
 defmodule GuardedStruct.Derive.Parser do
+  import GuardedStruct.Messages, only: [translated_message: 1]
+
   @spec parser(list(String.t()) | String.t()) :: any()
   def parser(inputs) when is_list(inputs) do
     Enum.map(inputs, &parser(&1))
@@ -35,14 +37,7 @@ defmodule GuardedStruct.Derive.Parser do
         {:sub_field, line, add_parent_tags(items, parent)}
 
       {:conditional_field, line, items} ->
-        raise("""
-        \n ----------------------------------------------------------\n
-        Unfortunately, this macro does not support the nested mode in the conditional_field macro.
-        If you can add this feature I would be very happy to send a PR.
-        More information: https://github.com/mishka-group/guarded_struct/issues/7
-        Parent Issue: https://github.com/mishka-group/guarded_struct/issues/8
-        \n ----------------------------------------------------------\n
-        """)
+        raise(translated_message(:unsupported_conditional_field))
 
         {:conditional_field, line,
          elements_unification(add_parent_tags(items, parent, "conds"), parent)}
@@ -58,14 +53,7 @@ defmodule GuardedStruct.Derive.Parser do
         {:sub_field, line, add_parent_tags(items, parent)}
 
       {:conditional_field, line, items} ->
-        raise("""
-        \n ----------------------------------------------------------\n
-        Unfortunately, this macro does not support the nested mode in the conditional_field macro.
-        If you can add this feature I would be very happy to send a PR.
-        More information: https://github.com/mishka-group/guarded_struct/issues/7
-        Parent Issue: https://github.com/mishka-group/guarded_struct/issues/8
-        \n ----------------------------------------------------------\n
-        """)
+        raise(translated_message(:unsupported_conditional_field))
 
         comverted_items = add_parent_tags(items, parent, "conds")
 
@@ -251,11 +239,7 @@ defmodule GuardedStruct.Derive.Parser do
 
   def field_value(output) when is_list(output), do: output
 
-  def field_value(nil),
-    do:
-      raise(
-        "Oh no!, I think you have not made all the subfields of a conditional field to the same name"
-      )
+  def field_value(nil), do: raise(translated_message(:parser_field_value))
 
   @spec conds_list(list(map()) | map(), String.t()) :: any()
   def conds_list(data, parent_key) do
