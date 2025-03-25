@@ -4,6 +4,10 @@
   <img src="https://img.buymeacoffee.com/button-api/?text=Buy us coffee&emoji=☕&slug=mishkagroup&button_colour=FFDD00&font_colour=000000&font_family=Cookie&outline_colour=000000&coffee_colour=ffffff" alt="Buy Me A Coffee" height="50" width="210">
 </a>
 
+## Low Maintenance Warning: 
+
+> **This library is in low maintenance mode, which means the author is currently only responding to pull requests.**
+
 The creation of this macro will allow you to build `Structs` that provide you with a number of important options, including the following:
 
 1. Validation
