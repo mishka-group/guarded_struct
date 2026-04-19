@@ -1,7 +1,7 @@
 defmodule GuardedStruct.MixProject do
   use Mix.Project
 
-  @version "0.0.4"
+  @version "0.0.5"
   @source_url "https://github.com/mishka-group/guarded_struct"
 
   def project do
@@ -53,14 +53,14 @@ defmodule GuardedStruct.MixProject do
   defp deps do
     [
       # necessary
-      {:html_sanitize_ex, "~> 1.4.3"},
+      {:html_sanitize_ex, "~> 1.5"},
       # document
-      {:ex_doc, "~> 0.37.1", only: :dev, runtime: false},
+      {:ex_doc, "~> 0.40.1", only: :dev, runtime: false},
 
       # test env
       {:email_checker, "~> 0.2.4", optional: true, only: :test},
-      {:ex_url, "~> 2.0.1", optional: true, only: :test},
-      {:ex_phone_number, "~> 0.4.5", optional: true, only: :test},
+      {:ex_url, "~> 2.0.2", optional: true, only: :test},
+      {:ex_phone_number, "~> 0.4.11", optional: true, only: :test},
       {:sweet_xml,
        github: "kbrw/sweet_xml", branch: "master", override: true, optional: true, only: :test}
     ]
