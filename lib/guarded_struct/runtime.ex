@@ -9,6 +9,51 @@ defmodule GuardedStruct.Runtime do
   alias GuardedStruct.Derive.Parser
   alias GuardedStruct.Derive.ValidationDerive
 
+  @doc """
+  Run the full GuardedStruct validation/sanitization/derive pipeline against
+  `attrs` WITHOUT producing a struct.
+
+  Used by `GuardedStruct.AshResource` (the Ash extension), where the struct
+  is owned by Ash itself and we just want the post-validation attrs map.
+  Returns `{:ok, validated_attrs_map}` or `{:error, errors}`.
+  """
+  @spec validate(module(), map() | tuple(), boolean()) ::
+          {:ok, map()} | {:error, any()}
+  def validate(module, attrs, error? \\ false) do
+    case do_build_no_struct(module, attrs, error?) do
+      {:ok, attrs_map} -> {:ok, attrs_map}
+      {:error, _} = err -> err
+    end
+  end
+
+  defp do_build_no_struct(module, attrs, error?) when is_map(attrs) do
+    # Reuse `do_build` but extract the attrs from the produced struct so the
+    # caller (Ash) doesn't get a guardedstruct struct it can't use.
+    case do_build(module, attrs, attrs, :add, error?, []) do
+      {:ok, struct_value} when is_struct(struct_value) ->
+        {:ok, Map.from_struct(struct_value)}
+
+      other ->
+        other
+    end
+  end
+
+  defp do_build_no_struct(module, {key, attrs} = input, error?)
+       when is_atom(key) or is_list(key) do
+    case build(module, input, error?) do
+      {:ok, struct_value} when is_struct(struct_value) ->
+        {:ok, Map.from_struct(struct_value)}
+
+      other ->
+        other
+    end
+  end
+
+  defp do_build_no_struct(_module, _attrs, _error?) do
+    {:error,
+     %{message: "Your input must be a map or list of maps", action: :bad_parameters}}
+  end
+
   @spec build(module(), map() | struct() | tuple(), boolean()) ::
           {:ok, struct()} | {:error, any()}
   def build(module, attrs, error?)
@@ -75,9 +120,11 @@ defmodule GuardedStruct.Runtime do
   end
 
   defp do_build(module, attrs, full_attrs, type, error?, path) when is_map(attrs) do
-    info = module.__information__()
-    fields_meta = module.__fields__()
-    section_opts = section_options(module)
+    # The standalone `use GuardedStruct` exposes `__information__/0` and
+    # `__fields__/0`. The `GuardedStruct.AshResource` extension uses the
+    # `__guarded_*` namespace to avoid clashing with Ash's own callbacks.
+    {info, fields_meta} = read_metadata(module)
+    section_opts = section_options_from(info)
 
     keys = info.keys
     enforce_keys = info.enforce_keys
@@ -153,8 +200,25 @@ defmodule GuardedStruct.Runtime do
     end
   end
 
-  defp section_options(module) do
-    info = module.__information__()
+  # Read metadata from either the standalone GuardedStruct module's
+  # `__information__/0` + `__fields__/0` OR the Ash extension's
+  # `__guarded_information__/0` + `__guarded_fields__/0`.
+  defp read_metadata(module) do
+    cond do
+      function_exported?(module, :__information__, 0) ->
+        {module.__information__(), module.__fields__()}
+
+      function_exported?(module, :__guarded_information__, 0) ->
+        {module.__guarded_information__(), module.__guarded_fields__()}
+
+      true ->
+        raise ArgumentError,
+              "module #{inspect(module)} doesn't appear to be a GuardedStruct or " <>
+                "an Ash resource using GuardedStruct.AshResource"
+    end
+  end
+
+  defp section_options_from(info) do
     Map.get(info, :options, %{authorized_fields: false})
   end
 

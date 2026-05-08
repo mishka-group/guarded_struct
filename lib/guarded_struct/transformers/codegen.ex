@@ -1,13 +1,21 @@
 defmodule GuardedStruct.Transformers.Codegen do
   @moduledoc false
 
-  # Shared code-generation helpers used by GenerateBuilder (top-level user
-  # module) and GenerateSubFieldModules (per-sub_field nested submodules).
-  # Both produce the same surface (defstruct, @type, @enforce_keys, keys/0,1,
-  # enforce_keys/0,1, __information__/0, __fields__/0, builder/1,2) so a
-  # sub_field is a real, callable module just like its parent.
+  # Shared code-generation helpers. Used by:
+  #   * GenerateBuilder — top-level user module (full struct + builder/2)
+  #   * GenerateSubFieldModules — per-sub_field nested submodules
+  #   * GenerateAshValidator — Ash resource extension variant (no struct,
+  #     no builder/2; emits __guarded_validate__/1 instead)
+  #
+  # `build_body/6` accepts a `variant:` option to switch between the
+  # full struct+builder body and the Ash-friendly validator-only body.
 
   alias GuardedStruct.Dsl.{Field, SubField, ConditionalField}
+
+  @doc """
+  Public entry point — also used by the Ash extension's transformer.
+  """
+  def struct_pieces(entities, block_enforce), do: build_struct_pieces(entities, block_enforce)
 
   @doc """
   Build the codegen body for a guardedstruct module.
