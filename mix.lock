@@ -10,5 +10,8 @@
   "makeup_erlang": {:hex, :makeup_erlang, "1.0.3", "4252d5d4098da7415c390e847c814bad3764c94a814a0b4245176215615e1035", [:mix], [{:makeup, "~> 1.0", [hex: :makeup, repo: "hexpm", optional: false]}], "hexpm", "953297c02582a33411ac6208f2c6e55f0e870df7f80da724ed613f10e6706afd"},
   "mochiweb": {:hex, :mochiweb, "3.3.0", "2898ad0bfeee234e4cbae623c7052abc3ff0d73d499ba6e6ffef445b13ffd07a", [:rebar3], [], "hexpm", "aa85b777fb23e9972ebc424e40b5d35106f19bc998873e026dedd876df8ee50c"},
   "nimble_parsec": {:hex, :nimble_parsec, "1.4.2", "8efba0122db06df95bfaa78f791344a89352ba04baedd3849593bfce4d0dc1c6", [:mix], [], "hexpm", "4b21398942dda052b403bbe1da991ccd03a053668d147d53fb8c4e0efe09c973"},
+  "sourceror": {:hex, :sourceror, "1.12.0", "da354c5f35aad3cc1132f5d5b0d8437d865e2661c263260480bab51b5eedb437", [:mix], [], "hexpm", "755703683bd014ebcd5de9acc24b68fb874a660a568d1d63f8f98cd8a6ef9cd0"},
+  "spark": {:hex, :spark, "2.7.0", "e685b33c038f12851993880bb7e3b326117612eb746fe15828678c152f8321c6", [:mix], [{:igniter, ">= 0.3.64 and < 1.0.0-0", [hex: :igniter, repo: "hexpm", optional: true]}, {:jason, "~> 1.4", [hex: :jason, repo: "hexpm", optional: true]}, {:sourceror, "~> 1.2", [hex: :sourceror, repo: "hexpm", optional: true]}], "hexpm", "e2f675fbda32375b01d9ee7c652671531027fd043bf4a91bafdb2ab716aa1122"},
+  "splode": {:hex, :splode, "0.3.1", "9843c54f84f71b7833fec3f0be06c3cfb5be6b35960ee195ea4fad84b1c25030", [:mix], [], "hexpm", "8f2309b6ec2ecbb01435656429ed1d9ed04ba28797a3280c3b0d1217018ecfbd"},
   "sweet_xml": {:git, "https://github.com/kbrw/sweet_xml.git", "e2824e9051c50650cdb7cc6a9b4d31bfe215917c", [branch: "master"]},
 }

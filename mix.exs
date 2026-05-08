@@ -53,7 +53,11 @@ defmodule GuardedStruct.MixProject do
   defp deps do
     [
       # necessary
+      {:spark, "~> 2.7"},
+      {:splode, "~> 0.3"},
       {:html_sanitize_ex, "~> 1.5"},
+      # required by Spark.Formatter for `mix format` and `mix spark.formatter`
+      {:sourceror, "~> 1.7", only: [:dev, :test]},
       # document
       {:ex_doc, "~> 0.40.1", only: :dev, runtime: false},
 
