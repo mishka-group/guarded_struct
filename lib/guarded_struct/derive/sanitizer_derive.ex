@@ -84,6 +84,15 @@ defmodule GuardedStruct.Derive.SanitizerDerive do
   end
 
   def sanitize(action, input) do
+    case GuardedStruct.Derive.Extension.dispatch_sanitize(action, input) do
+      :__not_found__ -> fallback_dispatch(action, input)
+      result -> result
+    end
+  rescue
+    _ -> input
+  end
+
+  defp fallback_dispatch(action, input) do
     case Application.get_env(:guarded_struct, :sanitize_derive) do
       nil ->
         input
@@ -94,8 +103,6 @@ defmodule GuardedStruct.Derive.SanitizerDerive do
       derive_module ->
         derive_module.sanitize(action, input)
     end
-  rescue
-    _ -> input
   end
 
   defp custom_derive(derive_list, action, input) do

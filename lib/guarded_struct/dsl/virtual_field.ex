@@ -1,4 +1,4 @@
-defmodule GuardedStruct.Dsl.Field do
+defmodule GuardedStruct.Dsl.VirtualField do
   @moduledoc false
 
   defstruct [
@@ -12,10 +12,7 @@ defmodule GuardedStruct.Dsl.Field do
     :from,
     :on,
     :domain,
-    :struct,
-    :structs,
     :hint,
-    :priority,
     :__spark_metadata__,
     :__derive_ops__,
     :__from_path__,
@@ -34,10 +31,7 @@ defmodule GuardedStruct.Dsl.Field do
           from: String.t() | nil,
           on: String.t() | nil,
           domain: String.t() | nil,
-          struct: module() | nil,
-          structs: module() | boolean() | nil,
           hint: String.t() | nil,
-          priority: boolean() | nil,
           __spark_metadata__: any(),
           __derive_ops__: map() | nil,
           __from_path__: [atom()] | nil,

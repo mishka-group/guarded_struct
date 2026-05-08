@@ -1,16 +1,7 @@
 defmodule GuardedStruct.Transformers.Codegen do
   @moduledoc false
 
-  # Shared code-generation helpers. Used by:
-  #   * GenerateBuilder — top-level user module (full struct + builder/2)
-  #   * GenerateSubFieldModules — per-sub_field nested submodules
-  #   * GenerateAshValidator — Ash resource extension variant (no struct,
-  #     no builder/2; emits __guarded_validate__/1 instead)
-  #
-  # `build_body/6` accepts a `variant:` option to switch between the
-  # full struct+builder body and the Ash-friendly validator-only body.
-
-  alias GuardedStruct.Dsl.{Field, SubField, ConditionalField}
+  alias GuardedStruct.Dsl.{Field, SubField, ConditionalField, VirtualField}
 
   @doc """
   Public entry point — also used by the Ash extension's transformer.
@@ -52,8 +43,6 @@ defmodule GuardedStruct.Transformers.Codegen do
         @type t() :: %__MODULE__{unquote_splicing(types)}
       end
 
-      # If the user redefined any of these in their module body, mark theirs
-      # overridable so our generated bodies (which know the actual values) win.
       if Module.defines?(__MODULE__, {:keys, 0}, :def),
         do: defoverridable(keys: 0)
 
@@ -92,9 +81,6 @@ defmodule GuardedStruct.Transformers.Codegen do
 
       def __fields__, do: unquote(Macro.escape(fields_runtime))
 
-      # Header: defines the default for the trailing arg. All clauses below
-      # share this default (Elixir requires a header when a multi-clause def
-      # sets a default).
       def builder(attrs_or_input, error \\ false)
 
       def builder({_, _} = input, error),
@@ -121,11 +107,7 @@ defmodule GuardedStruct.Transformers.Codegen do
   end
 
   @doc """
-  Validate field-level invariants and raise legacy-compatible `ArgumentError`s
-  for two cases the existing test suite relies on:
-
-  * non-atom `field` names → `"a field name must be an atom, got X"`
-  * duplicate field names at the same scope → `"the field :name is already set"`
+  Raise `ArgumentError` for non-atom field names or duplicate names in scope.
   """
   def validate_entities!(entities) do
     Enum.reduce(entities, [], fn entity, seen ->
@@ -155,11 +137,11 @@ defmodule GuardedStruct.Transformers.Codegen do
   defp entity_name(other), do: Map.get(other, :name)
 
   defp build_struct_pieces(entities, block_enforce) do
-    # A ConditionalField at the same scope can have multiple children with
-    # the same `:name` — but the parent struct only needs ONE field per name.
-    # Keep the unique names while preserving declaration order.
+    {virtual_entities, struct_entities} =
+      Enum.split_with(entities, &match?(%VirtualField{}, &1))
+
     unique_entities =
-      Enum.uniq_by(entities, & &1.name)
+      Enum.uniq_by(struct_entities, & &1.name)
 
     keys = Enum.map(unique_entities, & &1.name)
 
@@ -202,17 +184,17 @@ defmodule GuardedStruct.Transformers.Codegen do
         {entity.name, if(nullable?, do: nullable_type(type_ast), else: type_ast)}
       end)
 
-    # `fields_runtime` keeps ALL entities (including duplicates from a
-    # conditional_field's children at the same name) — runtime needs every
-    # candidate to do conditional dispatch. The struct-level pieces above
-    # were de-duped because the struct only has one slot per name.
     fields_runtime =
-      Enum.map(entities, fn
+      Enum.map(struct_entities, fn
         %Field{} = f ->
           %{
             kind: :field,
             name: f.name,
             derive: f.derive,
+            __derive_ops__: f.__derive_ops__,
+            __from_path__: f.__from_path__,
+            __on_path__: f.__on_path__,
+            __domain_ops__: f.__domain_ops__,
             validator: f.validator,
             auto: f.auto,
             on: f.on,
@@ -230,6 +212,10 @@ defmodule GuardedStruct.Transformers.Codegen do
             kind: :sub_field,
             name: sf.name,
             derive: sf.derive,
+            __derive_ops__: sf.__derive_ops__,
+            __from_path__: sf.__from_path__,
+            __on_path__: sf.__on_path__,
+            __domain_ops__: sf.__domain_ops__,
             validator: sf.validator,
             auto: sf.auto,
             on: sf.on,
@@ -251,6 +237,10 @@ defmodule GuardedStruct.Transformers.Codegen do
             kind: :conditional_field,
             name: cf.name,
             derive: cf.derive,
+            __derive_ops__: cf.__derive_ops__,
+            __from_path__: cf.__from_path__,
+            __on_path__: cf.__on_path__,
+            __domain_ops__: cf.__domain_ops__,
             validator: cf.validator,
             auto: cf.auto,
             on: cf.on,
@@ -269,21 +259,37 @@ defmodule GuardedStruct.Transformers.Codegen do
           %{kind: :unknown, name: other.name}
       end)
 
-    {keys, defstruct_kw, types, enforce_keys, fields_runtime}
+    virtual_runtime =
+      Enum.map(virtual_entities, fn %VirtualField{} = vf ->
+        %{
+          kind: :virtual_field,
+          name: vf.name,
+          derive: vf.derive,
+          __derive_ops__: vf.__derive_ops__,
+          __from_path__: vf.__from_path__,
+          __on_path__: vf.__on_path__,
+          __domain_ops__: vf.__domain_ops__,
+          validator: vf.validator,
+          auto: vf.auto,
+          on: vf.on,
+          from: vf.from,
+          domain: vf.domain,
+          hint: vf.hint,
+          default: vf.default
+        }
+      end)
+
+    {keys, defstruct_kw, types, enforce_keys, fields_runtime ++ virtual_runtime}
   end
 
-  # Spark partitions a conditional_field's children into separate `:fields`,
-  # `:sub_fields`, and `:conditional_fields` lists, losing source-declaration
-  # order. Existing tests pattern-match on the original declared order, so we
-  # use `__spark_metadata__.anno.line` to recover it.
+  # Spark partitions conditional_field children into separate :fields,
+  # :sub_fields, :conditional_fields lists; sort by `:type` AST line metadata
+  # to restore source-declaration order.
   defp merge_children_in_source_order(%ConditionalField{} = cf) do
     (cf.fields ++ cf.sub_fields ++ cf.conditional_fields)
     |> Enum.sort_by(&entity_line/1)
   end
 
-  # `__spark_metadata__.anno` is `nil` when this code runs (in a transformer),
-  # but the field's `:type` AST carries `[line: N, column: N]` metadata from
-  # parsing — that's what we use to recover declaration order.
   defp entity_line(%{type: type_ast}) do
     extract_line(type_ast)
   end
@@ -295,9 +301,6 @@ defmodule GuardedStruct.Transformers.Codegen do
   defp extract_line(_), do: 0
 
   defp encode_children(entities) do
-    # Number sub_fields by encounter order so the runtime knows which
-    # auto-generated submodule (e.g. `Thing1`, `Thing2`) corresponds to which
-    # child. Plain fields and conditional_fields don't carry an index.
     {result, _} =
       Enum.reduce(entities, {[], 0}, fn
         %Field{} = f, {acc, sf_count} ->
@@ -305,6 +308,7 @@ defmodule GuardedStruct.Transformers.Codegen do
             kind: :field,
             name: f.name,
             derive: f.derive,
+            __derive_ops__: f.__derive_ops__,
             validator: f.validator,
             struct: f.struct,
             structs: f.structs,
@@ -321,6 +325,7 @@ defmodule GuardedStruct.Transformers.Codegen do
             name: sf.name,
             sub_field_index: new_count,
             derive: sf.derive,
+            __derive_ops__: sf.__derive_ops__,
             validator: sf.validator,
             structs: sf.structs,
             hint: sf.hint,
@@ -334,13 +339,9 @@ defmodule GuardedStruct.Transformers.Codegen do
             kind: :conditional_field,
             name: cf.name,
             derive: cf.derive,
+            __derive_ops__: cf.__derive_ops__,
             validator: cf.validator,
             hint: cf.hint,
-            # `structs: true` on a nested conditional means "list-of-this-shape"
-            # — the runtime needs this to iterate per-element. Without these
-            # the inner-conditional list mode silently broke (see test
-            # "nested conditional resolves a list → INNER conditional with
-            # list children" in nested_conditional_field_test.exs).
             structs: cf.structs,
             list?: cf.structs == true,
             children: encode_children(merge_children_in_source_order(cf))

@@ -41,9 +41,6 @@ defmodule GuardedStruct.Messages do
   @callback check_dependent_keys({any(), any()}) :: message()
   @callback domain_field_status(any()) :: message()
   @callback force_domain_field_status(any()) :: message()
-  # Parser
-  @callback parser_field_value() :: message()
-  @callback unsupported_conditional_field() :: message()
   # ValidationDerive
   @callback not_empty_binary(any()) :: message()
   @callback not_empty_list(any()) :: message()
@@ -107,8 +104,6 @@ defmodule GuardedStruct.Messages do
                       check_dependent_keys: 1,
                       domain_field_status: 1,
                       force_domain_field_status: 1,
-                      parser_field_value: 0,
-                      unsupported_conditional_field: 0,
                       not_empty_binary: 1,
                       not_empty_list: 1,
                       not_empty_map: 1,
@@ -176,10 +171,6 @@ defmodule GuardedStruct.Messages do
       def check_dependent_keys(key_value), do: unquote(__MODULE__).check_dependent_keys(key_value)
       def domain_field_status(key), do: unquote(__MODULE__).domain_field_status(key)
       def force_domain_field_status(key), do: unquote(__MODULE__).force_domain_field_status(key)
-
-      # Parser
-      def unsupported_conditional_field(), do: unquote(__MODULE__).unsupported_conditional_field()
-      def parser_field_value(), do: unquote(__MODULE__).parser_field_value()
 
       # ValidationDerive
       def not_empty_binary(field), do: unquote(__MODULE__).not_empty_binary(field)
@@ -279,22 +270,6 @@ defmodule GuardedStruct.Messages do
 
   def force_domain_field_status(key),
     do: "Based on field #{key} input you have to send authorized data and required key"
-
-  # Parser
-  def unsupported_conditional_field() do
-    """
-    \n ----------------------------------------------------------\n
-    Unfortunately, this macro does not support the nested mode in the conditional_field macro.
-    If you can add this feature I would be very happy to send a PR.
-    More information: https://github.com/mishka-group/guarded_struct/issues/7
-    Parent Issue: https://github.com/mishka-group/guarded_struct/issues/8
-    \n ----------------------------------------------------------\n
-    """
-  end
-
-  def parser_field_value(),
-    do:
-      "Oh no!, I think you have not made all the subfields of a conditional field to the same name"
 
   # ValidationDerive
   def not_empty_binary(field), do: "The #{field} field must not be empty"

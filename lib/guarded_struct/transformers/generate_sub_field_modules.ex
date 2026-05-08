@@ -41,9 +41,6 @@ defmodule GuardedStruct.Transformers.GenerateSubFieldModules do
         generate_sub_field(sf, parent_path)
 
       %ConditionalField{} = cf ->
-        # Auto-number ONLY sub_fields, starting from 1. Plain `field` children
-        # don't increment the counter (legacy parity at
-        # `lib/guarded_struct.ex:2118-2153`).
         cf.sub_fields
         |> Enum.with_index(1)
         |> Enum.each(fn {inner_sf, idx} ->
@@ -74,8 +71,6 @@ defmodule GuardedStruct.Transformers.GenerateSubFieldModules do
     body =
       Codegen.build_body(
         sf.fields ++ sf.sub_fields ++ sf.conditional_fields,
-        # `enforce: true` on the sub_field is the block-level enforce for ALL
-        # its inner fields (legacy parity at `lib/guarded_struct.ex:1515`).
         sf.enforce == true,
         false,
         sf.error == true,

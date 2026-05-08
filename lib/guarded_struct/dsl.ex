@@ -30,9 +30,46 @@ defmodule GuardedStruct.Dsl do
     ]
   }
 
-  # `recursive_as: :sub_fields` lets `sub_field` nest inside `sub_field`. We
-  # also list the entity in its own `entities[:sub_fields]` slot so the section-
-  # macro generator imports `sub_field` inside the body.
+  @virtual_field %Spark.Dsl.Entity{
+    name: :virtual_field,
+    target: GuardedStruct.Dsl.VirtualField,
+    args: [:name, :type],
+    schema: [
+      name: [type: :any, required: true],
+      type: [type: :quoted, required: true],
+      enforce: [type: :boolean],
+      default: [type: :quoted],
+      derive: [type: :string],
+      validator: [type: {:tuple, [:atom, :atom]}],
+      auto: [
+        type:
+          {:or,
+           [
+             {:tuple, [:atom, :atom]},
+             {:tuple, [:atom, :atom, :any]}
+           ]}
+      ],
+      from: [type: :string],
+      on: [type: :string],
+      domain: [type: :string],
+      hint: [type: :string]
+    ]
+  }
+
+  @dynamic_field %Spark.Dsl.Entity{
+    name: :dynamic_field,
+    target: GuardedStruct.Dsl.Field,
+    args: [:name],
+    schema: [
+      name: [type: :any, required: true],
+      type: [type: :quoted, default: quote(do: map())],
+      default: [type: :quoted, default: Macro.escape(%{})],
+      derive: [type: :string, default: "validate(map)"],
+      validator: [type: {:tuple, [:atom, :atom]}],
+      hint: [type: :string]
+    ]
+  }
+
   @sub_field_base %Spark.Dsl.Entity{
     name: :sub_field,
     target: GuardedStruct.Dsl.SubField,
@@ -71,8 +108,6 @@ defmodule GuardedStruct.Dsl do
     ]
   }
 
-  # `recursive_as: :conditional_fields` lets `conditional_field` nest inside
-  # `conditional_field` — this is the headline fix for issues #7/#8/#25.
   @conditional_field_base %Spark.Dsl.Entity{
     name: :conditional_field,
     target: GuardedStruct.Dsl.ConditionalField,
@@ -136,24 +171,20 @@ defmodule GuardedStruct.Dsl do
       validate_derive: [type: {:or, [:atom, {:list, :atom}]}],
       sanitize_derive: [type: {:or, [:atom, {:list, :atom}]}]
     ],
-    entities: [@field, @sub_field, @conditional_field]
+    entities: [@field, @virtual_field, @dynamic_field, @sub_field, @conditional_field]
   }
 
   use Spark.Dsl.Extension,
     sections: [@section],
     transformers: [
-      # ParseDerive runs FIRST: validate every `derive: "..."` string at compile
-      # time, raising DslError with file:line:column on typos. Closes the
-      # headline complaint in REDESIGN.md §10 (legacy silently swallowed bad
-      # derives via `rescue _ -> nil`).
       GuardedStruct.Transformers.ParseDerive,
+      GuardedStruct.Transformers.VerifyDeriveOps,
+      GuardedStruct.Transformers.ParseCoreKeys,
+      GuardedStruct.Transformers.ParseDomain,
       GuardedStruct.Transformers.GenerateSubFieldModules,
       GuardedStruct.Transformers.GenerateBuilder
     ],
     verifiers: [
-      # Verifiers run POST-COMPILE so they can `Code.ensure_loaded?` and
-      # `function_exported?` user-supplied modules without forcing them into
-      # the compile graph. See REDESIGN.md §G "Verifier vs Transformer".
       GuardedStruct.Verifiers.VerifyValidatorMFA,
       GuardedStruct.Verifiers.VerifyAutoMFA
     ]

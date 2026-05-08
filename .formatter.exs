@@ -6,6 +6,8 @@ spark_locals_without_parens = [
   default: 1,
   derive: 1,
   domain: 1,
+  dynamic_field: 1,
+  dynamic_field: 2,
   enforce: 1,
   error: 1,
   field: 2,
@@ -22,8 +24,11 @@ spark_locals_without_parens = [
   structs: 1,
   sub_field: 2,
   sub_field: 3,
+  type: 1,
   validate_derive: 1,
-  validator: 1
+  validator: 1,
+  virtual_field: 2,
+  virtual_field: 3
 ]
 
 [

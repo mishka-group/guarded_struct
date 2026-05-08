@@ -1,10 +1,6 @@
 defmodule GuardedStruct.Runtime do
   @moduledoc false
 
-  # Runtime build pipeline for the Spark-based GuardedStruct rewrite.
-  # Mirrors the legacy `GuardedStruct.builder/4` step order (see
-  # `REDESIGN.md` §12 and the legacy `lib/guarded_struct.ex:1582-1629`).
-
   alias GuardedStruct.Derive
   alias GuardedStruct.Derive.Parser
   alias GuardedStruct.Derive.ValidationDerive
@@ -23,8 +19,7 @@ defmodule GuardedStruct.Runtime do
   end
 
   def validate(_module, _attrs, _error?) do
-    {:error,
-     %{message: "Your input must be a map or list of maps", action: :bad_parameters}}
+    {:error, %{message: "Your input must be a map or list of maps", action: :bad_parameters}}
   end
 
   @spec build(module(), map() | struct() | tuple(), boolean()) ::
@@ -48,9 +43,6 @@ defmodule GuardedStruct.Runtime do
     do_build_with_key(module, key, attrs, type, error?)
   end
 
-  # Internal nested-build call: pass FULL root attrs so `root::path` core keys
-  # resolve correctly inside sub_fields. `path` is the list of field names
-  # walked from the root to reach this scope's local attrs.
   def build(module, {:__nested__, local_attrs, full_attrs, path, type}, error?) do
     do_build(module, local_attrs, full_attrs, type, error?, path)
   end
@@ -79,13 +71,6 @@ defmodule GuardedStruct.Runtime do
     end
   end
 
-  # Main build pipeline. `attrs` is the current scope (sub-tree), `full_attrs`
-  # is the original root attrs — needed for `root::` core-key paths. `path`
-  # is the list of field names from root to here (for sub_field dispatch).
-  #
-  # Non-map input is normalized to an empty map — legacy `before_revaluation`
-  # at `lib/guarded_struct.ex:1640` converts non-map input into a stub map and
-  # the subsequent `required_fields` check produces the actual error.
   defp do_build(module, attrs, full_attrs, type, error?, path \\ [])
 
   defp do_build(module, attrs, full_attrs, type, error?, path) when not is_map(attrs) do
@@ -96,14 +81,8 @@ defmodule GuardedStruct.Runtime do
     do_pipeline(module, attrs, full_attrs, type, error?, path, _build_struct? = true)
   end
 
-  # Shared pipeline used by both `build/3` (returns a struct) and `validate/3`
-  # (returns the attrs map — used by the Ash extension where the struct is
-  # owned by Ash). The pipeline order is identical; only the final wrap differs.
   defp do_pipeline(module, attrs, full_attrs, type, error?, path, build_struct?)
        when is_map(attrs) do
-    # The standalone `use GuardedStruct` exposes `__information__/0` and
-    # `__fields__/0`. The `GuardedStruct.AshResource` extension uses the
-    # `__guarded_*` namespace to avoid clashing with Ash's own callbacks.
     {info, fields_meta} = read_metadata(module)
     section_opts = section_options_from(info)
 
@@ -131,15 +110,13 @@ defmodule GuardedStruct.Runtime do
 
       all_errors = sub_errors ++ validator_errors
 
-      # Continue through main_validator and derive even when sub_errors exist,
-      # so any field-level derive failures (e.g. on `last_activity`) accumulate
-      # alongside sub-field errors. Legacy aggregates ALL errors before
-      # surfacing — see `validation_errors_aggregator` at
-      # `lib/guarded_struct.ex:2646`.
-      # `wrap` produces either a `%module{}` struct (build/3 path) or a plain
-      # map (validate/3 path used by GuardedStruct.AshResource where the struct
-      # is owned by Ash, not us).
+      virtual_names =
+        fields_meta
+        |> Enum.filter(&(&1[:kind] == :virtual_field))
+        |> Enum.map(& &1.name)
+
       wrap = fn merged ->
+        merged = Map.drop(merged, virtual_names)
         if build_struct?, do: struct(module, merged), else: merged
       end
 
@@ -160,9 +137,6 @@ defmodule GuardedStruct.Runtime do
             {[err], wrap.(Map.merge(validator_attrs, sub_field_data))}
         end
 
-      # Order: derive errors first, then sub-field errors. This matches the
-      # legacy aggregator output order — see the test "nested macro field"
-      # in test/global_test.exs which pattern-matches on this exact ordering.
       final_errors = derive_errors ++ all_errors
 
       cond do
@@ -173,7 +147,6 @@ defmodule GuardedStruct.Runtime do
           {:ok, struct_value}
       end
     else
-      # `authorized_fields` produces a single error map at this level too.
       {:error, %{action: :authorized_fields}} = err ->
         handle_error(err, module, error?)
 
@@ -188,9 +161,6 @@ defmodule GuardedStruct.Runtime do
     end
   end
 
-  # Read metadata from either the standalone GuardedStruct module's
-  # `__information__/0` + `__fields__/0` OR the Ash extension's
-  # `__guarded_information__/0` + `__guarded_fields__/0`.
   defp read_metadata(module) do
     cond do
       function_exported?(module, :__information__, 0) ->
@@ -252,8 +222,6 @@ defmodule GuardedStruct.Runtime do
     end
   end
 
-  # Apply `auto: {Mod, :fn}` / `auto: {Mod, :fn, default}` at compile-time-known
-  # call sites. In `:edit` mode, preserve user-supplied values.
   defp apply_auto(attrs, fields_meta, type) do
     Enum.reduce(fields_meta, attrs, fn meta, acc ->
       case meta.auto do
@@ -284,26 +252,27 @@ defmodule GuardedStruct.Runtime do
     end)
   end
 
-  # `on: "root::path"` or `"sibling::path"` — if the dependent path is missing
-  # but the field's value IS provided, raise a :dependent_keys error.
   defp check_on(attrs, fields_meta, full_attrs) do
     errors =
       fields_meta
-      # Legacy iterates :gs_core_keys in reverse-accumulation order; tests
-      # pattern-match against that ordering.
       |> Enum.reverse()
       |> Enum.flat_map(fn
-        %{on: nil} -> []
-        %{on: pattern, name: name} -> [check_on_pattern(name, pattern, attrs, full_attrs)]
-        _ -> []
+        %{on: nil} ->
+          []
+
+        %{on: pattern, name: name} = f ->
+          [check_on_pattern(name, pattern, attrs, full_attrs, Map.get(f, :__on_path__))]
+
+        _ ->
+          []
       end)
       |> Enum.reject(&is_nil/1)
 
     if errors == [], do: {:ok, attrs}, else: {:error, errors}
   end
 
-  defp check_on_pattern(field_name, pattern, attrs, full_attrs) do
-    [head | rest] = path = Parser.parse_core_keys_pattern(pattern)
+  defp check_on_pattern(field_name, pattern, attrs, full_attrs, pre_parsed) do
+    [head | rest] = path = pre_parsed || Parser.parse_core_keys_pattern(pattern)
     field_value = Map.get(full_attrs, field_name) || Map.get(attrs, field_name)
 
     if is_nil(field_value) do
@@ -326,15 +295,14 @@ defmodule GuardedStruct.Runtime do
     end
   end
 
-  # `from: "root::path"` — copy a value from another path (root or local) into
-  # this field if the field isn't already set in attrs.
   defp apply_from(attrs, fields_meta, full_attrs) do
     Enum.reduce(fields_meta, attrs, fn
       %{from: nil}, acc ->
         acc
 
-      %{from: pattern, name: name}, acc ->
-        [head | rest] = path = Parser.parse_core_keys_pattern(pattern)
+      %{from: pattern, name: name} = f, acc ->
+        [head | rest] =
+          path = Map.get(f, :__from_path__) || Parser.parse_core_keys_pattern(pattern)
 
         source =
           if head == :root,
@@ -351,46 +319,44 @@ defmodule GuardedStruct.Runtime do
     end)
   end
 
-  # `domain: "!path=Type[...]::?path=Type[...]"` — input-shape constraints.
-  # Reuses the legacy parser at `lib/guarded_struct.ex:2475`.
   defp check_domain(full_attrs, attrs, fields_meta) do
     errors =
       fields_meta
       |> Enum.flat_map(fn
-        %{domain: nil} -> []
-        %{domain: pattern, name: name} -> parse_domain(pattern, name, full_attrs, attrs)
-        _ -> []
+        %{domain: nil} ->
+          []
+
+        %{name: name} = f ->
+          rules = Map.get(f, :__domain_ops__) || []
+          run_domain_rules(rules, name, full_attrs, attrs)
       end)
       |> List.flatten()
 
     if errors == [], do: {:ok, attrs}, else: {:error, errors}
   end
 
-  defp parse_domain(pattern, key, full_attrs, attrs) do
+  defp run_domain_rules([], _key, _full_attrs, _attrs), do: []
+
+  defp run_domain_rules(rules, key, full_attrs, attrs) do
     case Map.get(full_attrs, key) || Map.get(attrs, key) do
       nil ->
         []
 
       _ ->
-        pattern
-        |> String.trim()
-        |> String.split("::", trim: true)
-        |> Enum.map(&String.split(&1, "=", trim: true))
-        |> Enum.map(fn
-          ["!" <> field, p] -> domain_field_status(field, full_attrs, p, key, :error)
-          ["?" <> field, p] -> domain_field_status(field, full_attrs, p, key)
-        end)
-        |> Enum.reject(&is_nil/1)
+        Enum.map(rules, &run_domain_rule(&1, key, full_attrs)) |> Enum.reject(&is_nil/1)
     end
   end
 
-  defp domain_field_status(field, attrs, converted_pattern, key, force \\ nil) do
-    domain_field = get_domain_field(field, attrs)
-    converted = converted_domain_pattern(converted_pattern)
+  defp run_domain_rule(
+         %{field_path: field, validator: validator, required?: required?},
+         key,
+         full_attrs
+       ) do
+    domain_field = get_domain_field(field, full_attrs)
 
     cond do
       not is_nil(domain_field) ->
-        case ValidationDerive.validate(converted, domain_field, key) do
+        case ValidationDerive.validate(validator, domain_field, key) do
           data when is_tuple(data) and elem(data, 0) == :error ->
             %{
               message: "Based on field #{key} input you have to send authorized data",
@@ -403,7 +369,7 @@ defmodule GuardedStruct.Runtime do
             nil
         end
 
-      is_nil(force) ->
+      not required? ->
         nil
 
       true ->
@@ -417,43 +383,6 @@ defmodule GuardedStruct.Runtime do
     end
   end
 
-  defp converted_domain_pattern(pattern) do
-    case pattern do
-      "Tuple" <> list ->
-        {:enum, "Tuple[#{re_structure(list, "string")}]"}
-
-      "Map" <> list ->
-        {:enum, "Map[#{re_structure(list, "string")}]"}
-
-      "Equal" <> data ->
-        {:equal, data |> String.replace(["[", "]"], "") |> String.replace(">>", "::")}
-
-      "Either" <> list ->
-        converted =
-          list
-          |> String.replace("enum>>", "enum=")
-          |> String.replace(">>", "::")
-          |> then(&Parser.convert_parameters("parsed_string", Code.string_to_quoted!(&1)))
-
-        %{either: converted["parsed_string"]}
-
-      "Custom" <> list ->
-        {:custom, list}
-
-      data ->
-        {:enum, re_structure(data)}
-    end
-  end
-
-  defp re_structure(data) do
-    data |> String.split(",", trim: true) |> Enum.map(&String.trim/1) |> Enum.join("::")
-  end
-
-  defp re_structure(data, "string") do
-    {converted, []} = Code.eval_string(data)
-    Enum.reduce(converted, "", fn item, acc -> acc <> "#{Macro.to_string(item)}::" end)
-  end
-
   defp get_domain_field(field, attrs) do
     field
     |> String.trim()
@@ -462,13 +391,7 @@ defmodule GuardedStruct.Runtime do
     |> then(&get_in(attrs, &1))
   end
 
-  # Sub-field / struct: / structs: / conditional_field dispatch. Iterate by
-  # INPUT-attrs order so the resulting error list reflects the user's input
-  # ordering — this is what existing tests pattern-match.
   defp build_sub_fields(attrs, fields_meta, parent_module, full_attrs, parent_path) do
-    # Group fields_meta by name — conditional_field children share a name with
-    # the parent. We pick the FIRST entry per name from fields_meta when
-    # iterating, but keep the full list for conditional dispatch.
     by_name =
       Enum.reduce(fields_meta, %{}, fn f, acc ->
         Map.update(acc, f.name, [f], &(&1 ++ [f]))
@@ -500,9 +423,6 @@ defmodule GuardedStruct.Runtime do
         value ->
           case run_pre_validator(meta, value, parent_module) do
             {:ok, validated} ->
-              # Skip pre_derive for conditional_field — dispatch_conditional
-              # handles its own derive and wraps the error with the
-              # `action: :conditionals` marker.
               if meta.kind == :conditional_field do
                 dispatch(
                   meta,
@@ -583,14 +503,23 @@ defmodule GuardedStruct.Runtime do
 
   defp pre_derive(%{derive: nil}, value), do: {:ok, value}
 
-  defp pre_derive(%{derive: str, name: name}, value) when is_binary(str) do
-    case Derive.derive({:ok, %{name => value}, [%{field: name, derive: str}]}) do
-      {:ok, %{^name => sanitized}} -> {:ok, sanitized}
-      {:error, errs} -> {:error, errs}
+  defp pre_derive(%{name: name} = meta, value) do
+    ops = Map.get(meta, :__derive_ops__)
+    str = Map.get(meta, :derive)
+
+    cond do
+      is_nil(ops) and is_nil(str) ->
+        {:ok, value}
+
+      true ->
+        input = %{field: name, derive: str, derive_ops: ops}
+
+        case Derive.derive({:ok, %{name => value}, [input]}) do
+          {:ok, %{^name => sanitized}} -> {:ok, sanitized}
+          {:error, errs} -> {:error, errs}
+        end
     end
   end
-
-  defp pre_derive(_meta, value), do: {:ok, value}
 
   defp dispatch(meta, value, parent_module, ok_acc, err_acc, full_attrs, parent_path) do
     cond do
@@ -616,18 +545,10 @@ defmodule GuardedStruct.Runtime do
     end
   end
 
-  # Try each child of a conditional_field in order. First child whose
-  # validator (or natural shape match) returns `:ok` wins. Errors aggregate
-  # under the conditional's name with `action: :conditionals` and per-child
-  # `__hint__` markers.
   defp dispatch_conditional(meta, value, parent_module, ok_acc, err_acc, full_attrs, parent_path) do
     children = meta.children
     new_path = parent_path ++ [meta.name]
 
-    # Apply the conditional_field's OWN derive (e.g. `validate(not_flatten_empty_item)`)
-    # to the raw input before trying any child. If it fails, the error is the
-    # only one reported under this conditional. Legacy parity at
-    # `lib/guarded_struct.ex:2477-2493`.
     case run_child_derive(meta, value) do
       {:ok, value} ->
         do_dispatch_conditional(
@@ -712,8 +633,6 @@ defmodule GuardedStruct.Runtime do
     case run_child_validator(child, value) do
       {:ok, validated} ->
         cond do
-          # `struct: SomeMod` — value MUST be a map; otherwise this branch
-          # doesn't match.
           is_atom(Map.get(child, :struct)) and not is_nil(Map.get(child, :struct)) ->
             if is_map(validated) do
               child.struct.builder(validated)
@@ -725,9 +644,6 @@ defmodule GuardedStruct.Runtime do
                }}
             end
 
-          # `structs: SomeMod` — value MUST be a list. Nested list items are
-          # treated by iterating the inner list (legacy semantics at
-          # `lib/guarded_struct.ex:2308-2314`).
           is_atom(Map.get(child, :structs)) and
               Map.get(child, :structs) not in [nil, true, false] ->
             if is_list(validated) do
@@ -791,10 +707,6 @@ defmodule GuardedStruct.Runtime do
 
       cond do
         Map.get(child, :list?) == true and is_list(sanitized) ->
-          # Legacy semantics for list items (`lib/guarded_struct.ex:2308`):
-          #   * map item → submodule.builder(item)
-          #   * list item → iterate inner list, build each (skip empties)
-          #   * other → builder error
           built =
             Enum.flat_map(sanitized, fn
               item when is_map(item) ->
@@ -844,9 +756,6 @@ defmodule GuardedStruct.Runtime do
          full_attrs,
          path
        ) do
-    # A nested conditional_field can have `structs: true` — meaning the matched
-    # value must be a list, and each element is tried against the inner
-    # children individually (mirrors dispatch_conditional's list mode).
     children = child.children
     is_list_cond = Map.get(child, :structs) == true or Map.get(child, :list?) == true
 
@@ -867,8 +776,7 @@ defmodule GuardedStruct.Runtime do
               |> Enum.flat_map(fn {:error, e} -> e end)
               |> Enum.uniq()
 
-            {:error,
-             %{field: child.name, errors: collected, action: :conditionals}}
+            {:error, %{field: child.name, errors: collected, action: :conditionals}}
         end
 
       is_list_cond ->
@@ -889,10 +797,21 @@ defmodule GuardedStruct.Runtime do
 
   defp run_child_derive(%{derive: nil}, value), do: {:ok, value}
 
-  defp run_child_derive(%{derive: str, name: name}, value) when is_binary(str) do
-    case Derive.derive({:ok, %{name => value}, [%{field: name, derive: str}]}) do
-      {:ok, %{^name => sanitized}} -> {:ok, sanitized}
-      {:error, errs} -> {:error, errs}
+  defp run_child_derive(%{name: name} = child, value) do
+    ops = Map.get(child, :__derive_ops__)
+    str = Map.get(child, :derive)
+
+    cond do
+      is_nil(ops) and is_nil(str) ->
+        {:ok, value}
+
+      true ->
+        input = %{field: name, derive: str, derive_ops: ops}
+
+        case Derive.derive({:ok, %{name => value}, [input]}) do
+          {:ok, %{^name => sanitized}} -> {:ok, sanitized}
+          {:error, errs} -> {:error, errs}
+        end
     end
   end
 
@@ -915,10 +834,6 @@ defmodule GuardedStruct.Runtime do
         {:error, errors}, {oks, errs} -> {oks, errs ++ errors}
       end)
 
-    # Dedupe identical errors across list elements (legacy `Enum.uniq` at
-    # `lib/guarded_struct.ex:2615`). Preserves first-seen order so the result
-    # is element-1's errors in child order, then any UNIQUE errors from
-    # subsequent elements.
     deduped = Enum.uniq(errs)
 
     final_errs =
@@ -1037,19 +952,18 @@ defmodule GuardedStruct.Runtime do
   defp run_derives(value, fields_meta) do
     derive_inputs =
       Enum.flat_map(fields_meta, fn f ->
-        case f.derive do
-          nil -> []
-          str when is_binary(str) -> [%{field: f.name, derive: str}]
-          _ -> []
+        ops = Map.get(f, :__derive_ops__)
+        str = Map.get(f, :derive)
+
+        cond do
+          is_nil(ops) and is_nil(str) -> []
+          true -> [%{field: f.name, derive: str, derive_ops: ops}]
         end
       end)
 
     if derive_inputs == [] do
       {:ok, value}
     else
-      # Accept either a struct (build/3 path) or a plain map (validate/3
-      # path — Ash extension). For structs, unwrap → derive → re-wrap. For
-      # plain maps, derive → return.
       {data_map, rewrap} =
         if is_struct(value) do
           {Map.from_struct(value), &struct(value.__struct__, &1)}
@@ -1076,7 +990,6 @@ defmodule GuardedStruct.Runtime do
 
   defp handle_error(result, _module, _error?), do: result
 
-  # Public helpers for keys(:all) / enforce_keys(:all).
   @doc false
   def all_keys(module) do
     info = module.__information__()
@@ -1111,9 +1024,6 @@ defmodule GuardedStruct.Runtime do
         %{kind: :sub_field} ->
           submodule = Module.concat(module, atom_to_module(k))
 
-          # Legacy: enforce_keys(:all) at the outer level recurses with
-          # `:keys` (ALL keys) into sub_fields, not just their enforced ones.
-          # See `lib/guarded_struct.ex:2072` show_nested_keys default arg.
           nested =
             if Code.ensure_loaded?(submodule) and
                  function_exported?(submodule, :__information__, 0),

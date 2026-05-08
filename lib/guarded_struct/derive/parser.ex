@@ -1,179 +1,147 @@
 defmodule GuardedStruct.Derive.Parser do
-  import GuardedStruct.Messages, only: [translated_message: 1]
+  @moduledoc false
 
-  @spec parser(list(String.t()) | String.t()) :: any()
-  def parser(inputs) when is_list(inputs) do
-    Enum.map(inputs, &parser(&1))
-  end
+  @doc """
+  Parse a derive string into `%{sanitize: [...], validate: [...]}`.
 
-  def parser(input) do
-    String.split(String.trim(input), ")")
-    |> Enum.reject(&(&1 == ""))
-    |> Enum.map(fn x ->
-      case Code.string_to_quoted!(String.trim(x) <> ")") do
-        {key, _, parameters} ->
-          convert_parameters(key, parameters)
+  Returns `nil` for `nil`/empty input or for strings the AST parser refuses.
+  """
+  @spec parser(nil | String.t() | [String.t()]) :: nil | map() | [map()]
+  def parser(nil), do: nil
+  def parser(""), do: nil
 
-        _ ->
-          nil
-      end
-    end)
-    |> Enum.reject(&is_nil(&1))
-    |> merge_parser_list()
-  rescue
-    # We do not check the drive in compile time, so we need to pass nil
-    _e -> nil
-  end
+  def parser(inputs) when is_list(inputs), do: Enum.map(inputs, &parser/1)
 
-  def parser(blocks, :conditional, parent \\ "root") do
-    case blocks do
-      {:__block__, line, items} ->
-        {:__block__, line, elements_unification(items, parent)}
-
-      {:field, line, items} ->
-        {:field, line, add_parent_tags(items, parent)}
-
-      {:sub_field, line, items} ->
-        {:sub_field, line, add_parent_tags(items, parent)}
-
-      {:conditional_field, line, items} ->
-        raise(translated_message(:unsupported_conditional_field))
-
-        {:conditional_field, line,
-         elements_unification(add_parent_tags(items, parent, "conds"), parent)}
+  def parser(input) when is_binary(input) do
+    with {:ok, ast} <- to_block_ast(input) do
+      ast
+      |> normalize_block()
+      |> Enum.reduce(%{}, &collect_call/2)
+      |> nilify_empty()
+    else
+      _ -> nil
     end
   end
 
-  defp elements_unification(blocks, parent) do
-    Enum.map(blocks, fn
-      {:field, line, items} ->
-        {:field, line, add_parent_tags(items, parent)}
+  defp to_block_ast(input) do
+    wrapped =
+      input
+      |> String.trim()
+      |> balance_parens()
+      |> String.replace(~r/\)\s+/u, ")\n")
+      |> then(&"(\n#{&1}\n)")
 
-      {:sub_field, line, items} ->
-        {:sub_field, line, add_parent_tags(items, parent)}
-
-      {:conditional_field, line, items} ->
-        raise(translated_message(:unsupported_conditional_field))
-
-        comverted_items = add_parent_tags(items, parent, "conds")
-
-        recursive_children =
-          Enum.map(comverted_items, fn item ->
-            if Keyword.keyword?(item) and Keyword.has_key?(item, :do),
-              do: [
-                do:
-                  parser(Keyword.get(item, :do), :conditional, find_node_tags(comverted_items).id)
-              ],
-              else: item
-          end)
-
-        {:conditional_field, line, recursive_children}
-    end)
+    Code.string_to_quoted(wrapped)
   end
 
-  def find_node_tags([_name, _type, opts | _reset] = _items) do
-    %{parent: opts[:__node_parent_tree__], type: opts[:__node_type__], id: opts[:__node_id__]}
+  defp balance_parens(input) do
+    {depth, _state} =
+      input
+      |> String.to_charlist()
+      |> Enum.reduce({0, :code}, fn ch, {d, state} ->
+        case {state, ch} do
+          {:in_string, ?\\} -> {d, :string_escape}
+          {:string_escape, _} -> {d, :in_string}
+          {:in_string, ?"} -> {d, :code}
+          {:in_string, _} -> {d, :in_string}
+          {:in_charlist, ?\\} -> {d, :charlist_escape}
+          {:charlist_escape, _} -> {d, :in_charlist}
+          {:in_charlist, ?'} -> {d, :code}
+          {:in_charlist, _} -> {d, :in_charlist}
+          {:code, ?"} -> {d, :in_string}
+          {:code, ?'} -> {d, :in_charlist}
+          {:code, ?(} -> {d + 1, :code}
+          {:code, ?)} -> {d - 1, :code}
+          {:code, _} -> {d, :code}
+        end
+      end)
+
+    if depth > 0, do: input <> String.duplicate(")", depth), else: input
   end
 
-  defp add_parent_tags(items, parent, type \\ "normal") do
-    id = parent <> "::" <> GuardedStruct.Helper.Extra.randstring(8)
+  defp normalize_block({:__block__, _, calls}), do: calls
+  defp normalize_block(single_call), do: [single_call]
 
-    Enum.map(items, fn item ->
-      if Keyword.keyword?(item) and !Keyword.has_key?(item, :__node_type__) and
-           !Keyword.has_key?(item, :do) do
-        item ++ [__node_parent_tree__: parent, __node_type__: type, __node_id__: id]
-      else
-        item
-      end
-    end)
+  defp nilify_empty(map) when map == %{}, do: nil
+  defp nilify_empty(map), do: map
+
+  defp collect_call({op, _meta, args}, acc)
+       when op in [:sanitize, :validate] and is_list(args) do
+    parsed = args |> Enum.map(&parse_arg/1) |> Enum.reject(&is_nil/1)
+    Map.update(acc, op, parsed, &(&1 ++ parsed))
+  end
+
+  defp collect_call(_other, acc), do: acc
+
+  defp parse_arg({atom, _meta, nil}) when is_atom(atom), do: atom
+
+  defp parse_arg({:=, _, [{:custom, _, nil}, value]}) when is_list(value) do
+    case value do
+      [{:__aliases__, _, mods}, {fun, _, nil}] when is_atom(fun) ->
+        {:custom, {mods, fun}}
+
+      _ ->
+        nil
+    end
+  end
+
+  defp parse_arg({:=, _, [{key, _, nil}, {value, _, nil}]})
+       when is_atom(key) and is_atom(value) do
+    {key, Atom.to_string(value)}
+  end
+
+  defp parse_arg({:=, _, [{key, _, nil}, value]})
+       when is_atom(key) and is_integer(value),
+       do: {key, value}
+
+  defp parse_arg({:=, _, [{key, _, nil}, value]})
+       when is_atom(key) and is_binary(value),
+       do: {key, value}
+
+  defp parse_arg({:=, _, [{key, _, nil}, value]})
+       when is_atom(key) and is_list(value) do
+    if Enum.any?(value, &is_tuple/1) do
+      inner = value |> Enum.map(&parse_arg/1) |> Enum.reject(&is_nil/1)
+      if inner == [], do: nil, else: %{key => inner}
+    else
+      {key, value}
+    end
+  end
+
+  defp parse_arg({:=, _, [{key, _, nil}, {_, _, [{:__aliases__, _, [type]} | _]} = value]})
+       when is_atom(key) and is_atom(type) do
+    {key, ast_to_string(value)}
+  end
+
+  defp parse_arg(_other), do: nil
+
+  defp ast_to_string(ast) do
+    ast |> Macro.update_meta(fn _ -> [] end) |> Macro.to_string()
   end
 
   @spec convert_to_atom_map({:ok, map()} | {:error, any(), any()} | map()) ::
           {:error, any(), any()} | map()
-
   def convert_to_atom_map({:error, _, _} = error), do: error
-
   def convert_to_atom_map({:ok, map}) when is_map(map), do: convert_to_atom_map(map)
 
   def convert_to_atom_map(map) when is_struct(map) do
-    for {key, value} <- Map.from_struct(map),
-        into: %{},
-        do: {convert_key(key), convert_value(value)}
+    for {k, v} <- Map.from_struct(map), into: %{}, do: {convert_key(k), convert_value(v)}
   end
 
   def convert_to_atom_map(map) when is_map(map) do
-    for {key, value} <- map, into: %{}, do: {convert_key(key), convert_value(value)}
+    for {k, v} <- map, into: %{}, do: {convert_key(k), convert_value(v)}
   end
 
   defp convert_key(key) when is_binary(key), do: String.to_atom(key)
-
   defp convert_key(key), do: key
 
-  defp convert_value(%{__struct__: struct} = map)
-       when struct in [NaiveDateTime, DateTime, Date] do
-    map
-  end
-
-  defp convert_value(%{} = map), do: convert_to_atom_map(map)
-
+  defp convert_value(%{__struct__: s} = m) when s in [NaiveDateTime, DateTime, Date], do: m
+  defp convert_value(%{} = m), do: convert_to_atom_map(m)
   defp convert_value([]), do: []
-
   defp convert_value(list) when is_list(list), do: Enum.map(list, &convert_value/1)
-
   defp convert_value(value), do: value
 
-  @spec convert_parameters(atom() | String.t(), any()) :: nil | %{optional(any()) => list()}
-  def convert_parameters(derive_key, parameters) do
-    converted =
-      parameters
-      |> Enum.map(fn
-        {key, _, nil} ->
-          key
-
-        {:=, _, [{key, _, nil}, {value, _, nil}]} when is_atom(value) ->
-          {key, Atom.to_string(value)}
-
-        {:=, _, [{key, _, nil}, value]} when is_integer(value) ->
-          {key, value}
-
-        {:=, _, [{key, _, nil}, value]} when is_list(value) and key == :custom ->
-          case value do
-            [{:__aliases__, _, module_list}, {function, _, nil}] ->
-              {key, {module_list, function}}
-
-            _ ->
-              nil
-          end
-
-        {:=, _, [{key, _, nil}, value]} when is_list(value) ->
-          if Enum.any?(value, &is_tuple(&1)),
-            do: convert_parameters(key, value),
-            else: {key, value}
-
-        {:=, _, [{key, _, nil}, {_, _, [{:__aliases__, _, [type]} | _t]} = value]}
-        when is_tuple(value) and is_atom(type) ->
-          {key, Macro.to_string(value)}
-
-        {:=, _, [{key, _, nil}, value]} when is_binary(value) ->
-          {key, value}
-
-        _ ->
-          nil
-      end)
-      |> Enum.reject(&is_nil(&1))
-
-    if converted == [], do: nil, else: Map.put(%{}, derive_key, converted)
-  end
-
-  defp merge_parser_list([]), do: nil
-
-  defp merge_parser_list(list_of_maps) do
-    Enum.reduce(list_of_maps, %{}, fn map, acc ->
-      Map.merge(acc, map)
-    end)
-  end
-
-  @spec parse_core_keys_pattern(binary()) :: list()
+  @spec parse_core_keys_pattern(binary()) :: [atom()]
   def parse_core_keys_pattern(pattern) do
     pattern
     |> String.trim()
@@ -181,84 +149,11 @@ defmodule GuardedStruct.Derive.Parser do
     |> Enum.map(&String.to_atom/1)
   end
 
-  @spec is_data?(%{:data => any(), :errors => any(), optional(any()) => any()}) :: boolean()
-  @doc false
-  def is_data?(%{data: [], errors: []}), do: true
-
-  def is_data?(%{data: [], errors: errors}) when errors != [], do: false
-
-  def is_data?(%{data: data, errors: errors}) when data != [] and errors == [], do: true
-
-  def is_data?(%{data: _data, errors: errors}) when errors != [], do: false
-
-  @spec map_keys(map(), list(atom())) :: any()
-  @doc false
-  def map_keys(map_data, keys) when is_map(map_data) do
-    case List.first(Map.keys(map_data)) do
-      nil -> keys
-      data when is_atom(data) -> keys
-      data when is_binary(data) -> Enum.map(keys, &Atom.to_string(&1))
-    end
+  @spec convert_parameters(atom() | String.t(), any()) :: nil | %{optional(any()) => list()}
+  def convert_parameters(derive_key, parameters) when is_list(parameters) do
+    converted = parameters |> Enum.map(&parse_arg/1) |> Enum.reject(&is_nil/1)
+    if converted == [], do: nil, else: %{derive_key => converted}
   end
 
-  def map_keys(_map, keys), do: keys
-
-  @spec field_status?(tuple(), atom()) :: boolean()
-
-  def field_status?({{:error, _data}, _opts}, status) when status === :error,
-    do: true
-
-  def field_status?({{:error, _, _}, _}, status) when status === :error,
-    do: true
-
-  def field_status?({{:error, _, _}, _, _}, status) when status === :error,
-    do: true
-
-  def field_status?({{field_status, _, _}, _}, status) when field_status === status,
-    do: true
-
-  def field_status?({{field_status, _}, _, _}, status) when field_status === status,
-    do: true
-
-  def field_status?(_, _), do: false
-
-  @spec field_value(
-          maybe_improper_list()
-          | {{:ok, any()} | {:error, any(), any()} | {:ok, any(), any()}, any()}
-          | {{:ok, any()} | {:error, any(), any()}, any(), any()}
-        ) :: maybe_improper_list() | {any(), any()}
-  def field_value({{:error, _, _}, _} = output), do: [output]
-
-  def field_value({{:error, _, _}, _, _} = output), do: [output]
-
-  def field_value({{:ok, _, value}, opts}), do: {value, opts}
-
-  def field_value({{:ok, value}, _, opts}), do: {value, opts}
-
-  def field_value({{:ok, value}, opts}), do: {value, opts}
-
-  def field_value(output) when is_list(output), do: output
-
-  def field_value(nil), do: raise(translated_message(:parser_field_value))
-
-  @spec conds_list(list(map()) | map(), String.t()) :: any()
-  def conds_list(data, parent_key) do
-    items_with_parent =
-      Enum.filter(data, fn %{opts: opts} -> opts[:__node_parent_tree__] == parent_key end)
-
-    Enum.reduce(items_with_parent, %{}, fn item, acc ->
-      children = find_conds_children_recursive(data, item.opts[:__node_id__])
-      Map.put(acc, item.opts[:__node_id__], Map.merge(item, %{children: children}))
-    end)
-  end
-
-  defp find_conds_children_recursive(data, parent_tag) do
-    children =
-      Enum.filter(data, fn %{opts: opts} -> opts[:__node_parent_tree__] == parent_tag end)
-
-    Enum.reduce(children, %{}, fn item, acc ->
-      children = find_conds_children_recursive(data, item.opts[:__node_id__])
-      Map.put(acc, item.opts[:__node_id__], Map.merge(item, %{children: children}))
-    end)
-  end
+  def convert_parameters(_derive_key, _parameters), do: nil
 end

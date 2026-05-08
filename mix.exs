@@ -13,6 +13,7 @@ defmodule GuardedStruct.MixProject do
       elixirc_paths: elixirc_paths(Mix.env()),
       start_permanent: Mix.env() == :prod,
       deps: deps(),
+      aliases: aliases(),
       description: description(),
       package: package(),
       source_url: @source_url,
@@ -22,6 +23,16 @@ defmodule GuardedStruct.MixProject do
         extras: ["README.md", "CHANGELOG.md"],
         source_url: @source_url
       ]
+    ]
+  end
+
+  defp aliases do
+    [
+      "spark.formatter":
+        "spark.formatter --extensions GuardedStruct.Dsl,GuardedStruct.AshResource",
+      "spark.cheat_sheets":
+        "spark.cheat_sheets --extensions GuardedStruct.Dsl,GuardedStruct.AshResource",
+      lint: ["spark.formatter", "format"]
     ]
   end
 
@@ -66,7 +77,11 @@ defmodule GuardedStruct.MixProject do
       {:ex_url, "~> 2.0.2", optional: true, only: :test},
       {:ex_phone_number, "~> 0.4.11", optional: true, only: :test},
       {:sweet_xml,
-       github: "kbrw/sweet_xml", branch: "master", override: true, optional: true, only: :test}
+       github: "kbrw/sweet_xml", branch: "master", override: true, optional: true, only: :test},
+      {:igniter,
+       path: "/Users/shahryar/Documents/Programming/Elixir/igniter",
+       only: [:dev, :test],
+       override: true}
     ]
   end
 end

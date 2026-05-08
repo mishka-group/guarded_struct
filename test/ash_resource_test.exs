@@ -27,9 +27,7 @@ defmodule GuardedStructTest.AshResourceTest do
         derive: "sanitize(trim, downcase) validate(string, not_empty, email_r)"
       )
 
-      field(:nickname, :string,
-        derive: "sanitize(strip_tags, trim) validate(string, max_len=20)"
-      )
+      field(:nickname, :string, derive: "sanitize(strip_tags, trim) validate(string, max_len=20)")
 
       sub_field(:preferences, :map) do
         field(:theme, :string, derive: "validate(enum=String[light::dark])")

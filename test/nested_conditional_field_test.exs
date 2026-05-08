@@ -1,17 +1,6 @@
 defmodule GuardedStructTest.NestedConditionalFieldTest do
   use ExUnit.Case, async: true
 
-  # ----------------------------------------------------------
-  # Nested `conditional_field` was the headline blocker in the legacy library:
-  #   * https://github.com/mishka-group/guarded_struct/issues/7
-  #   * https://github.com/mishka-group/guarded_struct/issues/8
-  #   * https://github.com/mishka-group/guarded_struct/issues/25
-  #
-  # The Spark rewrite enables it via `recursive_as: :conditional_fields` on
-  # the @conditional_field entity (REDESIGN.md §9). These tests prove it
-  # actually works end-to-end.
-  # ----------------------------------------------------------
-
   defmodule Actor do
     use GuardedStruct
     @types ["Application", "Group", "Organization", "Person", "Service"]
@@ -31,9 +20,6 @@ defmodule GuardedStructTest.NestedConditionalFieldTest do
     end
   end
 
-  # The original issue-25 fixture: a `conditional_field` containing another
-  # `conditional_field` with the same name. The legacy `Parser` raised on
-  # this; the Spark version handles it.
   defmodule Conditional do
     use GuardedStruct
     alias ConditionalFieldValidatorTestValidators, as: VAL
@@ -66,8 +52,6 @@ defmodule GuardedStructTest.NestedConditionalFieldTest do
   end
 
   test "compiles without raising :unsupported_conditional_field" do
-    # The mere fact that `Conditional` compiled is the proof — the legacy
-    # parser would have raised at this point. Sanity-check the module loaded.
     assert Code.ensure_loaded?(Conditional)
     assert function_exported?(Conditional, :builder, 1)
   end
@@ -122,11 +106,6 @@ defmodule GuardedStructTest.NestedConditionalFieldTest do
     # nested-cond is_list, outer is_string).
     assert length(child_errors) >= 1
   end
-
-  ###########################################################################
-  # Three-deep conditional nesting — the kind of case the legacy library
-  # could not even compile.
-  ###########################################################################
 
   defmodule TripleNest do
     use GuardedStruct

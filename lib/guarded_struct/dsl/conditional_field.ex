@@ -19,7 +19,11 @@ defmodule GuardedStruct.Dsl.ConditionalField do
     fields: [],
     sub_fields: [],
     conditional_fields: [],
-    __spark_metadata__: nil
+    __spark_metadata__: nil,
+    __derive_ops__: nil,
+    __from_path__: nil,
+    __on_path__: nil,
+    __domain_ops__: nil
   ]
 
   @type t :: %__MODULE__{
@@ -40,6 +44,10 @@ defmodule GuardedStruct.Dsl.ConditionalField do
           fields: list(),
           sub_fields: list(),
           conditional_fields: list(),
-          __spark_metadata__: any()
+          __spark_metadata__: any(),
+          __derive_ops__: map() | nil,
+          __from_path__: [atom()] | nil,
+          __on_path__: [atom()] | nil,
+          __domain_ops__: list() | nil
         }
 end

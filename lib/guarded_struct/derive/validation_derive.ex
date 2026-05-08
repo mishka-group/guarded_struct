@@ -40,76 +40,35 @@ defmodule GuardedStruct.Derive.ValidationDerive do
   end
 
   @spec validate(atom() | tuple(), any(), atom()) :: any()
-  def validate(:string, input, field) do
-    is_type(field, is_binary(input), :string, input)
-  end
 
-  def validate(:integer, input, field) do
-    is_type(field, is_integer(input), :integer, input)
-  end
+  type_predicates = [
+    string: :is_binary,
+    integer: :is_integer,
+    list: :is_list,
+    atom: :is_atom,
+    bitstring: :is_bitstring,
+    boolean: :is_boolean,
+    exception: :is_exception,
+    float: :is_float,
+    function: :is_function,
+    map: :is_map,
+    nil_value: :is_nil,
+    number: :is_number,
+    pid: :is_pid,
+    port: :is_port,
+    reference: :is_reference,
+    struct: :is_struct,
+    tuple: :is_tuple
+  ]
 
-  def validate(:list, input, field) do
-    is_type(field, is_list(input), :list, input)
-  end
-
-  def validate(:atom, input, field) do
-    is_type(field, is_atom(input), :atom, input)
-  end
-
-  def validate(:bitstring, input, field) do
-    is_type(field, is_bitstring(input), :bitstring, input)
-  end
-
-  def validate(:boolean, input, field) do
-    is_type(field, is_boolean(input), :boolean, input)
-  end
-
-  def validate(:exception, input, field) do
-    is_type(field, is_exception(input), :exception, input)
-  end
-
-  def validate(:float, input, field) do
-    is_type(field, is_float(input), :float, input)
-  end
-
-  def validate(:function, input, field) do
-    is_type(field, is_function(input), :function, input)
-  end
-
-  def validate(:map, input, field) do
-    is_type(field, is_map(input), :map, input)
-  end
-
-  def validate(:nil_value, input, field) do
-    is_type(field, is_nil(input), :nil_value, input)
+  for {op, pred_name} <- type_predicates do
+    def validate(unquote(op), input, field) do
+      is_type(field, unquote(pred_name)(input), unquote(op), input)
+    end
   end
 
   def validate(:not_nil_value, input, field) do
-    is_type(field, !is_nil(input), :not_nil_value, input)
-  end
-
-  def validate(:number, input, field) do
-    is_type(field, is_number(input), :number, input)
-  end
-
-  def validate(:pid, input, field) do
-    is_type(field, is_pid(input), :pid, input)
-  end
-
-  def validate(:port, input, field) do
-    is_type(field, is_port(input), :port, input)
-  end
-
-  def validate(:reference, input, field) do
-    is_type(field, is_reference(input), :reference, input)
-  end
-
-  def validate(:struct, input, field) do
-    is_type(field, is_struct(input), :struct, input)
-  end
-
-  def validate(:tuple, input, field) do
-    is_type(field, is_tuple(input), :tuple, input)
+    is_type(field, not is_nil(input), :not_nil_value, input)
   end
 
   def validate(:not_empty, input, field) when is_binary(input) do
@@ -447,6 +406,10 @@ defmodule GuardedStruct.Derive.ValidationDerive do
     {:error, field, :full_name, translated_message(:full_name, field)}
   end
 
+  def validate({:enum, list}, input, field) when is_list(list) do
+    convert_enum_output(list, input, field)
+  end
+
   def validate({:enum, "String" <> list}, input, field) when is_binary(input) do
     convert_enum(list)
     |> convert_enum_output(input, field)
@@ -484,6 +447,10 @@ defmodule GuardedStruct.Derive.ValidationDerive do
 
   def validate({:enum, _}, _input, field) do
     {:error, field, :enum, translated_message(:enum, field)}
+  end
+
+  def validate({:equal, value}, input, field) when not is_binary(value) do
+    vlidate_equal(value, input, field)
   end
 
   def validate({:equal, "String::" <> value}, input, field) do
@@ -604,6 +571,16 @@ defmodule GuardedStruct.Derive.ValidationDerive do
   end
 
   def validate(action, input, field) do
+    case GuardedStruct.Derive.Extension.dispatch_validate(action, input, field) do
+      :__not_found__ -> fallback_dispatch(action, input, field)
+      result -> result
+    end
+  rescue
+    _ ->
+      {:error, field, :type, translated_message(:validate_unexpected, field)}
+  end
+
+  defp fallback_dispatch(action, input, field) do
     case Application.get_env(:guarded_struct, :validate_derive) do
       nil ->
         {:error, field, :type, translated_message(:validate_unexpected, field)}
@@ -614,9 +591,6 @@ defmodule GuardedStruct.Derive.ValidationDerive do
       derive_module ->
         derive_module.validate(action, input, field)
     end
-  rescue
-    _ ->
-      {:error, field, :type, translated_message(:validate_unexpected, field)}
   end
 
   if Code.ensure_loaded?(URL) do
