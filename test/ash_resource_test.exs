@@ -18,18 +18,16 @@ defmodule GuardedStructTest.AshResourceTest do
     use FakeFramework
 
     # Note: Ash users don't get our arity-2 `guardedstruct opts do … end`
-    # wrapper (that's auto-imported only by `use GuardedStruct`). Instead,
-    # set options via the Spark-generated inline setters at the top of the
-    # block — this is the idiomatic Spark pattern.
+    # wrapper (that's auto-imported only by `use GuardedStruct`). Set options
+    # via the Spark-generated inline setters at the top of the block — this
+    # is idiomatic Spark.
     guardedstruct do
-      enforce(true)
-
       field(:email, :string,
+        enforce: true,
         derive: "sanitize(trim, downcase) validate(string, not_empty, email_r)"
       )
 
       field(:nickname, :string,
-        enforce: false,
         derive: "sanitize(strip_tags, trim) validate(string, max_len=20)"
       )
 
@@ -131,8 +129,9 @@ defmodule GuardedStructTest.AshResourceTest do
     end
 
     test "Spark-generated guardedstruct_enforce!/1 reads the section option" do
+      # No block-level enforce was set, so this is the default (false).
       assert GuardedStruct.AshResource.Info.guardedstruct_enforce!(FakeAshResource) ==
-               true
+               false
     end
   end
 end

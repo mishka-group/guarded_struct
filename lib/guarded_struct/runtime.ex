@@ -10,46 +10,19 @@ defmodule GuardedStruct.Runtime do
   alias GuardedStruct.Derive.ValidationDerive
 
   @doc """
-  Run the full GuardedStruct validation/sanitization/derive pipeline against
-  `attrs` WITHOUT producing a struct.
-
-  Used by `GuardedStruct.AshResource` (the Ash extension), where the struct
-  is owned by Ash itself and we just want the post-validation attrs map.
-  Returns `{:ok, validated_attrs_map}` or `{:error, errors}`.
+  Run the validation pipeline and return `{:ok, attrs_map}` (NOT a struct).
+  Used by `GuardedStruct.AshResource` — Ash resources have their own struct,
+  so we don't try to make one of ours.
   """
   @spec validate(module(), map() | tuple(), boolean()) ::
           {:ok, map()} | {:error, any()}
-  def validate(module, attrs, error? \\ false) do
-    case do_build_no_struct(module, attrs, error?) do
-      {:ok, attrs_map} -> {:ok, attrs_map}
-      {:error, _} = err -> err
-    end
+  def validate(module, attrs, error? \\ false)
+
+  def validate(module, attrs, error?) when is_map(attrs) do
+    do_pipeline(module, attrs, attrs, :add, error?, [], _build_struct? = false)
   end
 
-  defp do_build_no_struct(module, attrs, error?) when is_map(attrs) do
-    # Reuse `do_build` but extract the attrs from the produced struct so the
-    # caller (Ash) doesn't get a guardedstruct struct it can't use.
-    case do_build(module, attrs, attrs, :add, error?, []) do
-      {:ok, struct_value} when is_struct(struct_value) ->
-        {:ok, Map.from_struct(struct_value)}
-
-      other ->
-        other
-    end
-  end
-
-  defp do_build_no_struct(module, {key, attrs} = input, error?)
-       when is_atom(key) or is_list(key) do
-    case build(module, input, error?) do
-      {:ok, struct_value} when is_struct(struct_value) ->
-        {:ok, Map.from_struct(struct_value)}
-
-      other ->
-        other
-    end
-  end
-
-  defp do_build_no_struct(_module, _attrs, _error?) do
+  def validate(_module, _attrs, _error?) do
     {:error,
      %{message: "Your input must be a map or list of maps", action: :bad_parameters}}
   end
@@ -120,6 +93,14 @@ defmodule GuardedStruct.Runtime do
   end
 
   defp do_build(module, attrs, full_attrs, type, error?, path) when is_map(attrs) do
+    do_pipeline(module, attrs, full_attrs, type, error?, path, _build_struct? = true)
+  end
+
+  # Shared pipeline used by both `build/3` (returns a struct) and `validate/3`
+  # (returns the attrs map — used by the Ash extension where the struct is
+  # owned by Ash). The pipeline order is identical; only the final wrap differs.
+  defp do_pipeline(module, attrs, full_attrs, type, error?, path, build_struct?)
+       when is_map(attrs) do
     # The standalone `use GuardedStruct` exposes `__information__/0` and
     # `__fields__/0`. The `GuardedStruct.AshResource` extension uses the
     # `__guarded_*` namespace to avoid clashing with Ash's own callbacks.
@@ -155,10 +136,17 @@ defmodule GuardedStruct.Runtime do
       # alongside sub-field errors. Legacy aggregates ALL errors before
       # surfacing — see `validation_errors_aggregator` at
       # `lib/guarded_struct.ex:2646`.
+      # `wrap` produces either a `%module{}` struct (build/3 path) or a plain
+      # map (validate/3 path used by GuardedStruct.AshResource where the struct
+      # is owned by Ash, not us).
+      wrap = fn merged ->
+        if build_struct?, do: struct(module, merged), else: merged
+      end
+
       {derive_errors, struct_value} =
         case run_main_validator(validator_attrs, module) do
           {:ok, after_main} ->
-            sv = struct(module, Map.merge(after_main, sub_field_data))
+            sv = wrap.(Map.merge(after_main, sub_field_data))
 
             case run_derives(sv, fields_meta) do
               {:ok, derived} -> {[], derived}
@@ -166,10 +154,10 @@ defmodule GuardedStruct.Runtime do
             end
 
           {:error, errs} when is_list(errs) ->
-            {errs, struct(module, Map.merge(validator_attrs, sub_field_data))}
+            {errs, wrap.(Map.merge(validator_attrs, sub_field_data))}
 
           {:error, err} ->
-            {[err], struct(module, Map.merge(validator_attrs, sub_field_data))}
+            {[err], wrap.(Map.merge(validator_attrs, sub_field_data))}
         end
 
       # Order: derive errors first, then sub-field errors. This matches the
@@ -1046,7 +1034,7 @@ defmodule GuardedStruct.Runtime do
     end
   end
 
-  defp run_derives(struct_value, fields_meta) do
+  defp run_derives(value, fields_meta) do
     derive_inputs =
       Enum.flat_map(fields_meta, fn f ->
         case f.derive do
@@ -1057,12 +1045,20 @@ defmodule GuardedStruct.Runtime do
       end)
 
     if derive_inputs == [] do
-      {:ok, struct_value}
+      {:ok, value}
     else
-      data_map = Map.from_struct(struct_value)
+      # Accept either a struct (build/3 path) or a plain map (validate/3
+      # path — Ash extension). For structs, unwrap → derive → re-wrap. For
+      # plain maps, derive → return.
+      {data_map, rewrap} =
+        if is_struct(value) do
+          {Map.from_struct(value), &struct(value.__struct__, &1)}
+        else
+          {value, & &1}
+        end
 
       case Derive.derive({:ok, data_map, derive_inputs}) do
-        {:ok, processed} -> {:ok, struct(struct_value.__struct__, processed)}
+        {:ok, processed} -> {:ok, rewrap.(processed)}
         {:error, errors} -> {:error, errors}
       end
     end
