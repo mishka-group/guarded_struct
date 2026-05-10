@@ -1,6 +1,8 @@
 defmodule GuardedStruct.Runtime do
   @moduledoc false
 
+  import GuardedStruct.Messages, only: [translated_message: 1, translated_message: 2]
+
   alias GuardedStruct.Derive
   alias GuardedStruct.Derive.Parser
   alias GuardedStruct.Derive.ValidationDerive
@@ -19,7 +21,7 @@ defmodule GuardedStruct.Runtime do
   end
 
   def validate(_module, _attrs, _error?) do
-    {:error, %{message: "Your input must be a map or list of maps", action: :bad_parameters}}
+    {:error, %{message: translated_message(:builder), action: :bad_parameters}}
   end
 
   @spec build(module(), map() | struct() | tuple(), boolean()) ::
@@ -31,16 +33,22 @@ defmodule GuardedStruct.Runtime do
   end
 
   def build(module, attrs, error?) when is_map(attrs) do
-    do_build(module, attrs, attrs, :add, error?)
+    with_telemetry(module, fn ->
+      do_build(module, attrs, attrs, :add, error?)
+    end)
   end
 
   def build(module, {key, attrs}, error?) when is_atom(key) or is_list(key) do
-    do_build_with_key(module, key, attrs, :add, error?)
+    with_telemetry(module, fn ->
+      do_build_with_key(module, key, attrs, :add, error?)
+    end)
   end
 
   def build(module, {key, attrs, type}, error?)
       when (is_atom(key) or is_list(key)) and type in [:add, :edit] do
-    do_build_with_key(module, key, attrs, type, error?)
+    with_telemetry(module, fn ->
+      do_build_with_key(module, key, attrs, type, error?)
+    end)
   end
 
   def build(module, {:__nested__, local_attrs, full_attrs, path, type}, error?) do
@@ -48,7 +56,149 @@ defmodule GuardedStruct.Runtime do
   end
 
   def build(_module, _attrs, _error?) do
-    {:error, %{message: "Your input must be a map or list of maps", action: :bad_parameters}}
+    {:error, %{message: translated_message(:builder), action: :bad_parameters}}
+  end
+
+  defp with_telemetry(module, fun) do
+    start = System.monotonic_time()
+    metadata = %{module: module}
+
+    :telemetry.execute(
+      [:guarded_struct, :builder, :start],
+      %{system_time: System.system_time()},
+      metadata
+    )
+
+    try do
+      result = fun.()
+      duration = System.monotonic_time() - start
+
+      :telemetry.execute(
+        [:guarded_struct, :builder, :stop],
+        %{duration: duration},
+        Map.merge(metadata, telemetry_result(result))
+      )
+
+      result
+    rescue
+      e ->
+        duration = System.monotonic_time() - start
+
+        :telemetry.execute(
+          [:guarded_struct, :builder, :exception],
+          %{duration: duration},
+          Map.merge(metadata, %{kind: :error, reason: e, stacktrace: __STACKTRACE__})
+        )
+
+        reraise(e, __STACKTRACE__)
+    end
+  end
+
+  defp telemetry_result({:ok, _}), do: %{result: :ok}
+
+  defp telemetry_result({:error, errs}) when is_list(errs),
+    do: %{result: :error, error_count: length(errs)}
+
+  defp telemetry_result({:error, _}), do: %{result: :error, error_count: 1}
+  defp telemetry_result(_), do: %{}
+
+  @spec build_pattern_map(module(), map(), boolean()) ::
+          {:ok, map()} | {:error, list()}
+  def build_pattern_map(module, attrs, error?)
+
+  def build_pattern_map(_module, attrs, _error?) when not is_map(attrs) do
+    {:error, %{message: translated_message(:builder), action: :bad_parameters}}
+  end
+
+  def build_pattern_map(module, attrs, error?) do
+    fields_meta = module.__fields__()
+
+    pattern_fields =
+      Enum.filter(fields_meta, &(Map.get(&1, :kind) == :pattern_field))
+
+    with {:ok, _} <- run_pattern_whole_map_derive(attrs, pattern_fields),
+         {:ok, validated} <- process_pattern_entries(attrs, pattern_fields, module) do
+      {:ok, validated}
+    else
+      {:error, errs} -> handle_error({:error, errs}, module, error?)
+    end
+  end
+
+  defp run_pattern_whole_map_derive(attrs, pattern_fields) do
+    case Enum.find(pattern_fields, &Map.get(&1, :__derive_ops__)) do
+      nil ->
+        {:ok, attrs}
+
+      f ->
+        ops = f.__derive_ops__
+        input = %{field: :__map__, derive_ops: ops}
+
+        case Derive.derive({:ok, %{__map__: attrs}, [input]}) do
+          {:ok, %{__map__: validated}} -> {:ok, validated}
+          {:error, errs} -> {:error, errs}
+        end
+    end
+  end
+
+  defp process_pattern_entries(attrs, pattern_fields, _module) do
+    {results, errors} =
+      Enum.reduce(attrs, {%{}, []}, fn {key, value}, {ok, errs} ->
+        key_str = if is_atom(key), do: Atom.to_string(key), else: to_string(key)
+
+        case Enum.find(pattern_fields, &Regex.match?(&1.pattern, key_str)) do
+          nil ->
+            {ok,
+             [
+               %{
+                 field: :__map__,
+                 key: key_str,
+                 action: :key_pattern,
+                 message: "key #{inspect(key_str)} does not match any declared pattern"
+               }
+               | errs
+             ]}
+
+          %{} = pf ->
+            case process_pattern_value(pf, value, key_str) do
+              {:ok, validated_value} -> {Map.put(ok, key_str, validated_value), errs}
+              {:error, value_errs} -> {ok, value_errs ++ errs}
+            end
+        end
+      end)
+
+    case errors do
+      [] -> {:ok, results}
+      _ -> {:error, Enum.reverse(errors)}
+    end
+  end
+
+  defp process_pattern_value(%{struct: target_mod} = _pf, value, key_str)
+       when is_atom(target_mod) and not is_nil(target_mod) do
+    case target_mod.builder(value) do
+      {:ok, built} -> {:ok, built}
+      {:error, errs} when is_list(errs) -> {:error, prefix_key(errs, key_str)}
+      {:error, err} -> {:error, prefix_key([err], key_str)}
+    end
+  end
+
+  defp process_pattern_value(%{validator: {mod, fun}}, value, key_str)
+       when is_atom(mod) and is_atom(fun) do
+    case apply(mod, fun, [key_str, value]) do
+      {:ok, _key, validated} -> {:ok, validated}
+      {:ok, validated} -> {:ok, validated}
+      {:error, _key, message} -> {:error, [%{key: key_str, action: :validator, message: message}]}
+      {:error, message} -> {:error, [%{key: key_str, action: :validator, message: message}]}
+      _ -> {:ok, value}
+    end
+  end
+
+  defp process_pattern_value(_pf, value, _key_str), do: {:ok, value}
+
+  defp prefix_key(errs, key_str) do
+    Enum.map(errs, fn
+      %{} = e -> Map.put(e, :key, key_str)
+      other -> %{key: key_str, error: other}
+    end)
   end
 
   defp do_build_with_key(module, :root, attrs, type, error?),
@@ -60,14 +210,14 @@ defmodule GuardedStruct.Runtime do
   defp do_build_with_key(module, key, attrs, type, error?) when is_list(key) do
     case get_in(attrs, key) do
       sub when is_map(sub) -> do_build(module, sub, attrs, type, error?)
-      _ -> {:error, %{message: "Bad path", action: :bad_parameters}}
+      _ -> {:error, %{message: translated_message(:builder), action: :bad_parameters}}
     end
   end
 
   defp do_build_with_key(module, key, attrs, type, error?) when is_atom(key) do
     case Map.get(attrs, key) do
       sub when is_map(sub) -> do_build(module, sub, attrs, type, error?)
-      _ -> {:error, %{message: "Bad path", action: :bad_parameters}}
+      _ -> {:error, %{message: translated_message(:builder), action: :bad_parameters}}
     end
   end
 
@@ -198,7 +348,7 @@ defmodule GuardedStruct.Runtime do
     else
       {:error,
        %{
-         message: "Unauthorized keys are present in the sent data.",
+         message: translated_message(:authorized_fields),
          fields: extras,
          action: :authorized_fields
        }}
@@ -215,7 +365,7 @@ defmodule GuardedStruct.Runtime do
     else
       {:error,
        %{
-         message: "Please submit required fields.",
+         message: translated_message(:required_fields),
          fields: missing,
          action: :required_fields
        }}
@@ -285,9 +435,7 @@ defmodule GuardedStruct.Runtime do
 
       if is_nil(target) do
         %{
-          message:
-            "The required dependency for field #{field_name} has not been submitted.\n" <>
-              "You must have field #{List.last(path)} in your input\n",
+          message: translated_message(:check_dependent_keys, {field_name, path}),
           field: field_name,
           action: :dependent_keys
         }
@@ -359,7 +507,7 @@ defmodule GuardedStruct.Runtime do
         case ValidationDerive.validate(validator, domain_field, key) do
           data when is_tuple(data) and elem(data, 0) == :error ->
             %{
-              message: "Based on field #{key} input you have to send authorized data",
+              message: translated_message(:domain_field_status, key),
               field_path: field,
               field: key,
               action: :domain_parameters
@@ -374,8 +522,7 @@ defmodule GuardedStruct.Runtime do
 
       true ->
         %{
-          message:
-            "Based on field #{key} input you have to send authorized data and required key",
+          message: translated_message(:force_domain_field_status, key),
           field_path: field,
           field: key,
           action: :domain_parameters
@@ -639,7 +786,7 @@ defmodule GuardedStruct.Runtime do
             else
               {:error,
                %{
-                 message: "Your input must be a map or list of maps",
+                 message: translated_message(:builder),
                  action: :bad_parameters
                }}
             end
@@ -665,7 +812,7 @@ defmodule GuardedStruct.Runtime do
             else
               {:error,
                %{
-                 message: "Your input must be a list of items",
+                 message: translated_message(:list_builder_type),
                  field: child.name,
                  action: :type
                }}
@@ -719,7 +866,7 @@ defmodule GuardedStruct.Runtime do
                 [
                   {:error,
                    %{
-                     message: "Your input must be a map or list of maps",
+                     message: translated_message(:builder),
                      action: :bad_parameters
                    }}
                 ]
@@ -733,7 +880,7 @@ defmodule GuardedStruct.Runtime do
         Map.get(child, :list?) == true ->
           {:error,
            %{
-             message: "Your input must be a list of items",
+             message: translated_message(:list_builder_type),
              field: name,
              action: :type
            }}
@@ -742,8 +889,7 @@ defmodule GuardedStruct.Runtime do
           submodule.builder(nested_input_for.(sanitized))
 
         true ->
-          {:error,
-           %{message: "Your input must be a map or list of maps", action: :bad_parameters}}
+          {:error, %{message: translated_message(:builder), action: :bad_parameters}}
       end
     end
   end
@@ -783,7 +929,7 @@ defmodule GuardedStruct.Runtime do
         {:error,
          %{
            field: child.name,
-           message: "Your input must be a list of items",
+           message: translated_message(:list_builder_type),
            action: :type
          }}
 

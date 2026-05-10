@@ -46,10 +46,10 @@ if Code.ensure_loaded?(Igniter) do
       module = parse_module(module_str)
 
       cond do
-        format not in ["json", "typescript"] ->
+        format not in ["json", "typescript", "openapi"] ->
           Igniter.add_issue(
             igniter,
-            "Unknown format #{inspect(format)}. Use `--format=json` or `--format=typescript`."
+            "Unknown format #{inspect(format)}. Use `--format=json`, `--format=typescript`, or `--format=openapi`."
           )
 
         not Code.ensure_loaded?(module) ->
@@ -85,6 +85,12 @@ if Code.ensure_loaded?(Igniter) do
     defp render_and_emit(igniter, module, "typescript", out) do
       content = GuardedStruct.Schema.typescript(module)
       emit(igniter, content, out, default_path(module, "ts"))
+    end
+
+    defp render_and_emit(igniter, module, "openapi", out) do
+      schema = GuardedStruct.Schema.openapi(module)
+      content = encode_json(schema)
+      emit(igniter, content, out, default_path(module, "openapi.json"))
     end
 
     defp emit(igniter, content, nil, default_path) do

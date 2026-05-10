@@ -10,6 +10,7 @@ defmodule GuardedStruct.Dsl do
       type: [type: :quoted, required: true],
       enforce: [type: :boolean],
       default: [type: :quoted],
+      derives: [type: :string],
       derive: [type: :string],
       validator: [type: {:tuple, [:atom, :atom]}],
       auto: [
@@ -39,6 +40,7 @@ defmodule GuardedStruct.Dsl do
       type: [type: :quoted, required: true],
       enforce: [type: :boolean],
       default: [type: :quoted],
+      derives: [type: :string],
       derive: [type: :string],
       validator: [type: {:tuple, [:atom, :atom]}],
       auto: [
@@ -64,7 +66,8 @@ defmodule GuardedStruct.Dsl do
       name: [type: :any, required: true],
       type: [type: :quoted, default: quote(do: map())],
       default: [type: :quoted, default: Macro.escape(%{})],
-      derive: [type: :string, default: "validate(map)"],
+      derives: [type: :string, default: "validate(map)"],
+      derive: [type: :string],
       validator: [type: {:tuple, [:atom, :atom]}],
       hint: [type: :string]
     ]
@@ -79,6 +82,7 @@ defmodule GuardedStruct.Dsl do
       type: [type: :quoted, required: true],
       enforce: [type: :boolean],
       default: [type: :quoted],
+      derives: [type: :string],
       derive: [type: :string],
       validator: [type: {:tuple, [:atom, :atom]}],
       auto: [
@@ -117,6 +121,7 @@ defmodule GuardedStruct.Dsl do
       type: [type: :quoted, required: true],
       enforce: [type: :boolean],
       default: [type: :quoted],
+      derives: [type: :string],
       derive: [type: :string],
       validator: [type: {:tuple, [:atom, :atom]}],
       auto: [
@@ -169,7 +174,8 @@ defmodule GuardedStruct.Dsl do
       authorized_fields: [type: :boolean, default: false],
       main_validator: [type: {:tuple, [:atom, :atom]}],
       validate_derive: [type: {:or, [:atom, {:list, :atom}]}],
-      sanitize_derive: [type: {:or, [:atom, {:list, :atom}]}]
+      sanitize_derive: [type: {:or, [:atom, {:list, :atom}]}],
+      jason: [type: :boolean, default: false]
     ],
     entities: [@field, @virtual_field, @dynamic_field, @sub_field, @conditional_field]
   }
@@ -180,12 +186,14 @@ defmodule GuardedStruct.Dsl do
       GuardedStruct.Transformers.ParseDerive,
       GuardedStruct.Transformers.VerifyDeriveOps,
       GuardedStruct.Transformers.ParseCoreKeys,
+      GuardedStruct.Transformers.VerifyCoreKeyPaths,
       GuardedStruct.Transformers.ParseDomain,
       GuardedStruct.Transformers.GenerateSubFieldModules,
       GuardedStruct.Transformers.GenerateBuilder
     ],
     verifiers: [
       GuardedStruct.Verifiers.VerifyValidatorMFA,
-      GuardedStruct.Verifiers.VerifyAutoMFA
+      GuardedStruct.Verifiers.VerifyAutoMFA,
+      GuardedStruct.Verifiers.VerifyNoStructCycles
     ]
 end

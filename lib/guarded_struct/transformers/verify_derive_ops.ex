@@ -73,15 +73,53 @@ defmodule GuardedStruct.Transformers.VerifyDeriveOps do
 
       [{kind, _} | _] = unknowns ->
         names = Enum.map(unknowns, fn {k, n} -> "#{k}=#{inspect(n)}" end) |> Enum.join(", ")
+        suggestions = Enum.map(unknowns, &suggest/1) |> Enum.reject(&is_nil/1)
+
+        suggestion_block =
+          case suggestions do
+            [] -> ""
+            [s] -> "\nDid you mean #{s}?"
+            _ -> "\nDid you mean:\n  - " <> Enum.join(suggestions, "\n  - ")
+          end
 
         raise Spark.Error.DslError,
           message:
-            "unknown derive op(s) on field #{inspect(field)}: #{names}.\n" <>
-              "Built-in #{kind} ops are listed in `GuardedStruct.Derive.Registry`.",
+            "unknown derive op(s) on field #{inspect(field)}: #{names}." <>
+              suggestion_block <>
+              "\nBuilt-in #{kind} ops are listed in `GuardedStruct.Derive.Registry`.",
           path: [:guardedstruct, :field, field, :derive],
           module: module
     end
   end
+
+  @suggestion_threshold 0.7
+  @suggestion_count 3
+
+  defp suggest({kind, name}) when is_atom(name) do
+    candidates =
+      case kind do
+        :validate -> Registry.validate_ops()
+        :sanitize -> Registry.sanitize_ops()
+      end
+
+    name_str = Atom.to_string(name)
+
+    matches =
+      candidates
+      |> Enum.map(fn op -> {op, String.jaro_distance(name_str, Atom.to_string(op))} end)
+      |> Enum.filter(fn {_op, d} -> d >= @suggestion_threshold end)
+      |> Enum.sort_by(fn {_op, d} -> d end, :desc)
+      |> Enum.take(@suggestion_count)
+      |> Enum.map(fn {op, _} -> "`:#{op}`" end)
+
+    case matches do
+      [] -> nil
+      [single] -> single
+      list -> "one of " <> Enum.join(list, ", ")
+    end
+  end
+
+  defp suggest(_), do: nil
 
   defp extract_unknown(name, kind) when is_atom(name) do
     if known?(name, kind), do: [], else: [{kind, name}]

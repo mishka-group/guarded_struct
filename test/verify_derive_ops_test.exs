@@ -57,6 +57,35 @@ defmodule GuardedStructTest.VerifyDeriveOpsTest do
     end
   end
 
+  test "typo close to a known op gets a 'did you mean' suggestion" do
+    state = dsl_state([field(:name, %{validate: [:stirng]})])
+
+    err =
+      assert_raise Spark.Error.DslError, fn -> VerifyDeriveOps.transform(state) end
+
+    assert Exception.message(err) =~ "Did you mean"
+    assert Exception.message(err) =~ ":string"
+  end
+
+  test "sanitize-side typo also gets a suggestion" do
+    state = dsl_state([field(:name, %{sanitize: [:triim]})])
+
+    err =
+      assert_raise Spark.Error.DslError, fn -> VerifyDeriveOps.transform(state) end
+
+    assert Exception.message(err) =~ "Did you mean"
+    assert Exception.message(err) =~ ":trim"
+  end
+
+  test "completely-fabricated op name gives no suggestion (below threshold)" do
+    state = dsl_state([field(:name, %{validate: [:zxqyzqyzpzxxyy]})])
+
+    err =
+      assert_raise Spark.Error.DslError, fn -> VerifyDeriveOps.transform(state) end
+
+    refute Exception.message(err) =~ "Did you mean"
+  end
+
   test "well-known ops pass" do
     state =
       dsl_state([

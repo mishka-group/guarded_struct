@@ -89,6 +89,7 @@ defmodule GuardedStruct.Messages do
   @callback is_type({any(), any()}) :: message()
   @callback convert_enum_output(any()) :: message()
   @callback equal(any()) :: message()
+  @callback record(any()) :: message()
 
   @optional_callbacks required_fields: 0,
                       authorized_fields: 0,
@@ -150,7 +151,8 @@ defmodule GuardedStruct.Messages do
                       location_url: 1,
                       is_type: 1,
                       convert_enum_output: 1,
-                      equal: 1
+                      equal: 1,
+                      record: 1
 
   @doc false
   # Get idea from https://github.com/pow-auth/pow/blob/main/lib/pow/phoenix/messages.ex
@@ -220,6 +222,7 @@ defmodule GuardedStruct.Messages do
       def is_type(field), do: unquote(__MODULE__).is_type(field)
       def convert_enum_output(field), do: unquote(__MODULE__).convert_enum_output(field)
       def equal(field), do: unquote(__MODULE__).equal(field)
+      def record(field), do: unquote(__MODULE__).record(field)
 
       defoverridable unquote(__MODULE__)
     end
@@ -387,6 +390,10 @@ defmodule GuardedStruct.Messages do
     do: "Your sent data form #{field} field is not in the allowed list"
 
   def equal(field), do: "Invalid value in the #{field} field"
+
+  def record(field) do
+    "The #{field} field is not a valid Erlang record (a tagged tuple)."
+  end
 
   # Helpers
   def translated_message(fn_atom), do: apply(@message_backend, fn_atom, [])

@@ -20,13 +20,13 @@ defmodule GuardedStruct.AshResource do
         # rules that Ash actions can reach via `__guarded_validate__/1`.
         guardedstruct do
           field :email, :string,
-            derive: "sanitize(trim, downcase) validate(string, not_empty, email_r)"
+            derives: "sanitize(trim, downcase) validate(string, not_empty, email_r)"
 
           field :nickname, :string,
-            derive: "sanitize(strip_tags, trim) validate(string, max_len=20)"
+            derives: "sanitize(strip_tags, trim) validate(string, max_len=20)"
 
           sub_field :preferences, :map do
-            field :theme, :string, derive: "validate(enum=String[light::dark])"
+            field :theme, :string, derives: "validate(enum=String[light::dark])"
           end
         end
       end

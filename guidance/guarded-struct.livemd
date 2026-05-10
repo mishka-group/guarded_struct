@@ -2,7 +2,7 @@
 
 ```elixir
 Mix.install([
-  {:guarded_struct, "~> 0.0.4"},
+  {:guarded_struct, "~> 0.1.0"},
   {:html_sanitize_ex, "~> 1.4.3"},
 
   # Optional dependencies, It’s recommended to create your own
@@ -13,6 +13,24 @@ Mix.install([
   {:ex_phone_number, "~> 0.4.3"},
 ])
 ```
+
+## What's new in 0.1.0
+
+`v0.1.0` rewrites the macro core on Spark. **Existing 0.0.x code keeps working — every example below runs unchanged.** New features are demonstrated near the bottom of this notebook:
+
+| Feature | Section |
+|---|---|
+| Pattern-keyed maps (regex `field` names, closes #11) | _Pattern-keyed maps_ |
+| `virtual_field` (closes #5) | _Virtual fields_ |
+| `GuardedStruct.Validate` standalone API (closes #2) | _Standalone validation_ |
+| Erlang Record support (closes #6) | _Erlang Records_ |
+| JSON Schema / TypeScript export (closes #3) | _Schema export_ |
+| Custom validators / sanitizers via Spark DSL | _Custom derive ops_ |
+| Strict op-name verification | _Strict mode_ |
+| Splode error wrapping | _Splode errors_ |
+| Ash extension | _Ash integration_ |
+
+See [`CHANGELOG.md`](https://github.com/mishka-group/guarded_struct/blob/master/CHANGELOG.md) for the full list and [`MIGRATION.md`](https://github.com/mishka-group/guarded_struct/blob/master/MIGRATION.md) for upgrade notes.
 
 ## About
 
@@ -1420,3 +1438,242 @@ As you can see in the code above, you only need to give the macro the `structs: 
 ##### Note:
 
 > Using a list `conditional_field` in a nested list can create a logical bug for you if the list is not flattened, **Please test your builder before releasing to production**.
+
+## New features in 0.1.0
+
+The sections below are new in `v0.1.0`. They show features added on top of the existing API; everything above this point continues to work unchanged.
+
+## Pattern-keyed maps
+
+A `field` whose name is a regex declares a free-form map shape. The struct's `builder/1` returns a plain validated map. Useful for translations, headers, sharded data — anything where keys are runtime-unknown but values share a uniform shape.
+
+```elixir
+defmodule Shard do
+  use GuardedStruct
+  guardedstruct do
+    field(:node, String.t(), enforce: true, derive: "sanitize(trim) validate(ipv4)")
+  end
+end
+
+defmodule ShardsMap do
+  use GuardedStruct
+  guardedstruct do
+    field(~r/^shard_\d+$/, struct(), struct: Shard, derive: "validate(map, not_empty)")
+  end
+end
+
+ShardsMap.builder(%{
+  "shard_1" => %{node: "10.0.0.1"},
+  "shard_2" => %{node: "10.0.0.2"}
+})
+# => {:ok, %{
+#      "shard_1" => %Shard{node: "10.0.0.1"},
+#      "shard_2" => %Shard{node: "10.0.0.2"}
+#    }}
+```
+
+Keys stay as strings (atom-table-exhaustion safe by default). Mixing atom-keyed and regex-keyed `field`s in the same `guardedstruct` raises a compile-time error.
+
+## Virtual fields
+
+A `virtual_field` is validated through the full pipeline but excluded from the generated `defstruct`. Use it for input fields needed only by `main_validator/1`:
+
+```elixir
+defmodule Signup do
+  use GuardedStruct
+
+  guardedstruct do
+    field(:email, String.t(), enforce: true, derive: "validate(email_r)")
+    field(:password, String.t(), enforce: true, derive: "validate(string, min_len=8)")
+    virtual_field(:password_confirm, String.t(), derive: "validate(string)")
+  end
+
+  def main_validator(attrs) do
+    if attrs[:password] == attrs[:password_confirm] do
+      {:ok, attrs}
+    else
+      {:error,
+       [%{field: :password_confirm, action: :match, message: "passwords don't match"}]}
+    end
+  end
+end
+
+Signup.builder(%{
+  email: "alice@x.com",
+  password: "longpassword",
+  password_confirm: "longpassword"
+})
+# => {:ok, %Signup{email: "alice@x.com", password: "longpassword"}}
+#    Note: password_confirm is NOT on the struct — it was used by main_validator and dropped.
+```
+
+## Standalone validation
+
+`GuardedStruct.Validate` exposes the schema without going through `builder/1`. Three tiers:
+
+```elixir
+# Tier 1 — ad-hoc op-string against a value, no module needed
+GuardedStruct.Validate.run("validate(string, max_len=80, email_r)", "alice@example.com")
+# => {:ok, "alice@example.com"}
+
+# Tier 2 — single named field of a module
+GuardedStruct.Validate.field(Signup, :email, "alice@x.com")
+# => {:ok, "alice@x.com"}
+
+# Tier 2 — with cross-field deps via context
+GuardedStruct.Validate.field(MyStruct, :owner_id, "u-123",
+  context: %{user_id: "u-123"}
+)
+
+# Tier 2 — isolated mode skips on:/domain: deps entirely
+GuardedStruct.Validate.field(MyStruct, :owner_id, "u-123", mode: :isolated)
+
+# Tier 3 — partial subset of fields (form-as-you-type, PATCH endpoints)
+GuardedStruct.Validate.partial(Signup, %{email: "alice@x.com", password: "longpassword"})
+# => {:ok, %{email: "alice@x.com", password: "longpassword"}}
+#    No enforce_keys check — missing fields silently skipped.
+```
+
+## Erlang Records
+
+```elixir
+require Record
+Record.defrecord(:user_record, name: nil, age: nil)
+
+defmodule WithRecord do
+  use GuardedStruct
+  guardedstruct do
+    field(:user, :tuple, derive: "validate(record=user_record)")
+  end
+end
+
+rec = user_record(name: "Alice", age: 30)
+WithRecord.builder(%{user: rec})
+# => {:ok, %WithRecord{user: {:user_record, "Alice", 30}}}
+```
+
+The `record=tag` form checks that the input is a tagged tuple with the given tag. The bare `validate(record)` accepts any tagged tuple.
+
+## Schema export
+
+Emit JSON Schema or TypeScript declarations from any GuardedStruct module:
+
+```elixir
+defmodule Person do
+  use GuardedStruct
+  guardedstruct do
+    field(:name, String.t(), enforce: true, derive: "validate(string, max_len=80)")
+    field(:age, integer(), derive: "validate(integer, min_len=0)")
+    field(:role, String.t(), derive: "validate(enum=String[admin::user::guest])")
+  end
+end
+
+GuardedStruct.Schema.json_schema(Person)
+# %{
+#   "$schema" => "https://json-schema.org/draft/2020-12/schema",
+#   "type" => "object",
+#   "properties" => %{
+#     "name" => %{"type" => "string", "maxLength" => 80},
+#     "age" => %{"type" => "integer", "minimum" => 0},
+#     "role" => %{"type" => "string", "enum" => ["admin", "user", "guest"]}
+#   },
+#   "required" => ["name"]
+# }
+
+GuardedStruct.Schema.typescript(Person)
+# "export interface Person {\n  name: string;\n  age?: number;\n  role?: \"admin\" | \"user\" | \"guest\";\n}\n"
+```
+
+CLI variant via Igniter (writes the file with diff preview):
+
+```sh
+mix guarded_struct.gen.schema MyApp.Person --format=json --out=priv/person.json
+```
+
+## Custom derive ops
+
+Beyond the 50+ built-in validators and 11 sanitizers, you can register your own via a small Spark-native DSL:
+
+```elixir
+defmodule MyApp.Derives do
+  use GuardedStruct.Derive.Extension
+
+  validator :slug, fn input ->
+    is_binary(input) and Regex.match?(~r/^[a-z0-9-]+$/, input)
+  end
+
+  sanitizer :slugify, fn input when is_binary(input) ->
+    input
+    |> String.downcase()
+    |> String.replace(~r/[^a-z0-9-]+/u, "-")
+  end
+end
+
+# config/config.exs
+# config :guarded_struct, derive_extensions: [MyApp.Derives]
+
+# Then anywhere:
+defmodule Post do
+  use GuardedStruct
+  guardedstruct do
+    field(:slug, String.t(), derive: "sanitize(slugify) validate(slug)")
+  end
+end
+```
+
+The legacy `Application.put_env(:guarded_struct, :validate_derive, MyMod)` plug-in mechanism still works — both can coexist.
+
+## Strict mode
+
+Opt in to compile-time op-name verification:
+
+```elixir
+# config/config.exs
+# config :guarded_struct, strict_derive_ops: true
+```
+
+Then a typo:
+
+```elixir
+field(:name, String.t(), derive: "validate(stirng)")
+# ** (Spark.Error.DslError) unknown derive op(s) on field :name: validate=:stirng
+#    Built-in validate ops are listed in `GuardedStruct.Derive.Registry`.
+```
+
+Automatically skipped if a `:validate_derive` / `:sanitize_derive` Application env plug-in is registered.
+
+## Splode errors
+
+`builder/1` returns the legacy tuple shape `{:error, [%{field, action, message}]}` by default. Wrap with Splode for `traverse_errors/2`, `to_class/1`, JSON serialisation:
+
+```elixir
+case Person.builder(input) do
+  {:ok, _} = ok ->
+    ok
+
+  {:error, errs} ->
+    {:error, GuardedStruct.Errors.from_tuple(errs)}
+end
+```
+
+## Ash integration
+
+Use the same DSL inside an `Ash.Resource`:
+
+```elixir
+defmodule MyApp.Resources.User do
+  use Ash.Resource, extensions: [GuardedStruct.AshResource]
+
+  guardedstruct do
+    field(:name, String.t(), enforce: true, derive: "validate(string, max_len=80)")
+    field(:email, String.t(), enforce: true, derive: "validate(email_r)")
+  end
+
+  # ... your normal Ash actions, attributes, policies, etc.
+end
+
+MyApp.Resources.User.__guarded_validate__(%{name: "Alice", email: "alice@x.com"})
+# => {:ok, %{name: "Alice", email: "alice@x.com"}}
+```
+
+The validation pipeline lives under the `__guarded_*__` namespace so it doesn't clash with Ash's own callbacks.

@@ -20,8 +20,62 @@ defmodule GuardedStruct.Transformers.Codegen do
     the root user module down to this submodule (used in `__information__/0`).
   """
   def build_body(entities, block_enforce, opaque?, error?, path \\ [], options \\ %{}) do
+    case classify_shape(entities) do
+      :pattern_map ->
+        build_pattern_map_body(entities, error?, path, options)
+
+      :struct ->
+        build_struct_body(entities, block_enforce, opaque?, error?, path, options)
+
+      {:mixed, atom_names, regex_names} ->
+        raise Spark.Error.DslError,
+          message:
+            "cannot mix atom-keyed and regex-keyed `field` declarations in the same " <>
+              "guardedstruct.\n" <>
+              "Atom fields create fixed slots on a struct (#{inspect(atom_names)}); " <>
+              "regex fields create entries in a free-form map " <>
+              "(#{inspect(Enum.map(regex_names, &Regex.source/1))}).\n" <>
+              "These shapes can't both fit in one Elixir struct. Either keep just one " <>
+              "shape, or extract the regex part into a separate module and reference it " <>
+              "via `struct:`.",
+          path: [:guardedstruct]
+    end
+  end
+
+  defp classify_shape(entities) do
+    {atoms, regexes} =
+      Enum.reduce(entities, {[], []}, fn entity, {a, r} ->
+        case entity_name(entity) do
+          name when is_atom(name) and not is_nil(name) -> {[name | a], r}
+          %Regex{} = pattern -> {a, [pattern | r]}
+          _ -> {a, r}
+        end
+      end)
+
+    cond do
+      atoms == [] and regexes != [] -> :pattern_map
+      atoms != [] and regexes != [] -> {:mixed, Enum.reverse(atoms), Enum.reverse(regexes)}
+      true -> :struct
+    end
+  end
+
+  defp build_struct_body(entities, block_enforce, opaque?, error?, path, options) do
     {keys, defstruct_kw, types, enforce_keys, fields_runtime} =
       build_struct_pieces(entities, block_enforce)
+
+    _jason? = Map.get(options, :jason, false) == true
+
+    example_pairs =
+      entities
+      |> Enum.reject(&match?(%VirtualField{}, &1))
+      |> Enum.uniq_by(& &1.name)
+      |> Enum.map(fn entity -> {entity.name, example_value_ast(entity, path)} end)
+
+    conditional_keys =
+      entities
+      |> Enum.filter(&match?(%ConditionalField{}, &1))
+      |> Enum.map(& &1.name)
+      |> Enum.uniq()
 
     info_map =
       Macro.escape(%{
@@ -29,7 +83,7 @@ defmodule GuardedStruct.Transformers.Codegen do
         key: if(path == [], do: :root, else: List.last(path)),
         keys: keys,
         enforce_keys: enforce_keys,
-        conditional_keys: [],
+        conditional_keys: conditional_keys,
         options: options
       })
 
@@ -92,14 +146,96 @@ defmodule GuardedStruct.Transformers.Codegen do
       def builder(attrs, error),
         do: GuardedStruct.Runtime.build(__MODULE__, attrs, error)
 
+      @doc "A sample %#{inspect(__MODULE__)}{} populated from defaults + type-based fallbacks."
+      def example, do: struct(__MODULE__, unquote(example_pairs))
+
       if unquote(error?) do
         defmodule Error do
           defexception [:errors, :term]
 
           @impl true
           def message(%{errors: errs, term: term}) do
-            "There is at least one validation problem with your data: #{inspect(term)}\n" <>
-              "Errors: #{inspect(errs)}"
+            """
+            #{GuardedStruct.Messages.translated_message(:message_exception)}
+             Term: #{inspect(term)}
+             Errors: #{inspect(errs)}
+            """
+          end
+        end
+      end
+    end
+  end
+
+  defp build_pattern_map_body(entities, error?, _path, options) do
+    patterns = Enum.map(entities, & &1.name)
+
+    fields_runtime =
+      Enum.map(entities, fn %Field{} = f ->
+        %{
+          kind: :pattern_field,
+          pattern: f.name,
+          type: f.type,
+          derive: f.derives || f.derive,
+          __derive_ops__: f.__derive_ops__,
+          validator: f.validator,
+          struct: f.struct,
+          structs: f.structs,
+          hint: f.hint,
+          default: f.default
+        }
+      end)
+
+    info_map =
+      Macro.escape(%{
+        path: [],
+        key: :pattern,
+        keys: [],
+        enforce_keys: [],
+        conditional_keys: [],
+        patterns: patterns,
+        options: options,
+        shape: :pattern_map
+      })
+
+    quote do
+      def keys, do: []
+      def keys(_), do: false
+      def enforce_keys, do: []
+      def enforce_keys(_), do: false
+
+      def __information__ do
+        Map.put(unquote(info_map), :module, __MODULE__)
+      end
+
+      def __fields__, do: unquote(Macro.escape(fields_runtime))
+
+      def example, do: %{}
+
+      def builder(attrs, error \\ false)
+
+      def builder({:__nested__, local_attrs, _full_attrs, _path, _type}, error),
+        do: GuardedStruct.Runtime.build_pattern_map(__MODULE__, local_attrs, error)
+
+      def builder({_, _} = input, error),
+        do: GuardedStruct.Runtime.build_pattern_map(__MODULE__, input, error)
+
+      def builder({_, _, _} = input, error),
+        do: GuardedStruct.Runtime.build_pattern_map(__MODULE__, input, error)
+
+      def builder(attrs, error),
+        do: GuardedStruct.Runtime.build_pattern_map(__MODULE__, attrs, error)
+
+      if unquote(error?) do
+        defmodule Error do
+          defexception [:errors, :term]
+
+          @impl true
+          def message(%{errors: errs, term: term}) do
+            """
+            #{GuardedStruct.Messages.translated_message(:message_exception)}
+             Term: #{inspect(term)}
+             Errors: #{inspect(errs)}
+            """
           end
         end
       end
@@ -107,7 +243,7 @@ defmodule GuardedStruct.Transformers.Codegen do
   end
 
   @doc """
-  Raise `ArgumentError` for non-atom field names or duplicate names in scope.
+  Raise `ArgumentError` for non-atom non-regex field names or duplicate names.
   """
   def validate_entities!(entities) do
     Enum.reduce(entities, [], fn entity, seen ->
@@ -119,6 +255,9 @@ defmodule GuardedStruct.Transformers.Codegen do
             raise ArgumentError, "the field #{inspect(name)} is already set"
           end
 
+          [name | seen]
+
+        is_struct(name, Regex) ->
           [name | seen]
 
         is_number(name) or is_binary(name) ->
@@ -190,7 +329,7 @@ defmodule GuardedStruct.Transformers.Codegen do
           %{
             kind: :field,
             name: f.name,
-            derive: f.derive,
+            derive: f.derives || f.derive,
             __derive_ops__: f.__derive_ops__,
             __from_path__: f.__from_path__,
             __on_path__: f.__on_path__,
@@ -211,7 +350,7 @@ defmodule GuardedStruct.Transformers.Codegen do
           %{
             kind: :sub_field,
             name: sf.name,
-            derive: sf.derive,
+            derive: sf.derives || sf.derive,
             __derive_ops__: sf.__derive_ops__,
             __from_path__: sf.__from_path__,
             __on_path__: sf.__on_path__,
@@ -236,7 +375,7 @@ defmodule GuardedStruct.Transformers.Codegen do
           %{
             kind: :conditional_field,
             name: cf.name,
-            derive: cf.derive,
+            derive: cf.derives || cf.derive,
             __derive_ops__: cf.__derive_ops__,
             __from_path__: cf.__from_path__,
             __on_path__: cf.__on_path__,
@@ -264,7 +403,7 @@ defmodule GuardedStruct.Transformers.Codegen do
         %{
           kind: :virtual_field,
           name: vf.name,
-          derive: vf.derive,
+          derive: vf.derives || vf.derive,
           __derive_ops__: vf.__derive_ops__,
           __from_path__: vf.__from_path__,
           __on_path__: vf.__on_path__,
@@ -307,7 +446,7 @@ defmodule GuardedStruct.Transformers.Codegen do
           encoded = %{
             kind: :field,
             name: f.name,
-            derive: f.derive,
+            derive: f.derives || f.derive,
             __derive_ops__: f.__derive_ops__,
             validator: f.validator,
             struct: f.struct,
@@ -324,7 +463,7 @@ defmodule GuardedStruct.Transformers.Codegen do
             kind: :sub_field,
             name: sf.name,
             sub_field_index: new_count,
-            derive: sf.derive,
+            derive: sf.derives || sf.derive,
             __derive_ops__: sf.__derive_ops__,
             validator: sf.validator,
             structs: sf.structs,
@@ -338,7 +477,7 @@ defmodule GuardedStruct.Transformers.Codegen do
           encoded = %{
             kind: :conditional_field,
             name: cf.name,
-            derive: cf.derive,
+            derive: cf.derives || cf.derive,
             __derive_ops__: cf.__derive_ops__,
             validator: cf.validator,
             hint: cf.hint,
@@ -373,4 +512,49 @@ defmodule GuardedStruct.Transformers.Codegen do
   def atom_to_module(field_atom) do
     field_atom |> Atom.to_string() |> Macro.camelize() |> String.to_atom()
   end
+
+  defp example_value_ast(%Field{default: default}, _path) when not is_nil(default), do: default
+
+  defp example_value_ast(%Field{struct: mod}, _path) when is_atom(mod) and not is_nil(mod) do
+    quote do: unquote(mod).example()
+  end
+
+  defp example_value_ast(%Field{structs: mod}, _path)
+       when is_atom(mod) and mod not in [nil, true, false] do
+    quote do: [unquote(mod).example()]
+  end
+
+  defp example_value_ast(%Field{type: type}, _path), do: type_default_ast(type)
+
+  defp example_value_ast(%SubField{default: default}, _path) when not is_nil(default),
+    do: default
+
+  defp example_value_ast(%SubField{name: name}, _path) do
+    component = atom_to_module(name)
+    quote do: Module.concat(__MODULE__, unquote(component)).example()
+  end
+
+  defp example_value_ast(%ConditionalField{default: default}, _path) when not is_nil(default),
+    do: default
+
+  defp example_value_ast(%ConditionalField{}, _path), do: nil
+
+  defp example_value_ast(_other, _path), do: nil
+
+  # Heuristic placeholder values for common type ASTs. Anything we don't
+  # recognise falls back to nil — the user can always set `default:` to
+  # override.
+  defp type_default_ast({{:., _, [{:__aliases__, _, [:String]}, :t]}, _, _}), do: ""
+  defp type_default_ast({:integer, _, _}), do: 0
+  defp type_default_ast({:non_neg_integer, _, _}), do: 0
+  defp type_default_ast({:pos_integer, _, _}), do: 1
+  defp type_default_ast({:float, _, _}), do: 0.0
+  defp type_default_ast({:number, _, _}), do: 0
+  defp type_default_ast({:boolean, _, _}), do: false
+  defp type_default_ast({:atom, _, _}), do: :placeholder
+  defp type_default_ast({:list, _, _}), do: []
+  defp type_default_ast({:map, _, _}), do: Macro.escape(%{})
+  defp type_default_ast({:any, _, _}), do: nil
+  defp type_default_ast({:term, _, _}), do: nil
+  defp type_default_ast(_other), do: nil
 end

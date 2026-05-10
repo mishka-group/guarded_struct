@@ -33,7 +33,7 @@ defmodule GuardedStructTest.DeriveExtensionTest do
       use GuardedStruct
 
       guardedstruct do
-        field(:slug, String.t(), derive: "validate(slug)")
+        field(:slug, String.t(), derives: "validate(slug)")
       end
     end
 
@@ -48,7 +48,7 @@ defmodule GuardedStructTest.DeriveExtensionTest do
       use GuardedStruct
 
       guardedstruct do
-        field(:slug, String.t(), derive: "sanitize(slugify) validate(slug)")
+        field(:slug, String.t(), derives: "sanitize(slugify) validate(slug)")
       end
     end
 
@@ -82,7 +82,7 @@ defmodule GuardedStructTest.DeriveExtensionTest do
         use GuardedStruct
 
         guardedstruct do
-          field(:slug, String.t(), derive: "validate(slug)")
+          field(:slug, String.t(), derives: "validate(slug)")
         end
       end
       """)

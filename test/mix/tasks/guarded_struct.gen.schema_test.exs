@@ -6,9 +6,9 @@ defmodule Mix.Tasks.GuardedStruct.Gen.SchemaTest do
     use GuardedStruct
 
     guardedstruct do
-      field(:name, String.t(), enforce: true, derive: "validate(string, max_len=80)")
-      field(:age, integer(), derive: "validate(integer, min_len=0)")
-      field(:role, String.t(), derive: "validate(enum=String[admin::user])")
+      field(:name, String.t(), enforce: true, derives: "validate(string, max_len=80)")
+      field(:age, integer(), derives: "validate(integer, min_len=0)")
+      field(:role, String.t(), derives: "validate(enum=String[admin::user])")
     end
   end
 

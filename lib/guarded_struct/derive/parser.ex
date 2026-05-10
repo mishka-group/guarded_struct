@@ -21,6 +21,8 @@ defmodule GuardedStruct.Derive.Parser do
     else
       _ -> nil
     end
+  rescue
+    _ -> nil
   end
 
   defp to_block_ast(input) do
@@ -31,13 +33,13 @@ defmodule GuardedStruct.Derive.Parser do
       |> String.replace(~r/\)\s+/u, ")\n")
       |> then(&"(\n#{&1}\n)")
 
-    Code.string_to_quoted(wrapped)
+    Code.string_to_quoted(wrapped, emit_warnings: false)
   end
 
   defp balance_parens(input) do
     {depth, _state} =
       input
-      |> String.to_charlist()
+      |> :binary.bin_to_list()
       |> Enum.reduce({0, :code}, fn ch, {d, state} ->
         case {state, ch} do
           {:in_string, ?\\} -> {d, :string_escape}

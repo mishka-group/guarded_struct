@@ -9,15 +9,15 @@ defmodule GuardedStructTest.SchemaTest do
     guardedstruct do
       field(:name, String.t(),
         enforce: true,
-        derive: "validate(string, max_len=80, min_len=1)"
+        derives: "validate(string, max_len=80, min_len=1)"
       )
 
-      field(:age, integer(), derive: "validate(integer, max_len=120, min_len=0)")
-      field(:email, String.t(), derive: "validate(email_r)")
-      field(:role, String.t(), derive: "validate(enum=String[admin::user::guest])")
-      field(:website, String.t(), derive: "validate(url)")
-      field(:user_id, String.t(), derive: "validate(uuid)")
-      field(:active, boolean(), default: true, derive: "validate(boolean)")
+      field(:age, integer(), derives: "validate(integer, max_len=120, min_len=0)")
+      field(:email, String.t(), derives: "validate(email_r)")
+      field(:role, String.t(), derives: "validate(enum=String[admin::user::guest])")
+      field(:website, String.t(), derives: "validate(url)")
+      field(:user_id, String.t(), derives: "validate(uuid)")
+      field(:active, boolean(), default: true, derives: "validate(boolean)")
     end
   end
 
@@ -75,5 +75,53 @@ defmodule GuardedStructTest.SchemaTest do
     assert ts =~ "age?: number;"
     # enum becomes a TS union
     assert ts =~ "role?: \"admin\" | \"user\" | \"guest\";"
+  end
+
+  describe "openapi/1" do
+    test "wraps json_schema in OpenAPI 3.1 envelope" do
+      doc = Schema.openapi(Person)
+
+      assert doc["openapi"] == "3.1.0"
+      assert is_map(doc["info"])
+      assert is_map(doc["components"]["schemas"])
+    end
+
+    test "schema name is the inspected module with dots replaced" do
+      doc = Schema.openapi(Person)
+
+      assert Map.has_key?(
+               doc["components"]["schemas"],
+               "GuardedStructTest_SchemaTest_Person"
+             )
+    end
+
+    test "envelope strips $schema and title from inner schemas" do
+      doc = Schema.openapi(Person)
+      [schema] = doc["components"]["schemas"] |> Map.values()
+
+      refute Map.has_key?(schema, "$schema")
+      refute Map.has_key?(schema, "title")
+      assert schema["type"] == "object"
+    end
+
+    test "passing a list bundles multiple schemas" do
+      defmodule Other do
+        use GuardedStruct
+
+        guardedstruct do
+          field(:x, integer())
+        end
+      end
+
+      doc = Schema.openapi([Person, Other])
+      assert map_size(doc["components"]["schemas"]) == 2
+    end
+
+    test "single module is treated as list-of-one" do
+      single = Schema.openapi(Person)
+      list = Schema.openapi([Person])
+
+      assert single["components"] == list["components"]
+    end
   end
 end

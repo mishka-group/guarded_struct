@@ -7,7 +7,7 @@ defmodule GuardedStructTest.InfoTest do
     guardedstruct enforce: true, authorized_fields: true do
       field(:id, :integer, default: 0)
       field(:name, String.t())
-      field(:nickname, String.t(), enforce: false, derive: "validate(string, max_len=20)")
+      field(:nickname, String.t(), enforce: false, derives: "validate(string, max_len=20)")
 
       sub_field(:profile, :map) do
         field(:bio, :string)

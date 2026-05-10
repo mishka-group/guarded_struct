@@ -7,7 +7,7 @@ defmodule GuardedStructTest.ConditionalFieldTest do
     use GuardedStruct
 
     guardedstruct do
-      field(:post_id, integer(), derive: "validate(integer)")
+      field(:post_id, integer(), derives: "validate(integer)")
       field(:like, boolean(), enforce: true)
     end
   end
@@ -17,7 +17,7 @@ defmodule GuardedStructTest.ConditionalFieldTest do
     alias ConditionalFieldValidatorTestValidators, as: VAL
 
     guardedstruct do
-      field(:nickname, String.t(), derive: "validate(string, not_empty)")
+      field(:nickname, String.t(), derives: "validate(string, not_empty)")
 
       # For domain
       sub_field(:identity, struct()) do
@@ -40,13 +40,13 @@ defmodule GuardedStructTest.ConditionalFieldTest do
 
           field(:city, String.t(),
             enforce: true,
-            derive: "sanitize(trim) validate(string, not_empty)"
+            derives: "sanitize(trim) validate(string, not_empty)"
           )
         end
 
         field(:location, String.t(),
           validator: {VAL, :is_string_data},
-          derive: "sanitize(trim) validate(string, location)",
+          derives: "sanitize(trim) validate(string, location)",
           hint: "location2"
         )
       end
@@ -74,7 +74,7 @@ defmodule GuardedStructTest.ConditionalFieldTest do
           hint: "auth1",
           structs: true,
           validator: {VAL, :is_list_data},
-          derive: "validate(not_flatten_empty_item)"
+          derives: "validate(not_flatten_empty_item)"
         ) do
           field(:username, String.t(), enforce: true)
           field(:provider, String.t(), enforce: true)
@@ -131,8 +131,8 @@ defmodule GuardedStructTest.ConditionalFieldTest do
         field(:profile, String.t(), hint: "profile1", validator: {VAL, :is_string_data})
 
         sub_field(:profile, struct(), hint: "profile2", validator: {VAL, :is_map_data}) do
-          field(:name, String.t(), enforce: true, derive: "validate(not_empty)")
-          field(:family, String.t(), enforce: true, derive: "validate(not_empty)")
+          field(:name, String.t(), enforce: true, derives: "validate(not_empty)")
+          field(:family, String.t(), enforce: true, derives: "validate(not_empty)")
         end
       end
 
@@ -151,7 +151,7 @@ defmodule GuardedStructTest.ConditionalFieldTest do
 
       conditional_field(:address, any(), structs: true) do
         sub_field(:address, struct(),
-          derive: "sanitize(trim, upcase)",
+          derives: "sanitize(trim, upcase)",
           validator: {VAL, :is_map_data},
           hint: "address1"
         ) do
@@ -160,7 +160,7 @@ defmodule GuardedStructTest.ConditionalFieldTest do
         end
 
         field(:address, String.t(),
-          derive: "sanitize(trim) validate(not_empty)",
+          derives: "sanitize(trim) validate(not_empty)",
           hint: "address2",
           validator: {VAL, :is_string_data}
         )
@@ -171,13 +171,13 @@ defmodule GuardedStructTest.ConditionalFieldTest do
           field(:username, String.t(),
             enforce: true,
             validator: {VAL, :is_string_data},
-            derive: "sanitize(trim) validate(string)"
+            derives: "sanitize(trim) validate(string)"
           )
 
           field(:provider, String.t(), enforce: true)
         end
 
-        field(:extera_auth, String.t(), derive: "sanitize(trim) validate(string, not_empty)")
+        field(:extera_auth, String.t(), derives: "sanitize(trim) validate(string, not_empty)")
       end
 
       conditional_field(:extera_auth2, any(), structs: true) do
@@ -188,14 +188,14 @@ defmodule GuardedStructTest.ConditionalFieldTest do
           field(:username, String.t(),
             enforce: true,
             validator: {VAL, :is_string_data},
-            derive: "sanitize(trim) validate(string)"
+            derives: "sanitize(trim) validate(string)"
           )
 
           field(:provider, String.t(), enforce: true)
         end
 
         field(:extera_auth2, String.t(),
-          derive: "sanitize(trim) validate(string, not_empty)",
+          derives: "sanitize(trim) validate(string, not_empty)",
           hint: "extera_auth2",
           validator: {VAL, :is_string_data}
         )
@@ -234,7 +234,7 @@ defmodule GuardedStructTest.ConditionalFieldTest do
         ) do
           field(:role, String.t(),
             enforce: true,
-            derive: "sanitize(trim) validate(string, not_empty)"
+            derives: "sanitize(trim) validate(string, not_empty)"
           )
 
           field(:action, String.t(), enforce: true)
@@ -257,11 +257,11 @@ defmodule GuardedStructTest.ConditionalFieldTest do
           structs: true,
           validator: {VAL, :is_flat_list_data},
           hint: "activities2",
-          derive: "validate(not_flatten_empty_item)"
+          derives: "validate(not_flatten_empty_item)"
         ) do
           field(:role, String.t(),
             enforce: true,
-            derive: "sanitize(trim) validate(string, not_empty)"
+            derives: "sanitize(trim) validate(string, not_empty)"
           )
 
           field(:action, String.t(), enforce: true)
@@ -292,7 +292,7 @@ defmodule GuardedStructTest.ConditionalFieldTest do
           structs: true,
           enforce: true,
           validator: {VAL, :is_flat_list_data},
-          derive: "validate(not_flatten_empty_item)",
+          derives: "validate(not_flatten_empty_item)",
           hint: "author2"
         ) do
           field(:name, String.t())
@@ -365,7 +365,7 @@ defmodule GuardedStructTest.ConditionalFieldTest do
 
       conditional_field(:activity5, any(),
         structs: true,
-        derive: "validate(not_flatten_empty_item)"
+        derives: "validate(not_flatten_empty_item)"
       ) do
         field(:activity5, String.t(),
           validator: {VAL, :is_string_data},
@@ -373,7 +373,7 @@ defmodule GuardedStructTest.ConditionalFieldTest do
         )
       end
 
-      conditional_field(:activity6, any(), derive: "validate(map)") do
+      conditional_field(:activity6, any(), derives: "validate(map)") do
         field(:activity6, String.t(),
           validator: {VAL, :is_string_data},
           hint: "activity1"
@@ -381,7 +381,7 @@ defmodule GuardedStructTest.ConditionalFieldTest do
       end
 
       conditional_field(:activity7, any(),
-        derive: "sanitize(tag=strip_tags) validate(not_empty_string)"
+        derives: "sanitize(tag=strip_tags) validate(not_empty_string)"
       ) do
         field(:activity7, String.t(),
           validator: {VAL, :is_string_data},

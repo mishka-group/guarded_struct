@@ -70,6 +70,8 @@ guardedstruct block at runtime:
 
 ### Nested DSLs
  * [field](#guardedstruct-field)
+ * [virtual_field](#guardedstruct-virtual_field)
+ * [dynamic_field](#guardedstruct-dynamic_field)
  * [sub_field](#guardedstruct-sub_field)
    * conditional_field
      * field
@@ -146,6 +148,75 @@ field name, type
 | [`structs`](#guardedstruct-field-structs){: #guardedstruct-field-structs } | `atom \| boolean` |  |  |
 | [`hint`](#guardedstruct-field-hint){: #guardedstruct-field-hint } | `String.t` |  |  |
 | [`priority`](#guardedstruct-field-priority){: #guardedstruct-field-priority } | `boolean` |  |  |
+
+
+
+
+
+
+### guardedstruct.virtual_field
+```elixir
+virtual_field name, type
+```
+
+
+
+
+
+
+
+
+### Arguments
+
+| Name | Type | Default | Docs |
+|------|------|---------|------|
+| [`name`](#guardedstruct-virtual_field-name){: #guardedstruct-virtual_field-name .spark-required} | `any` |  |  |
+| [`type`](#guardedstruct-virtual_field-type){: #guardedstruct-virtual_field-type .spark-required} | `any` |  |  |
+### Options
+
+| Name | Type | Default | Docs |
+|------|------|---------|------|
+| [`enforce`](#guardedstruct-virtual_field-enforce){: #guardedstruct-virtual_field-enforce } | `boolean` |  |  |
+| [`default`](#guardedstruct-virtual_field-default){: #guardedstruct-virtual_field-default } | `any` |  |  |
+| [`derive`](#guardedstruct-virtual_field-derive){: #guardedstruct-virtual_field-derive } | `String.t` |  |  |
+| [`validator`](#guardedstruct-virtual_field-validator){: #guardedstruct-virtual_field-validator } | `{atom, atom}` |  |  |
+| [`auto`](#guardedstruct-virtual_field-auto){: #guardedstruct-virtual_field-auto } | `{atom, atom} \| {atom, atom, any}` |  |  |
+| [`from`](#guardedstruct-virtual_field-from){: #guardedstruct-virtual_field-from } | `String.t` |  |  |
+| [`on`](#guardedstruct-virtual_field-on){: #guardedstruct-virtual_field-on } | `String.t` |  |  |
+| [`domain`](#guardedstruct-virtual_field-domain){: #guardedstruct-virtual_field-domain } | `String.t` |  |  |
+| [`hint`](#guardedstruct-virtual_field-hint){: #guardedstruct-virtual_field-hint } | `String.t` |  |  |
+
+
+
+
+
+
+### guardedstruct.dynamic_field
+```elixir
+dynamic_field name
+```
+
+
+
+
+
+
+
+
+### Arguments
+
+| Name | Type | Default | Docs |
+|------|------|---------|------|
+| [`name`](#guardedstruct-dynamic_field-name){: #guardedstruct-dynamic_field-name .spark-required} | `any` |  |  |
+### Options
+
+| Name | Type | Default | Docs |
+|------|------|---------|------|
+| [`type`](#guardedstruct-dynamic_field-type){: #guardedstruct-dynamic_field-type } | `any` | `{:map, [], []}` |  |
+| [`default`](#guardedstruct-dynamic_field-default){: #guardedstruct-dynamic_field-default } | `any` | `{:%{}, [], []}` |  |
+| [`derive`](#guardedstruct-dynamic_field-derive){: #guardedstruct-dynamic_field-derive } | `String.t` | `"validate(map)"` |  |
+| [`validator`](#guardedstruct-dynamic_field-validator){: #guardedstruct-dynamic_field-validator } | `{atom, atom}` |  |  |
+| [`hint`](#guardedstruct-dynamic_field-hint){: #guardedstruct-dynamic_field-hint } | `String.t` |  |  |
 
 
 

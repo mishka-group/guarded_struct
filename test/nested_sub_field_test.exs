@@ -12,14 +12,14 @@ defmodule GuardedStructTest.NestedSubFieldTest do
     guardedstruct do
       sub_field(:list, list(struct()),
         structs: true,
-        derive: "validate(list, not_empty)",
+        derives: "validate(list, not_empty)",
         enforce: true
       ) do
         field(:id, String.t(), enforce: true)
 
         sub_field(:sublist, list(struct()),
           structs: true,
-          derive: "validate(list, not_empty)",
+          derives: "validate(list, not_empty)",
           enforce: true
         ) do
           field(:id, String.t())

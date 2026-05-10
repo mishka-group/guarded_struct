@@ -14,7 +14,7 @@ defmodule GuardedStruct.AshResource.Info do
           extensions: [GuardedStruct.AshResource]
 
         guardedstruct do
-          field :nickname, :string, derive: "validate(string, max_len=20)"
+          field :nickname, :string, derives: "validate(string, max_len=20)"
         end
       end
 
@@ -22,7 +22,7 @@ defmodule GuardedStruct.AshResource.Info do
       #=> [:nickname]
 
       GuardedStruct.AshResource.Info.field(MyApp.User, :nickname)
-      #=> %{kind: :field, name: :nickname, derive: "validate(string, max_len=20)", ...}
+      #=> %{kind: :field, name: :nickname, derives: "validate(string, max_len=20)", ...}
   """
 
   use Spark.InfoGenerator,

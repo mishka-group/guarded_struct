@@ -54,10 +54,12 @@ defmodule GuardedStruct do
   `module: Foo` are lifted into setter calls inside the section body.
   """
   defmacro guardedstruct(opts, do: block) when is_list(opts) do
+    block = transform_derive_rules(block)
     validate_block!(block)
     block_enforce? = Keyword.get(opts, :enforce, false) == true
     pre_enforce_keys = extract_enforce_keys(block, block_enforce?)
     block_aliases = extract_aliases(block)
+    jason? = Keyword.get(opts, :jason, false) == true
 
     setters =
       Enum.map(opts, fn {key, value} ->
@@ -66,11 +68,19 @@ defmodule GuardedStruct do
 
     full_block = {:__block__, [], setters ++ [block]}
 
+    derive_jason =
+      if jason? do
+        quote do
+          @derive Jason.Encoder
+        end
+      end
+
     quote do
       require GuardedStruct.Dsl
       import GuardedStruct, only: [sub_field: 4, conditional_field: 4]
 
       unquote_splicing(block_aliases)
+      unquote(derive_jason)
 
       GuardedStruct.Dsl.guardedstruct do
         unquote(full_block)
@@ -82,6 +92,7 @@ defmodule GuardedStruct do
 
   @doc "`guardedstruct do … end` — no top-level options."
   defmacro guardedstruct(do: block) do
+    block = transform_derive_rules(block)
     validate_block!(block)
     pre_enforce_keys = extract_enforce_keys(block, false)
     block_aliases = extract_aliases(block)
@@ -97,6 +108,63 @@ defmodule GuardedStruct do
       end
 
       @enforce_keys unquote(pre_enforce_keys)
+    end
+  end
+
+  # Walk the block and convert any `@derive_rules "..."` decorator that sits
+  # immediately above a field/sub_field/conditional_field call into an inline
+  # `derives: "..."` opt on that field. One-shot — consumed by the very next
+  # field-like declaration, like `@doc`.
+  defp transform_derive_rules(block) do
+    items =
+      case block do
+        {:__block__, meta, list} -> {:__block__, meta, do_transform_derive_rules(list, nil, [])}
+        single -> List.first(do_transform_derive_rules([single], nil, [])) || single
+      end
+
+    items
+  end
+
+  defp do_transform_derive_rules([], _pending, acc), do: Enum.reverse(acc)
+
+  defp do_transform_derive_rules([{:@, _meta, [{name, _, [rules]}]} | rest], _pending, acc)
+       when name in [:derive_rules, :derives] and is_binary(rules) do
+    do_transform_derive_rules(rest, rules, acc)
+  end
+
+  defp do_transform_derive_rules([{op, meta, args} | rest], pending, acc)
+       when op in [:field, :sub_field, :conditional_field] and not is_nil(pending) do
+    new_args = inject_derive(args, pending)
+    do_transform_derive_rules(rest, nil, [{op, meta, new_args} | acc])
+  end
+
+  defp do_transform_derive_rules([item | rest], pending, acc) do
+    do_transform_derive_rules(rest, pending, [item | acc])
+  end
+
+  defp inject_derive(args, derive_str) do
+    case args do
+      [name, type, opts] when is_list(opts) ->
+        [name, type, put_derive(opts, derive_str)]
+
+      [name, type] ->
+        [name, type, [derives: derive_str]]
+
+      [name, type, opts, do_block] when is_list(opts) and is_list(do_block) ->
+        [name, type, put_derive(opts, derive_str), do_block]
+
+      other ->
+        other
+    end
+  end
+
+  # Inline `derives:` or `derive:` wins over the decorator. If neither is
+  # set, inject under the canonical `derives:` name.
+  defp put_derive(opts, derive_str) do
+    cond do
+      Keyword.has_key?(opts, :derives) -> opts
+      Keyword.has_key?(opts, :derive) -> opts
+      true -> Keyword.put(opts, :derives, derive_str)
     end
   end
 

@@ -6,19 +6,19 @@ defmodule GuardedStructTest.ValidatorDeriveTest do
     use GuardedStruct
 
     guardedstruct do
-      field(:action, String.t(), derive: "validate(not_empty)")
+      field(:action, String.t(), derives: "validate(not_empty)")
 
       sub_field(:path, struct(), main_validator: {TestAuthStruct, :main_validator}) do
         field(:role, String.t(), validator: {TestAuthStruct, :validator})
-        field(:custom_path, String.t(), derive: "validate(not_empty)")
+        field(:custom_path, String.t(), derives: "validate(not_empty)")
 
         sub_field(:rel, struct()) do
-          field(:social, String.t(), derive: "validate(not_empty)")
+          field(:social, String.t(), derives: "validate(not_empty)")
         end
       end
 
       field(:changed, String.t(),
-        derive: "validate(not_empty)",
+        derives: "validate(not_empty)",
         validator: {__MODULE__, :test_validator}
       )
     end
@@ -50,26 +50,26 @@ defmodule GuardedStructTest.ValidatorDeriveTest do
     use GuardedStruct
 
     guardedstruct do
-      field(:name, String.t(), derive: "validate(not_empty)")
+      field(:name, String.t(), derives: "validate(not_empty)")
       field(:auth_path, struct(), structs: TestAuthStruct)
 
       sub_field(:profile, list(struct()), structs: true) do
-        field(:github, String.t(), enforce: true, derive: "validate(url)")
-        field(:nickname, String.t(), derive: "validate(not_empty)")
+        field(:github, String.t(), enforce: true, derives: "validate(url)")
+        field(:nickname, String.t(), derives: "validate(not_empty)")
       end
 
-      field(:auth_path1, struct(), struct: TestAuthStruct, derive: "validate(map, not_empty)")
-      field(:auth_path2, struct(), structs: TestAuthStruct, derive: "validate(list, not_empty)")
+      field(:auth_path1, struct(), struct: TestAuthStruct, derives: "validate(map, not_empty)")
+      field(:auth_path2, struct(), structs: TestAuthStruct, derives: "validate(list, not_empty)")
 
       field(:auth_path3, struct(),
         structs: TestAuthStruct,
-        derive: "validate(list, not_empty)",
+        derives: "validate(list, not_empty)",
         validator: {__MODULE__, :test_validator}
       )
 
-      sub_field(:profile1, list(struct()), structs: true, derive: "validate(list, not_empty)") do
-        field(:github, String.t(), enforce: true, derive: "validate(url)")
-        field(:nickname, String.t(), derive: "validate(not_empty)")
+      sub_field(:profile1, list(struct()), structs: true, derives: "validate(list, not_empty)") do
+        field(:github, String.t(), enforce: true, derives: "validate(url)")
+        field(:nickname, String.t(), derives: "validate(not_empty)")
       end
     end
 
@@ -202,8 +202,8 @@ defmodule GuardedStructTest.ValidatorDeriveTest do
       use GuardedStruct
 
       guardedstruct do
-        field(:name, String.t(), enforce: true, derive: "sanitize(trim, upcase)")
-        field(:title, String.t(), derive: "sanitize(capitalize)")
+        field(:name, String.t(), enforce: true, derives: "sanitize(trim, upcase)")
+        field(:title, String.t(), derives: "sanitize(capitalize)")
       end
     end
 
@@ -217,8 +217,8 @@ defmodule GuardedStructTest.ValidatorDeriveTest do
       use GuardedStruct
 
       guardedstruct do
-        field(:name, String.t(), enforce: true, derive: "validate(not_empty)")
-        field(:title, String.t(), derive: "validate(not_empty, time)")
+        field(:name, String.t(), enforce: true, derives: "validate(not_empty)")
+        field(:title, String.t(), derives: "validate(not_empty, time)")
       end
     end
 
@@ -233,8 +233,8 @@ defmodule GuardedStructTest.ValidatorDeriveTest do
       use GuardedStruct
 
       guardedstruct do
-        field(:name, String.t(), enforce: true, derive: "validate(not_empty)")
-        field(:title, String.t(), derive: "validate(not_empty)")
+        field(:name, String.t(), enforce: true, derives: "validate(not_empty)")
+        field(:title, String.t(), derives: "validate(not_empty)")
       end
     end
 
@@ -249,10 +249,10 @@ defmodule GuardedStructTest.ValidatorDeriveTest do
       guardedstruct do
         field(:name, String.t(),
           enforce: true,
-          derive: "sanitize(trim, upcase) validate(not_empty)"
+          derives: "sanitize(trim, upcase) validate(not_empty)"
         )
 
-        field(:title, String.t(), derive: "validate(not_empty)")
+        field(:title, String.t(), derives: "validate(not_empty)")
       end
     end
 
@@ -272,10 +272,10 @@ defmodule GuardedStructTest.ValidatorDeriveTest do
       guardedstruct do
         field(:name, String.t(),
           enforce: true,
-          derive: "sanitize(trim, upcase) validate(not_empty)"
+          derives: "sanitize(trim, upcase) validate(not_empty)"
         )
 
-        field(:title, String.t(), derive: "sanitize(trim, capitalize) validate(not_empty)")
+        field(:title, String.t(), derives: "sanitize(trim, capitalize) validate(not_empty)")
       end
 
       def validator(:name, value) do
@@ -310,10 +310,10 @@ defmodule GuardedStructTest.ValidatorDeriveTest do
       guardedstruct do
         field(:name, String.t(),
           enforce: true,
-          derive: "sanitize(trim, upcase) validate(not_empty)"
+          derives: "sanitize(trim, upcase) validate(not_empty)"
         )
 
-        field(:title, String.t(), derive: "sanitize(trim, capitalize) validate(not_empty)")
+        field(:title, String.t(), derives: "sanitize(trim, capitalize) validate(not_empty)")
       end
 
       def main_validator(value) do
@@ -338,11 +338,11 @@ defmodule GuardedStructTest.ValidatorDeriveTest do
       guardedstruct do
         field(:name, String.t(),
           enforce: true,
-          derive: "sanitize(trim, upcase) validate(not_empty)"
+          derives: "sanitize(trim, upcase) validate(not_empty)"
         )
 
-        field(:title, String.t(), derive: "sanitize(trim, capitalize) validate(not_empty)")
-        field(:nickname, String.t(), derive: "validate(not_empty, time)")
+        field(:title, String.t(), derives: "sanitize(trim, capitalize) validate(not_empty)")
+        field(:nickname, String.t(), derives: "validate(not_empty, time)")
       end
 
       def validator(:name, value) do

@@ -28,7 +28,7 @@ defmodule GuardedStruct.Derive.Extension do
         use GuardedStruct
 
         guardedstruct do
-          field(:slug, String.t(), derive: "sanitize(slugify) validate(slug)")
+          field(:slug, String.t(), derives: "sanitize(slugify) validate(slug)")
         end
       end
 
@@ -58,23 +58,26 @@ defmodule GuardedStruct.Derive.Extension do
     quote do
       @__validator_ops__ unquote(name)
       def __validate__(unquote(name), input, field) do
-        case unquote(fun_ast).(input) do
-          true ->
-            input
-
-          false ->
-            {:error, field, unquote(name),
-             "Invalid format in the #{field} field (#{unquote(name)})"}
-
-          {:error, _, _, _} = e ->
-            e
-
-          other ->
-            other
-        end
+        GuardedStruct.Derive.Extension.__dispatch_validator__(
+          unquote(fun_ast).(input),
+          input,
+          field,
+          unquote(name)
+        )
       end
     end
   end
+
+  @doc false
+  def __dispatch_validator__(true, input, _field, _name), do: input
+
+  def __dispatch_validator__(false, _input, field, name) do
+    {:error, field, name, "Invalid format in the #{field} field (#{name})"}
+  end
+
+  def __dispatch_validator__({:error, _, _, _} = e, _input, _field, _name), do: e
+
+  def __dispatch_validator__(other, _input, _field, _name), do: other
 
   @doc "Declare a sanitizer op."
   defmacro sanitizer(name, fun_ast) when is_atom(name) do

@@ -570,6 +570,22 @@ defmodule GuardedStruct.Derive.ValidationDerive do
       {:error, field, :some_string_integer, translated_message(:some_string_integer, field)}
   end
 
+  def validate(:record, input, field) do
+    if record?(input),
+      do: input,
+      else: {:error, field, :record, translated_message(:record, field)}
+  end
+
+  def validate({:record, tag}, input, field) when is_atom(tag) do
+    if record?(input) and elem(input, 0) == tag,
+      do: input,
+      else: {:error, field, :record, translated_message(:record, field)}
+  end
+
+  def validate({:record, tag}, input, field) when is_binary(tag) do
+    validate({:record, String.to_atom(tag)}, input, field)
+  end
+
   def validate(action, input, field) do
     case GuardedStruct.Derive.Extension.dispatch_validate(action, input, field) do
       :__not_found__ -> fallback_dispatch(action, input, field)
@@ -607,6 +623,10 @@ defmodule GuardedStruct.Derive.ValidationDerive do
       _ ->
         {:error, field, action, translated_message(:location_url, field)}
     end
+  end
+
+  defp record?(input) do
+    is_tuple(input) and tuple_size(input) > 0 and is_atom(elem(input, 0))
   end
 
   defp is_type(field, status, type, input) do

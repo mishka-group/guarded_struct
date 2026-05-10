@@ -41,6 +41,37 @@ defmodule GuardedStruct.Schema do
     }
   end
 
+  @doc """
+  Render as an OpenAPI 3.1 `components.schemas` envelope. Wraps `json_schema/1`
+  for the given module(s) under `components.schemas.<ModuleName>`.
+
+  Pass either one module or a list of modules to bundle several schemas in
+  a single OpenAPI document.
+  """
+  @spec openapi(module() | [module()]) :: map()
+  def openapi(module) when is_atom(module), do: openapi([module])
+
+  def openapi(modules) when is_list(modules) do
+    schemas =
+      modules
+      |> Enum.map(fn mod ->
+        {mod |> inspect() |> String.replace(".", "_"), strip_meta(json_schema(mod))}
+      end)
+      |> Map.new()
+
+    %{
+      "openapi" => "3.1.0",
+      "info" => %{
+        "title" => "GuardedStruct schemas",
+        "version" => "1.0.0"
+      },
+      "components" => %{"schemas" => schemas}
+    }
+  end
+
+  defp strip_meta(json) when is_map(json), do: Map.drop(json, ["$schema", "title"])
+  defp strip_meta(other), do: other
+
   @doc "Render as a TypeScript `interface` declaration."
   @spec typescript(module()) :: String.t()
   def typescript(module) do

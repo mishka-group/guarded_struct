@@ -8,8 +8,8 @@ defmodule GuardedStructTest.ErrorsTest do
     use GuardedStruct
 
     guardedstruct do
-      field(:email, String.t(), enforce: true, derive: "validate(string, email_r)")
-      field(:age, integer(), derive: "validate(integer, max_len=120, min_len=0)")
+      field(:email, String.t(), enforce: true, derives: "validate(string, email_r)")
+      field(:age, integer(), derives: "validate(integer, max_len=120, min_len=0)")
     end
   end
 

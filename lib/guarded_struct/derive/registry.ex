@@ -46,6 +46,7 @@ defmodule GuardedStruct.Derive.Registry do
                   :equal,
                   :custom,
                   :either,
+                  :record,
                   :string_float,
                   :string_integer,
                   :some_string_float,

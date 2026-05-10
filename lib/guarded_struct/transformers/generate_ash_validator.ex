@@ -14,6 +14,7 @@ defmodule GuardedStruct.Transformers.GenerateAshValidator do
   use Spark.Dsl.Transformer
 
   alias Spark.Dsl.Transformer
+  alias GuardedStruct.Dsl.ConditionalField
   alias GuardedStruct.Transformers.Codegen
 
   @impl true
@@ -32,13 +33,19 @@ defmodule GuardedStruct.Transformers.GenerateAshValidator do
     {keys, _defstruct_kw, _types, enforce_keys, fields_runtime} =
       Codegen.struct_pieces(entities, block_enforce)
 
+    conditional_keys =
+      entities
+      |> Enum.filter(&match?(%ConditionalField{}, &1))
+      |> Enum.map(& &1.name)
+      |> Enum.uniq()
+
     info_map =
       Macro.escape(%{
         path: [],
         key: :root,
         keys: keys,
         enforce_keys: enforce_keys,
-        conditional_keys: [],
+        conditional_keys: conditional_keys,
         options: section_options
       })
 

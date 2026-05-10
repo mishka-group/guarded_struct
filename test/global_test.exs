@@ -13,12 +13,12 @@ defmodule GuardedStructTest.GlobalTest do
     use GuardedStruct
 
     guardedstruct do
-      field(:name, String.t(), derive: "validate(not_empty)")
+      field(:name, String.t(), derives: "validate(not_empty)")
       field(:auth_path, struct(), structs: TestAuthStruct)
 
       sub_field(:profile, list(struct()), structs: true) do
-        field(:github, String.t(), enforce: true, derive: "validate(url)")
-        field(:nickname, String.t(), derive: "validate(not_empty)")
+        field(:github, String.t(), enforce: true, derives: "validate(url)")
+        field(:nickname, String.t(), derives: "validate(not_empty)")
       end
     end
 
@@ -36,49 +36,51 @@ defmodule GuardedStructTest.GlobalTest do
 
     guardedstruct do
       field(:name, String.t(),
-        derive:
+        derives:
           "sanitize(strip_tags, trim, capitalize) validate(string, not_empty, max_len=20, min_len=3)"
       )
 
       field(:family, String.t(),
-        derive:
+        derives:
           "sanitize(basic_html, trim, capitalize) validate(string, not_empty, max_len=20, min_len=3)"
       )
 
-      field(:age, integer(), enforce: true, derive: "validate(integer, max_len=110, min_len=18)")
+      field(:age, integer(), enforce: true, derives: "validate(integer, max_len=110, min_len=18)")
 
       sub_field(:auth, struct(), enforce: true) do
-        field(:server, String.t(), derive: "validate(regex=#{~c"^[a-zA-Z]+@mishka\\.group$"})")
+        field(:server, String.t(), derives: "validate(regex=#{~c"^[a-zA-Z]+@mishka\\.group$"})")
 
         field(:identity_provider, String.t(),
-          derive: "sanitize(strip_tags, trim, lowercase) validate(not_empty)"
+          derives: "sanitize(strip_tags, trim, lowercase) validate(not_empty)"
         )
 
         sub_field(:role, struct(), enforce: true) do
           field(:name, String.t(),
-            derive:
+            derives:
               "sanitize(strip_tags, trim, lowercase) validate(enum=Atom[admin::user::banned])"
           )
 
-          field(:action, String.t(), derive: "validate(string_boolean)")
+          field(:action, String.t(), derives: "validate(string_boolean)")
 
           field(:status, String.t(),
-            derive: "validate(enum=Map[%{status: 1}::%{status: 2}::%{status: 3}])"
+            derives: "validate(enum=Map[%{status: 1}::%{status: 2}::%{status: 3}])"
           )
         end
 
-        field(:last_activity, String.t(), derive: "sanitize(strip_tags, trim) validate(datetime)")
+        field(:last_activity, String.t(),
+          derives: "sanitize(strip_tags, trim) validate(datetime)"
+        )
       end
 
       sub_field(:profile, struct()) do
-        field(:site, String.t(), derive: "validate(url)")
+        field(:site, String.t(), derives: "validate(url)")
 
         field(:nickname, String.t(), validator: {TestNestedStruct, :validator})
       end
 
       field(:username, String.t(),
         enforce: true,
-        derive: "sanitize(tag=strip_tags) validate(not_empty, max_len=20, min_len=3)"
+        derives: "sanitize(tag=strip_tags) validate(not_empty, max_len=20, min_len=3)"
       )
     end
 
@@ -97,24 +99,24 @@ defmodule GuardedStructTest.GlobalTest do
     use GuardedStruct
 
     guardedstruct do
-      field(:username, String.t(), derive: "validate(not_empty)")
+      field(:username, String.t(), derives: "validate(not_empty)")
       field(:user_id, String.t(), auto: {GuardedStructTest.Support.UUID, :generate})
       field(:parent_id, String.t(), auto: {GuardedStructTest.Support.UUID, :generate})
 
       sub_field(:profile, struct()) do
         field(:id, String.t(), auto: {GuardedStructTest.Support.UUID, :generate})
-        field(:nickname, String.t(), derive: "validate(not_empty)")
+        field(:nickname, String.t(), derives: "validate(not_empty)")
 
         sub_field(:social, struct()) do
           field(:id, String.t(), auto: {TestAutoValueStruct, :create_uuid, "test-path"})
-          field(:skype, String.t(), derive: "validate(string)")
+          field(:skype, String.t(), derives: "validate(string)")
           field(:username, String.t(), from: "root::username")
         end
       end
 
       sub_field(:items, struct(), structs: true) do
         field(:id, String.t(), auto: {GuardedStructTest.Support.UUID, :generate})
-        field(:something, String.t(), derive: "validate(string)", from: "root::username")
+        field(:something, String.t(), derives: "validate(string)", from: "root::username")
       end
     end
 
@@ -127,15 +129,15 @@ defmodule GuardedStructTest.GlobalTest do
     use GuardedStruct
 
     guardedstruct do
-      field(:name, String.t(), derive: "validate(string)")
+      field(:name, String.t(), derives: "validate(string)")
 
       sub_field(:profile, struct()) do
         field(:id, String.t(), auto: {GuardedStructTest.Support.UUID, :generate})
-        field(:nickname, String.t(), on: "root::name", derive: "validate(string)")
-        field(:github, String.t(), derive: "validate(string)")
+        field(:nickname, String.t(), on: "root::name", derives: "validate(string)")
+        field(:github, String.t(), derives: "validate(string)")
 
         sub_field(:identity, struct()) do
-          field(:provider, String.t(), on: "root::profile::github", derive: "validate(string)")
+          field(:provider, String.t(), on: "root::profile::github", derives: "validate(string)")
           field(:id, String.t(), auto: {GuardedStructTest.Support.UUID, :generate})
           field(:rel, String.t(), on: "sub_identity::auth_path::action")
 
@@ -147,7 +149,7 @@ defmodule GuardedStructTest.GlobalTest do
       end
 
       sub_field(:last_activity, list(struct()), structs: true) do
-        field(:action, String.t(), enforce: true, derive: "validate(string)", on: "root::name")
+        field(:action, String.t(), enforce: true, derives: "validate(string)", on: "root::name")
       end
     end
   end
@@ -291,13 +293,13 @@ defmodule GuardedStructTest.GlobalTest do
       use GuardedStruct
 
       guardedstruct do
-        field(:name, String.t(), enforce: true, derive: "sanitize(trim, upcase)")
-        field(:title, String.t(), derive: "sanitize(trim, capitalize) validate(not_empty)")
-        field(:nickname, String.t(), derive: "validate(not_empty, time)")
+        field(:name, String.t(), enforce: true, derives: "sanitize(trim, upcase)")
+        field(:title, String.t(), derives: "sanitize(trim, capitalize) validate(not_empty)")
+        field(:nickname, String.t(), derives: "validate(not_empty, time)")
 
         sub_field(:auth, struct(), enforce: true) do
-          field(:role, String.t(), derive: "validate(enum=Atom[admin, user])")
-          field(:action, String.t(), derive: "validate(not_empty)")
+          field(:role, String.t(), derives: "validate(enum=Atom[admin, user])")
+          field(:action, String.t(), derives: "validate(not_empty)")
 
           sub_field(:path, struct()) do
             field(:name, String.t())
@@ -319,10 +321,10 @@ defmodule GuardedStructTest.GlobalTest do
       use GuardedStruct
 
       guardedstruct error: true do
-        field(:name, String.t(), derive: "validate(string)")
+        field(:name, String.t(), derives: "validate(string)")
 
         sub_field(:auth, struct(), error: true) do
-          field(:action, String.t(), derive: "validate(not_empty)")
+          field(:action, String.t(), derives: "validate(not_empty)")
 
           sub_field(:path, struct(), error: true) do
             field(:name, String.t())
@@ -341,10 +343,10 @@ defmodule GuardedStructTest.GlobalTest do
       use GuardedStruct
 
       guardedstruct authorized_fields: true do
-        field(:name, String.t(), derive: "validate(string)")
+        field(:name, String.t(), derives: "validate(string)")
 
         sub_field(:auth, struct(), authorized_fields: true) do
-          field(:action, String.t(), derive: "validate(not_empty)")
+          field(:action, String.t(), derives: "validate(not_empty)")
 
           sub_field(:path, struct()) do
             field(:name, String.t())

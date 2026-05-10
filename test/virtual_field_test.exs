@@ -9,9 +9,9 @@ defmodule GuardedStructTest.VirtualFieldTest do
     use GuardedStruct
 
     guardedstruct do
-      field(:email, String.t(), enforce: true, derive: "validate(string, email_r)")
-      field(:password, String.t(), enforce: true, derive: "validate(string, min_len=8)")
-      virtual_field(:password_confirm, String.t(), derive: "validate(string)")
+      field(:email, String.t(), enforce: true, derives: "validate(string, email_r)")
+      field(:password, String.t(), enforce: true, derives: "validate(string, min_len=8)")
+      virtual_field(:password_confirm, String.t(), derives: "validate(string)")
     end
 
     # Convention: `main_validator/1` is auto-discovered by the runtime when
@@ -60,7 +60,7 @@ defmodule GuardedStructTest.VirtualFieldTest do
     use GuardedStruct
 
     guardedstruct do
-      field(:name, String.t(), enforce: true, derive: "validate(string)")
+      field(:name, String.t(), enforce: true, derives: "validate(string)")
       dynamic_field(:metadata)
     end
   end
