@@ -127,12 +127,7 @@ defmodule GuardedStruct.MixProject do
       {:ex_phone_number, "~> 0.4.11", optional: true, only: :test},
       {:sweet_xml,
        github: "kbrw/sweet_xml", branch: "master", override: true, optional: true, only: :test},
-      # Local path until our `args_for_group/2` fix lands upstream; switch to
-      # {:igniter, "~> 0.7", only: [:dev, :test]} on hex publish.
-      {:igniter,
-       path: "/Users/shahryar/Documents/Programming/Elixir/igniter",
-       only: [:dev, :test],
-       override: true}
+      {:igniter, "~> 0.8.0", only: [:dev, :test]}
     ]
   end
 end
