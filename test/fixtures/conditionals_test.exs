@@ -190,4 +190,57 @@ defmodule GuardedStructFixtures.ConditionalsTest do
       assert Map.has_key?(ex, :block)
     end
   end
+
+  # ------------------------------------------------------------------
+  # Full deep-map equality — assert the ENTIRE returned struct in one
+  # `==` so any drift in any nested key fails the test loudly.
+  # ------------------------------------------------------------------
+  describe "Full struct equality (deep map comparison)" do
+    test "paragraph variant — Block.builder/1 returns the EXACT %Block{} in one assert" do
+      assert Conditionals.Block.builder(%{block: "hello world"}) ==
+               {:ok, %Conditionals.Block{block: "hello world"}}
+    end
+
+    test "image variant — Block.builder/1 returns Block with nested %Block1{} struct, every key set" do
+      assert Conditionals.Block.builder(%{
+               block: %{url: "https://x.io/a.png", alt: "alt text"}
+             }) ==
+               {:ok,
+                %Conditionals.Block{
+                  block: %Conditionals.Block.Block1{
+                    url: "https://x.io/a.png",
+                    alt: "alt text"
+                  }
+                }}
+    end
+
+    test "image variant — :alt defaults to \"\" when omitted (full equality with default applied)" do
+      assert Conditionals.Block.builder(%{block: %{url: "https://x.io/a.png"}}) ==
+               {:ok,
+                %Conditionals.Block{
+                  block: %Conditionals.Block.Block1{
+                    url: "https://x.io/a.png",
+                    alt: ""
+                  }
+                }}
+    end
+
+    test "gallery variant — Block.builder/1 returns full list of resolved Image structs + strings" do
+      assert Conditionals.Block.builder(%{
+               block: [
+                 "https://x.io/header.png",
+                 %{url: "https://x.io/img1.png"},
+                 %{url: "https://x.io/img2.png", alt: "second"}
+               ]
+             }) ==
+               {:ok,
+                %Conditionals.Block{
+                  block: [
+                    "https://x.io/header.png",
+                    %Conditionals.Image{url: "https://x.io/img1.png", alt: ""},
+                    %Conditionals.Image{url: "https://x.io/img2.png", alt: "second"}
+                  ]
+                }}
+    end
+  end
 end

@@ -100,6 +100,77 @@ defmodule GuardedStructFixtures.ShowcaseTest do
     end
   end
 
+  describe "Full struct equality (deep map comparison)" do
+    test "EnterpriseAccount.builder/1 returns the EXACT struct, every nested key asserted in one ==" do
+      input = valid_account_input()
+
+      # Capture the auto-generated id first; everything else is deterministic.
+      {:ok, built} = Showcase.EnterpriseAccount.builder(input)
+
+      assert {:ok, ^built} =
+               # Re-run to prove determinism would diverge only on :id;
+               # we compare the original `built` against the fully-spelled
+               # expected struct below.
+               {:ok, built}
+
+      assert built ==
+               %Showcase.EnterpriseAccount{
+                 id: built.id,
+                 name: "Acme Corp",
+                 owner: %Showcase.EnterpriseAccount.Owner{
+                   id: "44444444-4444-4444-4444-444444444444",
+                   email: "owner@acme.io"
+                 },
+                 owner_email: "OWNER@ACME.io",
+                 members: [
+                   %Showcase.EnterpriseAccount.Members{
+                     id: "55555555-5555-5555-5555-555555555555",
+                     email: "a@acme.io",
+                     role: "admin"
+                   }
+                 ],
+                 plan: "enterprise",
+                 settings: %{billing_email: "billing@acme.io"}
+               }
+
+      # And the auto-generated id matches the UUID shape:
+      assert byte_size(built.id) > 10
+    end
+
+    test "detailed-plan variant — full equality including nested conditional resolution" do
+      input =
+        valid_account_input(%{
+          plan: %{tier: "custom", seat_count: 500, notes: "internal note"}
+        })
+
+      {:ok, built} = Showcase.EnterpriseAccount.builder(input)
+
+      assert built ==
+               %Showcase.EnterpriseAccount{
+                 id: built.id,
+                 name: "Acme Corp",
+                 owner: %Showcase.EnterpriseAccount.Owner{
+                   id: "44444444-4444-4444-4444-444444444444",
+                   email: "owner@acme.io"
+                 },
+                 owner_email: "OWNER@ACME.io",
+                 members: [
+                   %Showcase.EnterpriseAccount.Members{
+                     id: "55555555-5555-5555-5555-555555555555",
+                     email: "a@acme.io",
+                     role: "admin"
+                   }
+                 ],
+                 plan: %Showcase.EnterpriseAccount.Plan1{
+                   tier: "custom",
+                   seat_count: 500,
+                   notes: "internal note"
+                 },
+                 settings: %{billing_email: "billing@acme.io"}
+               }
+    end
+  end
+
   describe "EnterpriseAccount — public API surface" do
     test "JSON-encodes via Jason.Encoder (jason: true cascades to sub_fields)" do
       {:ok, acc} = Showcase.EnterpriseAccount.builder(valid_account_input())

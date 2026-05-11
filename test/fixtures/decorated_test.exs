@@ -50,6 +50,43 @@ defmodule GuardedStructFixtures.DecoratedTest do
     end
   end
 
+  describe "Full struct equality (deep map comparison)" do
+    test "BlogPost.builder/1 returns the EXACT %BlogPost{} struct, every key & nested sub_field asserted at once" do
+      uuid = "22222222-2222-2222-2222-222222222222"
+
+      assert Decorated.BlogPost.builder(%{
+               title: "  Hello  ",
+               body: "**bold**",
+               slug: "hello-world",
+               draft: true,
+               metadata: %{tags: ["a", "b"], author_id: uuid}
+             }) ==
+               {:ok,
+                %Decorated.BlogPost{
+                  title: "Hello",
+                  body: "**bold**",
+                  slug: "hello-world",
+                  draft: true,
+                  metadata: %Decorated.BlogPost.Metadata{
+                    tags: ["a", "b"],
+                    author_id: uuid
+                  }
+                }}
+    end
+
+    test "BlogPost.builder/1 with only enforce'd fields → all optional fields take their defaults" do
+      assert Decorated.BlogPost.builder(%{title: "x", body: "y"}) ==
+               {:ok,
+                %Decorated.BlogPost{
+                  title: "x",
+                  body: "y",
+                  slug: nil,
+                  draft: false,
+                  metadata: nil
+                }}
+    end
+  end
+
   describe "@derives inside a sub_field body (AST walker recurses)" do
     test "decorated inner field's derives: validate(uuid) accepts a valid uuid" do
       uuid = "22222222-2222-2222-2222-222222222222"

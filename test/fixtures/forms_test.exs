@@ -79,6 +79,35 @@ defmodule GuardedStructFixtures.FormsTest do
     end
   end
 
+  describe "Full struct equality (deep map comparison)" do
+    test "Signup.builder/1 returns the EXACT %Signup{} struct, every key asserted at once" do
+      hashed = :crypto.hash(:sha256, "longenough") |> Base.encode16(case: :lower)
+
+      assert Forms.Signup.builder(%{
+               email: "  ALICE@Example.IO  ",
+               password: "longenough",
+               password_confirmation: "longenough"
+             }) ==
+               {:ok,
+                %Forms.Signup{
+                  email: "alice@example.io",
+                  password: hashed
+                }}
+    end
+
+    test "Login.builder/1 returns the EXACT %Login{} struct" do
+      assert Forms.Login.builder(%{
+               email: "  USER@example.io  ",
+               password: "anything"
+             }) ==
+               {:ok,
+                %Forms.Login{
+                  email: "user@example.io",
+                  password: "anything"
+                }}
+    end
+  end
+
   describe "Jason encoding (jason: true)" do
     test "Signup struct round-trips through Jason.encode!/1" do
       {:ok, signup} =
