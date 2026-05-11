@@ -136,10 +136,15 @@ defmodule GuardedStruct do
     end
   end
 
-  # Walk the block and convert any `@derive_rules "..."` decorator that sits
-  # immediately above a field/sub_field/conditional_field call into an inline
-  # `derives: "..."` opt on that field. One-shot — consumed by the very next
-  # field-like declaration, like `@doc`.
+  # Every entity type that accepts a `:derives` opt. `@derives "..."` /
+  # `@derive_rules "..."` decorators get consumed by the very next call to
+  # any of these.
+  @decoratable_entities [:field, :sub_field, :conditional_field, :virtual_field, :dynamic_field]
+
+  # Walk the block and convert any `@derive_rules "..."` / `@derives "..."`
+  # decorator that sits immediately above a decoratable entity call into an
+  # inline `derives: "..."` opt on that entity. One-shot — consumed by the
+  # very next entity declaration, like `@doc`.
   defp transform_derive_rules(block) do
     items =
       case block do
@@ -158,13 +163,13 @@ defmodule GuardedStruct do
   end
 
   defp do_transform_derive_rules([{op, meta, args} | rest], pending, acc)
-       when op in [:field, :sub_field, :conditional_field] and not is_nil(pending) do
+       when op in @decoratable_entities and not is_nil(pending) do
     new_args = args |> inject_derive(pending) |> recurse_into_block()
     do_transform_derive_rules(rest, nil, [{op, meta, new_args} | acc])
   end
 
   defp do_transform_derive_rules([{op, meta, args} | rest], pending, acc)
-       when op in [:field, :sub_field, :conditional_field] do
+       when op in @decoratable_entities do
     new_args = recurse_into_block(args)
     do_transform_derive_rules(rest, pending, [{op, meta, new_args} | acc])
   end
@@ -200,14 +205,27 @@ defmodule GuardedStruct do
 
   defp inject_derive(args, derive_str) do
     case args do
+      # field/sub_field/conditional_field/virtual_field with explicit opts
       [name, type, opts] when is_list(opts) ->
         [name, type, put_derive(opts, derive_str)]
 
-      [name, type] ->
-        [name, type, [derives: derive_str]]
-
+      # field/sub_field/conditional_field/virtual_field with opts AND do-block
       [name, type, opts, do_block] when is_list(opts) and is_list(do_block) ->
         [name, type, put_derive(opts, derive_str), do_block]
+
+      # field/sub_field/conditional_field/virtual_field with NO opts
+      # (note: type is an AST tuple, never a list — `is_tuple(type)` distinguishes
+      # this case from `dynamic_field name, [opts]` below).
+      [name, type] when is_tuple(type) ->
+        [name, type, [derives: derive_str]]
+
+      # dynamic_field with opts — args: [:name] in DSL, opts is a keyword list
+      [name, opts] when is_atom(name) and is_list(opts) ->
+        [name, put_derive(opts, derive_str)]
+
+      # dynamic_field with NO opts at all
+      [name] when is_atom(name) ->
+        [name, [derives: derive_str]]
 
       other ->
         other
