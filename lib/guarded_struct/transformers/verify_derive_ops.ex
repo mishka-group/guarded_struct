@@ -62,10 +62,14 @@ defmodule GuardedStruct.Transformers.VerifyDeriveOps do
 
   defp check_ops(%{} = ops, field, module) do
     bad_validate =
-      ops |> Map.get(:validate, []) |> Enum.flat_map(&extract_unknown(&1, :validate))
+      ops
+      |> Map.get(:validate, [])
+      |> Enum.flat_map(&extract_unknown(&1, :validate, module))
 
     bad_sanitize =
-      ops |> Map.get(:sanitize, []) |> Enum.flat_map(&extract_unknown(&1, :sanitize))
+      ops
+      |> Map.get(:sanitize, [])
+      |> Enum.flat_map(&extract_unknown(&1, :sanitize, module))
 
     case bad_validate ++ bad_sanitize do
       [] ->
@@ -121,28 +125,51 @@ defmodule GuardedStruct.Transformers.VerifyDeriveOps do
 
   defp suggest(_), do: nil
 
-  defp extract_unknown(name, kind) when is_atom(name) do
-    if known?(name, kind), do: [], else: [{kind, name}]
+  defp extract_unknown(name, kind, module) when is_atom(name) do
+    if known?(name, kind, module), do: [], else: [{kind, name}]
   end
 
-  defp extract_unknown({name, _arg}, kind) when is_atom(name) do
-    if known?(name, kind), do: [], else: [{kind, name}]
+  defp extract_unknown({name, _arg}, kind, module) when is_atom(name) do
+    if known?(name, kind, module), do: [], else: [{kind, name}]
   end
 
-  defp extract_unknown(%{either: inner}, _kind) when is_list(inner) do
-    Enum.flat_map(inner, &extract_unknown(&1, :validate))
+  defp extract_unknown(%{either: inner}, _kind, module) when is_list(inner) do
+    Enum.flat_map(inner, &extract_unknown(&1, :validate, module))
   end
 
-  defp extract_unknown(_, _), do: []
+  defp extract_unknown(_, _, _), do: []
 
-  defp known?(name, :validate) do
+  defp known?(name, :validate, module) do
     Registry.known_validate?(name) or
-      MapSet.member?(GuardedStruct.Derive.Extension.all_extension_validators(), name)
+      MapSet.member?(extension_validators(module), name)
   end
 
-  defp known?(name, :sanitize) do
+  defp known?(name, :sanitize, module) do
     Registry.known_sanitize?(name) or
-      MapSet.member?(GuardedStruct.Derive.Extension.all_extension_sanitizers(), name)
+      MapSet.member?(extension_sanitizers(module), name)
+  end
+
+  # At compile-time the user module's `__guarded_derive_extensions_opt__/0`
+  # isn't callable yet (the module isn't finalized). Read the raw attribute
+  # via Module.get_attribute/2 instead.
+  defp extension_validators(module) do
+    GuardedStruct.Derive.Extension.resolve_opt(compile_time_opt(module))
+    |> Enum.flat_map(& &1.__validators__())
+    |> MapSet.new()
+  end
+
+  defp extension_sanitizers(module) do
+    GuardedStruct.Derive.Extension.resolve_opt(compile_time_opt(module))
+    |> Enum.flat_map(& &1.__sanitizers__())
+    |> MapSet.new()
+  end
+
+  defp compile_time_opt(nil), do: nil
+
+  defp compile_time_opt(module) do
+    Module.get_attribute(module, :__guarded_derive_extensions_opt__)
+  rescue
+    _ -> nil
   end
 
   defp strict_mode? do

@@ -100,21 +100,122 @@ defmodule GuardedStruct.Derive.Extension do
     end
   end
 
-  @doc "Returns the list of registered extension modules from app config."
-  def registered_extensions do
-    :guarded_struct
-    |> Application.get_env(:derive_extensions, [])
+  @doc """
+  Returns the list of registered extension modules from app config.
+  Loads each module and filters to only those that `use` this extension.
+  """
+  def registered_extensions, do: load_extensions(global_extensions())
+
+  defp global_extensions, do: Application.get_env(:guarded_struct, :derive_extensions, [])
+
+  defp load_extensions(list) do
+    list
     |> List.wrap()
     |> Enum.filter(&Code.ensure_loaded?/1)
     |> Enum.filter(&function_exported?(&1, :__derive_extension__?, 0))
   end
 
   @doc """
-  Try each registered extension's `__validate__/3` until one returns a non-
-  `:__not_found__` result.
+  Resolve a per-module `derive_extensions:` opt — the raw list user wrote
+  in `use GuardedStruct, derive_extensions: [...]` — into a flat list of
+  extension modules with `:config` expanded to the current global config
+  at the position it appears.
+
+  ## Resolution rules
+
+    * `nil` → fall back to the global Application config (no per-module opt set)
+    * `[]` → no extensions at all (intentional opt-out, ignores global)
+    * `[A, B]` (no `:config`) → these only; global is ignored
+    * `[:config, A]` → global ++ [A] (global wins on op-name collisions)
+    * `[A, :config]` → [A] ++ global (A wins on op-name collisions)
+    * `[A, :config, B]` → [A] ++ global ++ [B]
   """
+  @spec resolve_opt(list() | nil) :: [module()]
+  def resolve_opt(nil), do: registered_extensions()
+
+  def resolve_opt(list) when is_list(list) do
+    list
+    |> Enum.flat_map(fn
+      :config -> global_extensions()
+      mod when is_atom(mod) -> [mod]
+    end)
+    |> load_extensions()
+  end
+
+  @doc """
+  Resolve the effective extension list for a specific user module. If the
+  module declared a per-module opt via `use GuardedStruct, derive_extensions: [...]`,
+  that takes precedence (with `:config` honoured); otherwise falls back to
+  global config.
+  """
+  @spec extensions_for(module() | nil) :: [module()]
+  def extensions_for(nil), do: registered_extensions()
+
+  def extensions_for(module) when is_atom(module) do
+    cond do
+      function_exported?(module, :__guarded_derive_extensions_opt__, 0) ->
+        resolve_opt(module.__guarded_derive_extensions_opt__())
+
+      Code.ensure_loaded?(module) and
+          function_exported?(module, :__guarded_derive_extensions_opt__, 0) ->
+        resolve_opt(module.__guarded_derive_extensions_opt__())
+
+      true ->
+        registered_extensions()
+    end
+  end
+
+  @doc """
+  Validate a `derive_extensions:` opt list at compile time. Raises
+  `ArgumentError` if entries are not modules / `:config`, or if `:config`
+  appears more than once.
+  """
+  def validate_opt!(nil), do: nil
+
+  def validate_opt!(list) when is_list(list) do
+    Enum.each(list, fn
+      :config ->
+        :ok
+
+      mod when is_atom(mod) ->
+        :ok
+
+      other ->
+        raise ArgumentError,
+              "derive_extensions: entries must be modules or :config, got #{inspect(other)}"
+    end)
+
+    config_count = Enum.count(list, &(&1 == :config))
+
+    if config_count > 1 do
+      raise ArgumentError,
+            "derive_extensions: contains :config more than once; specify it exactly once or remove it"
+    end
+
+    list
+  end
+
+  def validate_opt!(other) do
+    raise ArgumentError,
+          "derive_extensions: expected a list, got #{inspect(other)}"
+  end
+
+  @doc """
+  The user module currently being built. Set by `Runtime.with_telemetry/2`
+  around every top-level `builder/1` call; nested sub_field builds inherit
+  via the process dictionary. Returns `nil` for standalone callers like
+  `GuardedStruct.Validate.run/2` that don't go through `builder/1`.
+  """
+  def current_module, do: Process.get(:guarded_struct_current_module)
+
+  @doc "Try the current module's extensions for a validator op."
   def dispatch_validate(op, input, field) do
-    Enum.reduce_while(registered_extensions(), :__not_found__, fn mod, _ ->
+    dispatch_validate(op, input, field, extensions_for(current_module()))
+  end
+
+  @doc "Try a specific list of extensions for a validator op."
+  def dispatch_validate(op, input, field, extensions) when is_list(extensions) do
+    Enum.reduce_while(extensions, :__not_found__, fn mod, _ ->
       case mod.__validate__(op, input, field) do
         :__not_found__ -> {:cont, :__not_found__}
         result -> {:halt, result}
@@ -122,23 +223,32 @@ defmodule GuardedStruct.Derive.Extension do
     end)
   end
 
-  @doc "Try each registered extension's `__sanitize__/2`."
+  @doc "Try the current module's extensions for a sanitizer op."
   def dispatch_sanitize(op, input) do
-    Enum.find_value(registered_extensions(), :__not_found__, fn mod ->
+    dispatch_sanitize(op, input, extensions_for(current_module()))
+  end
+
+  @doc "Try a specific list of extensions for a sanitizer op."
+  def dispatch_sanitize(op, input, extensions) when is_list(extensions) do
+    Enum.find_value(extensions, :__not_found__, fn mod ->
       if op in mod.__sanitizers__(), do: mod.__sanitize__(op, input)
     end)
   end
 
-  @doc "All validator op atoms registered across every extension."
-  def all_extension_validators do
-    registered_extensions()
+  @doc """
+  All validator op atoms known across every extension visible from the
+  given module (per-module + globally if opted in via `:config`).
+  Used by the strict-mode compile-time check.
+  """
+  def all_extension_validators(module \\ nil) do
+    extensions_for(module)
     |> Enum.flat_map(& &1.__validators__())
     |> MapSet.new()
   end
 
-  @doc "All sanitizer op atoms registered across every extension."
-  def all_extension_sanitizers do
-    registered_extensions()
+  @doc "All sanitizer op atoms known across every extension visible from `module`."
+  def all_extension_sanitizers(module \\ nil) do
+    extensions_for(module)
     |> Enum.flat_map(& &1.__sanitizers__())
     |> MapSet.new()
   end

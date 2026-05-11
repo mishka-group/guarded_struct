@@ -21,14 +21,48 @@ defmodule GuardedStruct do
   use Spark.Dsl, default_extensions: [extensions: [GuardedStruct.Dsl]]
 
   defmacro __using__(opts) do
-    super_ast = super(opts)
+    super_opts = Keyword.drop(opts, [:derive_extensions])
+    super_ast = super(super_opts)
+
+    derive_extensions_opt =
+      opts
+      |> Keyword.get(:derive_extensions)
+      |> resolve_extension_aliases(__CALLER__)
+
+    # Validate at compile time so typos / bad shapes fail loudly here, not
+    # silently at the first builder/1 call.
+    GuardedStruct.Derive.Extension.validate_opt!(derive_extensions_opt)
+
+    derive_extensions_ast = Macro.escape(derive_extensions_opt)
 
     quote do
       unquote(super_ast)
       import GuardedStruct.Dsl, only: []
       import GuardedStruct, only: [guardedstruct: 1, guardedstruct: 2]
+
+      @__guarded_derive_extensions_opt__ unquote(derive_extensions_ast)
+
+      @doc false
+      def __guarded_derive_extensions_opt__, do: @__guarded_derive_extensions_opt__
     end
   end
+
+  # When the `derive_extensions:` opt is passed in source as
+  # `[Foo.Bar, :config]`, Elixir hands the macro the AST form
+  # `[{:__aliases__, _, [:Foo, :Bar]}, :config]`. We resolve aliases via
+  # `Macro.expand/2` against the caller's environment — that's the only
+  # way to honour `alias Foo` AND nested-module context (so `LocalDerives`
+  # inside test/X.exs becomes the fully-qualified `Test.X.LocalDerives`).
+  defp resolve_extension_aliases(nil, _caller), do: nil
+
+  defp resolve_extension_aliases(list, caller) when is_list(list) do
+    Enum.map(list, fn
+      {:__aliases__, _, _} = ast -> Macro.expand(ast, caller)
+      other -> other
+    end)
+  end
+
+  defp resolve_extension_aliases(other, _caller), do: other
 
   @doc "Arity-4 wrapper for `sub_field name, type, opts do … end`."
   defmacro sub_field(name, type, opts, do_block) when is_list(opts) and is_list(do_block) do

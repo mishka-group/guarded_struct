@@ -63,6 +63,13 @@ defmodule GuardedStruct.Runtime do
     start = System.monotonic_time()
     metadata = %{module: module}
 
+    # Push the current module onto the process dictionary so per-module
+    # `derive_extensions` lookups in Extension.dispatch_*/2,3 can find it.
+    # Nested sub_field builds inherit; external `struct: Other` calls push
+    # their own and restore the previous on return.
+    previous_module = Process.get(:guarded_struct_current_module)
+    Process.put(:guarded_struct_current_module, module)
+
     :telemetry.execute(
       [:guarded_struct, :builder, :start],
       %{system_time: System.system_time()},
@@ -91,6 +98,11 @@ defmodule GuardedStruct.Runtime do
         )
 
         reraise(e, __STACKTRACE__)
+    after
+      case previous_module do
+        nil -> Process.delete(:guarded_struct_current_module)
+        prev -> Process.put(:guarded_struct_current_module, prev)
+      end
     end
   end
 
@@ -1002,7 +1014,7 @@ defmodule GuardedStruct.Runtime do
     new_path = parent_path ++ [field_name]
     nested_input = {:__nested__, value, full_attrs, new_path, :add}
 
-    case module.builder(nested_input) do
+    case with_module_context(module, fn -> module.builder(nested_input) end) do
       {:ok, built} ->
         {:ok, Map.put(ok_acc, field_name, built), err_acc}
 
@@ -1016,7 +1028,9 @@ defmodule GuardedStruct.Runtime do
 
     built =
       Enum.map(list, fn item ->
-        module.builder({:__nested__, item, full_attrs, new_path, :add})
+        with_module_context(module, fn ->
+          module.builder({:__nested__, item, full_attrs, new_path, :add})
+        end)
       end)
 
     case Enum.find(built, &(elem(&1, 0) == :error)) do
@@ -1025,6 +1039,29 @@ defmodule GuardedStruct.Runtime do
 
       {:error, errs} ->
         {:ok, ok_acc, err_acc ++ [%{field: field_name, errors: errs}]}
+    end
+  end
+
+  # Switches the process-dict current module for the duration of `fun.()`
+  # ONLY when `module` is a separate user module (one declared with
+  # `use GuardedStruct`). Auto-generated sub_field submodules don't have
+  # `__guarded_derive_extensions_opt__/0` defined, so we leave pdict alone
+  # for them — they inherit the root user module's per-module opt.
+  defp with_module_context(module, fun) do
+    if function_exported?(module, :__guarded_derive_extensions_opt__, 0) do
+      previous = Process.get(:guarded_struct_current_module)
+      Process.put(:guarded_struct_current_module, module)
+
+      try do
+        fun.()
+      after
+        case previous do
+          nil -> Process.delete(:guarded_struct_current_module)
+          prev -> Process.put(:guarded_struct_current_module, prev)
+        end
+      end
+    else
+      fun.()
     end
   end
 
