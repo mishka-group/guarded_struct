@@ -10,11 +10,15 @@ defmodule GuardedStructFixtures.ConditionalsTest do
 
   describe "Block (nested conditional_field)" do
     test "resolves a plain paragraph (string) to the first branch" do
+      # `:block` is a conditional with 3 variants. A string input matches
+      # the first variant's `is_string` validator → resolved as the string.
       assert {:ok, %Conditionals.Block{block: "hello world"}} =
                Conditionals.Block.builder(%{block: "hello world"})
     end
 
     test "resolves a single image (map) to the sub_field branch" do
+      # A bare map input fails the string branch, passes `is_map` on the
+      # sub_field branch → resolved as the auto-numbered submodule struct.
       assert {:ok, %Conditionals.Block{block: %{url: url}}} =
                Conditionals.Block.builder(%{block: %{url: "https://x.io/a.png"}})
 
@@ -22,6 +26,8 @@ defmodule GuardedStructFixtures.ConditionalsTest do
     end
 
     test "resolves a gallery (list) to the INNER conditional with list children" do
+      # A list input fails both leaf branches, passes `is_list` on the
+      # NESTED conditional → each item resolved via its own inner conditional.
       gallery = [
         "https://x.io/cap.png",
         %{url: "https://x.io/img.png", alt: "a pic"}
@@ -34,15 +40,22 @@ defmodule GuardedStructFixtures.ConditionalsTest do
     end
 
     test "rejects a value that matches no branch (number)" do
+      # ERROR REASON: 42 is not a string, not a map, not a list. All
+      # three branch validators reject it → :conditionals aggregate error.
       assert {:error, _} = Conditionals.Block.builder(%{block: 42})
     end
 
     test "gallery item with an invalid URL inside a map fails the inner url validator" do
+      # ERROR REASON: the gallery branch's image variant routes through
+      # `Image.builder/1`, where `:url` has `derives: "validate(url, ...)"`.
+      # "not-a-url" is not a URL → :url action error.
       gallery = [%{url: "not-a-url"}]
       assert {:error, _} = Conditionals.Block.builder(%{block: gallery})
     end
 
     test "single image map with a non-url url fails the url validator" do
+      # ERROR REASON: same `validate(url)` rule on the sub_field branch's
+      # `:url`. "ftp://broken" fails the url shape check.
       assert {:error, _} = Conditionals.Block.builder(%{block: %{url: "ftp://broken"}})
     end
   end
@@ -197,11 +210,14 @@ defmodule GuardedStructFixtures.ConditionalsTest do
   # ------------------------------------------------------------------
   describe "Full struct equality (deep map comparison)" do
     test "paragraph variant — Block.builder/1 returns the EXACT %Block{} in one assert" do
+      # Deep-equality lock for the string branch: only :block populated.
       assert Conditionals.Block.builder(%{block: "hello world"}) ==
                {:ok, %Conditionals.Block{block: "hello world"}}
     end
 
     test "image variant — Block.builder/1 returns Block with nested %Block1{} struct, every key set" do
+      # The sub_field branch inside a conditional gets auto-numbered →
+      # generated submodule is `Block.Block1`. Asserted by exact name.
       assert Conditionals.Block.builder(%{
                block: %{url: "https://x.io/a.png", alt: "alt text"}
              }) ==
@@ -215,6 +231,8 @@ defmodule GuardedStructFixtures.ConditionalsTest do
     end
 
     test "image variant — :alt defaults to \"\" when omitted (full equality with default applied)" do
+      # Locks the default behavior: omitting :alt yields "" not nil,
+      # because `:alt` has `default: ""` in the fixture.
       assert Conditionals.Block.builder(%{block: %{url: "https://x.io/a.png"}}) ==
                {:ok,
                 %Conditionals.Block{
@@ -226,6 +244,9 @@ defmodule GuardedStructFixtures.ConditionalsTest do
     end
 
     test "gallery variant — Block.builder/1 returns full list of resolved Image structs + strings" do
+      # The gallery branch routes maps through the external `Image`
+      # module (not an auto-numbered submodule). Strings stay strings,
+      # maps become `%Image{}` structs with defaults applied.
       assert Conditionals.Block.builder(%{
                block: [
                  "https://x.io/header.png",
@@ -249,6 +270,7 @@ defmodule GuardedStructFixtures.ConditionalsTest do
   # ==================================================================
   describe "Document — deeply nested conditional_field (7 levels deep)" do
     test "plain content variant — top conditional resolves to bare string" do
+      # Top conditional, first branch (string). No deeper traversal.
       assert Conditionals.Document.builder(%{
                title: "Hello",
                content: "just plain text"
@@ -261,6 +283,9 @@ defmodule GuardedStructFixtures.ConditionalsTest do
     end
 
     test "rich + simple-string body — 3 levels deep" do
+      # Top conditional resolves to sub_field (Content1). The Content1's
+      # `:body` is itself a conditional whose string branch wins.
+      # Depth: Document → Content1 → :body (string).
       assert Conditionals.Document.builder(%{
                title: "Hello",
                content: %{title: "Post", body: "one paragraph"}
@@ -276,6 +301,8 @@ defmodule GuardedStructFixtures.ConditionalsTest do
     end
 
     test "rich + structured body + plain paragraphs only — 5 levels deep" do
+      # Depth: Document → Content1 → Body1 → :paragraphs (string branch).
+      # The inner conditional's string variant catches every list item.
       assert Conditionals.Document.builder(%{
                title: "Hello",
                content: %{
@@ -300,6 +327,9 @@ defmodule GuardedStructFixtures.ConditionalsTest do
     end
 
     test "rich + structured body + ONE quote paragraph with source — 7 levels deep" do
+      # Deepest path: Document → Content1 → Body1 → Paragraphs1 → Source.
+      # The inner conditional's sub_field branch resolves; the quote's
+      # `:source` is a regular nested sub_field (not numbered).
       assert Conditionals.Document.builder(%{
                title: "Hello",
                content: %{
@@ -337,6 +367,9 @@ defmodule GuardedStructFixtures.ConditionalsTest do
     end
 
     test "rich + structured body + MIXED paragraphs (strings + quotes) — full deep equality" do
+      # The inner conditional resolves each list item independently:
+      # strings go to the string branch, maps to the quote sub_field.
+      # Locks the per-item resolution behavior.
       assert Conditionals.Document.builder(%{
                title: "Mixed",
                content: %{
@@ -378,6 +411,9 @@ defmodule GuardedStructFixtures.ConditionalsTest do
     end
 
     test "deepest path: quote.source.author missing → builder rejects (cascade enforce)" do
+      # ERROR REASON: `source.author` is `enforce: true` (also cascaded
+      # from the parent sub_field). Omitting it 7 levels deep still
+      # propagates the required-fields error all the way up.
       assert {:error, _} =
                Conditionals.Document.builder(%{
                  title: "Hello",

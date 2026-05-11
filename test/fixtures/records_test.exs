@@ -11,6 +11,8 @@ defmodule GuardedStructFixtures.RecordsTest do
 
   describe "validate(record=user)" do
     test "accepts a record built with the matching tag" do
+      # `:user` is `derives: "validate(record=user)"` — accepts only
+      # tagged tuples whose first element is the atom :user.
       rec = Records.user(name: "Alice", age: 30)
 
       assert {:ok, %Records.UserEvent{user: ^rec}} =
@@ -18,6 +20,8 @@ defmodule GuardedStructFixtures.RecordsTest do
     end
 
     test "rejects a record with the wrong tag" do
+      # ERROR REASON: `:user` derive demands tag `:user`. An :address
+      # record (`{:address, ...}`) has the wrong tag → :record action error.
       bad = Records.address(street: "Main", city: "NYC")
 
       assert {:error, _} =
@@ -27,6 +31,9 @@ defmodule GuardedStructFixtures.RecordsTest do
 
   describe "validate(enum=Atom[...]) on event_kind" do
     test "rejects an unknown atom" do
+      # ERROR REASON: `:event_kind` derive is
+      # `enum=Atom[created::updated::deleted]`. :exploded is not in
+      # the list → :enum action error.
       rec = Records.user(name: "Alice", age: 30)
 
       assert {:error, _} =
@@ -34,6 +41,8 @@ defmodule GuardedStructFixtures.RecordsTest do
     end
 
     test "accepts each of the listed atoms" do
+      # Each allowed atom must build successfully. Locks the full
+      # set against accidental shrinkage.
       rec = Records.user(name: "X", age: 1)
 
       for kind <- [:created, :updated, :deleted] do
@@ -45,6 +54,8 @@ defmodule GuardedStructFixtures.RecordsTest do
 
   describe "validate(record) (no tag)" do
     test "accepts any tagged tuple on the :trace field" do
+      # `:trace` is `derives: "validate(record)"` — no tag constraint,
+      # any 2+ element tagged tuple is accepted (here `{:custom, "..."}`).
       rec = Records.user(name: "X", age: 1)
       trace = {:custom, "anywhere"}
 

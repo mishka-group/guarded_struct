@@ -11,6 +11,8 @@ defmodule GuardedStructFixtures.DecoratedTest do
 
   describe "@derives / @derive_rules decorator on top-level fields" do
     test "decorated fields enforce the same rules as inline derives:" do
+      # `@derives` above `:title` injects the same sanitize/validate ops
+      # as if written inline. Sanitize trims the leading/trailing spaces.
       assert {:ok, post} =
                Decorated.BlogPost.builder(%{
                  title: "  Hello  ",
@@ -22,6 +24,8 @@ defmodule GuardedStructFixtures.DecoratedTest do
     end
 
     test "rejects long titles via the @derives max_len rule" do
+      # ERROR REASON: the @derives line above `:title` includes
+      # `max_len=200`. 250 x's exceed it → :max_len action error.
       assert {:error, errs} =
                Decorated.BlogPost.builder(%{
                  title: String.duplicate("x", 250),
@@ -32,6 +36,9 @@ defmodule GuardedStructFixtures.DecoratedTest do
     end
 
     test "field without a decorator and without a derives: opt has no rule" do
+      # `:draft` is declared with neither a decorator nor inline `derives:`
+      # → any value passes (here: true / default false). Confirms decorator
+      # is one-shot — it doesn't leak to the next field.
       assert {:ok, %{draft: true}} =
                Decorated.BlogPost.builder(%{title: "ok", body: "ok", draft: true})
 
@@ -40,6 +47,8 @@ defmodule GuardedStructFixtures.DecoratedTest do
     end
 
     test "@derive_rules (verbose alias) and @derives produce identical ops" do
+      # `@derive_rules` decorates `:body` with `sanitize(markdown_html)`
+      # which strips dangerous HTML. `<script>` tags must not survive.
       assert {:ok, post} =
                Decorated.BlogPost.builder(%{
                  title: "<script>alert('xss')</script>Hello",
@@ -89,6 +98,9 @@ defmodule GuardedStructFixtures.DecoratedTest do
 
   describe "@derives inside a sub_field body (AST walker recurses)" do
     test "decorated inner field's derives: validate(uuid) accepts a valid uuid" do
+      # The walker recurses into the `:metadata` sub_field body, so
+      # `@derives "validate(uuid)"` above `:author_id` applies even
+      # though it's two levels deep, not at the outermost block.
       uuid = "22222222-2222-2222-2222-222222222222"
 
       assert {:ok, post} =
@@ -102,6 +114,9 @@ defmodule GuardedStructFixtures.DecoratedTest do
     end
 
     test "rejects an invalid uuid on the decorated inner field" do
+      # ERROR REASON: same nested `@derives "validate(uuid)"` rule
+      # applies. "not-a-uuid" doesn't match the uuid shape → :uuid
+      # action error on `metadata.author_id`.
       assert {:error, _} =
                Decorated.BlogPost.builder(%{
                  title: "ok",
