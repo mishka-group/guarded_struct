@@ -107,10 +107,10 @@ defmodule GuardedStructFixtures.ShowcaseTest do
       # Capture the auto-generated id first; everything else is deterministic.
       {:ok, built} = Showcase.EnterpriseAccount.builder(input)
 
+      # Re-run to prove determinism would diverge only on :id;
+      # we compare the original `built` against the fully-spelled
+      # expected struct below.
       assert {:ok, ^built} =
-               # Re-run to prove determinism would diverge only on :id;
-               # we compare the original `built` against the fully-spelled
-               # expected struct below.
                {:ok, built}
 
       assert built ==

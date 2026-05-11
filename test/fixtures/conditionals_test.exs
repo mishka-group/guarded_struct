@@ -243,4 +243,185 @@ defmodule GuardedStructFixtures.ConditionalsTest do
                 }}
     end
   end
+
+  # ==================================================================
+  # Document — DEEPLY nested (7 levels, 3 stacked conditional layers)
+  # ==================================================================
+  describe "Document — deeply nested conditional_field (7 levels deep)" do
+    test "plain content variant — top conditional resolves to bare string" do
+      assert Conditionals.Document.builder(%{
+               title: "Hello",
+               content: "just plain text"
+             }) ==
+               {:ok,
+                %Conditionals.Document{
+                  title: "Hello",
+                  content: "just plain text"
+                }}
+    end
+
+    test "rich + simple-string body — 3 levels deep" do
+      assert Conditionals.Document.builder(%{
+               title: "Hello",
+               content: %{title: "Post", body: "one paragraph"}
+             }) ==
+               {:ok,
+                %Conditionals.Document{
+                  title: "Hello",
+                  content: %Conditionals.Document.Content1{
+                    title: "Post",
+                    body: "one paragraph"
+                  }
+                }}
+    end
+
+    test "rich + structured body + plain paragraphs only — 5 levels deep" do
+      assert Conditionals.Document.builder(%{
+               title: "Hello",
+               content: %{
+                 title: "Post",
+                 body: %{
+                   heading: "Section 1",
+                   paragraphs: ["alpha", "beta", "gamma"]
+                 }
+               }
+             }) ==
+               {:ok,
+                %Conditionals.Document{
+                  title: "Hello",
+                  content: %Conditionals.Document.Content1{
+                    title: "Post",
+                    body: %Conditionals.Document.Content1.Body1{
+                      heading: "Section 1",
+                      paragraphs: ["alpha", "beta", "gamma"]
+                    }
+                  }
+                }}
+    end
+
+    test "rich + structured body + ONE quote paragraph with source — 7 levels deep" do
+      assert Conditionals.Document.builder(%{
+               title: "Hello",
+               content: %{
+                 title: "Post",
+                 body: %{
+                   heading: "Section",
+                   paragraphs: [
+                     %{
+                       text: "To be or not to be",
+                       source: %{author: "Shakespeare", url: "https://shakespeare.io"}
+                     }
+                   ]
+                 }
+               }
+             }) ==
+               {:ok,
+                %Conditionals.Document{
+                  title: "Hello",
+                  content: %Conditionals.Document.Content1{
+                    title: "Post",
+                    body: %Conditionals.Document.Content1.Body1{
+                      heading: "Section",
+                      paragraphs: [
+                        %Conditionals.Document.Content1.Body1.Paragraphs1{
+                          text: "To be or not to be",
+                          source: %Conditionals.Document.Content1.Body1.Paragraphs1.Source{
+                            author: "Shakespeare",
+                            url: "https://shakespeare.io"
+                          }
+                        }
+                      ]
+                    }
+                  }
+                }}
+    end
+
+    test "rich + structured body + MIXED paragraphs (strings + quotes) — full deep equality" do
+      assert Conditionals.Document.builder(%{
+               title: "Mixed",
+               content: %{
+                 title: "Post",
+                 body: %{
+                   heading: "Section",
+                   paragraphs: [
+                     "intro text",
+                     %{
+                       text: "quoted",
+                       source: %{author: "X", url: "https://x.io"}
+                     },
+                     "outro text"
+                   ]
+                 }
+               }
+             }) ==
+               {:ok,
+                %Conditionals.Document{
+                  title: "Mixed",
+                  content: %Conditionals.Document.Content1{
+                    title: "Post",
+                    body: %Conditionals.Document.Content1.Body1{
+                      heading: "Section",
+                      paragraphs: [
+                        "intro text",
+                        %Conditionals.Document.Content1.Body1.Paragraphs1{
+                          text: "quoted",
+                          source: %Conditionals.Document.Content1.Body1.Paragraphs1.Source{
+                            author: "X",
+                            url: "https://x.io"
+                          }
+                        },
+                        "outro text"
+                      ]
+                    }
+                  }
+                }}
+    end
+
+    test "deepest path: quote.source.author missing → builder rejects (cascade enforce)" do
+      assert {:error, _} =
+               Conditionals.Document.builder(%{
+                 title: "Hello",
+                 content: %{
+                   title: "Post",
+                   body: %{
+                     heading: "Section",
+                     paragraphs: [
+                       # :source.author is enforce: true
+                       %{text: "incomplete quote", source: %{url: "https://x.io"}}
+                     ]
+                   }
+                 }
+               })
+    end
+
+    test "introspection — every auto-generated submodule in the chain exists" do
+      # Following the docstring's nesting diagram:
+      mods = [
+        Conditionals.Document,
+        Conditionals.Document.Content1,
+        Conditionals.Document.Content1.Body1,
+        Conditionals.Document.Content1.Body1.Paragraphs1,
+        Conditionals.Document.Content1.Body1.Paragraphs1.Source
+      ]
+
+      for mod <- mods do
+        assert Code.ensure_loaded?(mod),
+               "expected #{inspect(mod)} to be a generated submodule"
+
+        assert function_exported?(mod, :builder, 1),
+               "expected #{inspect(mod)}.builder/1 to be defined"
+
+        assert function_exported?(mod, :keys, 0),
+               "expected #{inspect(mod)}.keys/0 to be defined"
+      end
+    end
+
+    test "introspection — keys/0 at each depth reports the right fields" do
+      assert Conditionals.Document.keys() == [:title, :content]
+      assert Conditionals.Document.Content1.keys() == [:title, :body]
+      assert Conditionals.Document.Content1.Body1.keys() == [:heading, :paragraphs]
+      assert Conditionals.Document.Content1.Body1.Paragraphs1.keys() == [:text, :source]
+      assert Conditionals.Document.Content1.Body1.Paragraphs1.Source.keys() == [:author, :url]
+    end
+  end
 end
