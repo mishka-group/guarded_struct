@@ -59,7 +59,6 @@ defmodule GuardedStruct do
     block_enforce? = Keyword.get(opts, :enforce, false) == true
     pre_enforce_keys = extract_enforce_keys(block, block_enforce?)
     block_aliases = extract_aliases(block)
-    jason? = Keyword.get(opts, :jason, false) == true
 
     setters =
       Enum.map(opts, fn {key, value} ->
@@ -68,19 +67,11 @@ defmodule GuardedStruct do
 
     full_block = {:__block__, [], setters ++ [block]}
 
-    derive_jason =
-      if jason? do
-        quote do
-          @derive Jason.Encoder
-        end
-      end
-
     quote do
       require GuardedStruct.Dsl
       import GuardedStruct, only: [sub_field: 4, conditional_field: 4]
 
       unquote_splicing(block_aliases)
-      unquote(derive_jason)
 
       GuardedStruct.Dsl.guardedstruct do
         unquote(full_block)
@@ -134,12 +125,43 @@ defmodule GuardedStruct do
 
   defp do_transform_derive_rules([{op, meta, args} | rest], pending, acc)
        when op in [:field, :sub_field, :conditional_field] and not is_nil(pending) do
-    new_args = inject_derive(args, pending)
+    new_args = args |> inject_derive(pending) |> recurse_into_block()
     do_transform_derive_rules(rest, nil, [{op, meta, new_args} | acc])
+  end
+
+  defp do_transform_derive_rules([{op, meta, args} | rest], pending, acc)
+       when op in [:field, :sub_field, :conditional_field] do
+    new_args = recurse_into_block(args)
+    do_transform_derive_rules(rest, pending, [{op, meta, new_args} | acc])
   end
 
   defp do_transform_derive_rules([item | rest], pending, acc) do
     do_transform_derive_rules(rest, pending, [item | acc])
+  end
+
+  # Recurse into a sub_field / conditional_field's `do:` block so `@derives`
+  # decorators inside the body are also expanded.
+  defp recurse_into_block(args) do
+    case args do
+      [name, type, opts, [do: do_block]] when is_list(opts) ->
+        [name, type, opts, [do: transform_derive_rules(do_block)]]
+
+      [name, type, [{:do, _} | _] = kw] ->
+        rewritten = Keyword.update!(kw, :do, fn block -> transform_derive_rules(block) end)
+        [name, type, rewritten]
+
+      [name, type, opts] when is_list(opts) ->
+        case Keyword.fetch(opts, :do) do
+          {:ok, do_block} ->
+            [name, type, Keyword.put(opts, :do, transform_derive_rules(do_block))]
+
+          :error ->
+            args
+        end
+
+      other ->
+        other
+    end
   end
 
   defp inject_derive(args, derive_str) do

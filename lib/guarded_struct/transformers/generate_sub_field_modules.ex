@@ -23,7 +23,9 @@ defmodule GuardedStruct.Transformers.GenerateSubFieldModules do
         ast -> resolve_module_ast(parent, ast)
       end
 
-    generate_for_entities(entities, [base_module])
+    jason? = Transformer.get_option(dsl_state, [:guardedstruct], :jason) == true
+
+    generate_for_entities(entities, [base_module], jason?)
 
     {:ok, dsl_state}
   end
@@ -35,10 +37,10 @@ defmodule GuardedStruct.Transformers.GenerateSubFieldModules do
   defp resolve_module_ast(parent, name) when is_atom(name), do: Module.concat(parent, name)
   defp resolve_module_ast(_parent, mod) when is_atom(mod), do: mod
 
-  defp generate_for_entities(entities, parent_path) do
+  defp generate_for_entities(entities, parent_path, jason?) do
     Enum.each(entities, fn
       %SubField{} = sf ->
-        generate_sub_field(sf, parent_path)
+        generate_sub_field(sf, parent_path, jason?)
 
       %ConditionalField{} = cf ->
         cf.sub_fields
@@ -46,11 +48,11 @@ defmodule GuardedStruct.Transformers.GenerateSubFieldModules do
         |> Enum.each(fn {inner_sf, idx} ->
           numbered_name = "#{cf.name}#{idx}" |> String.to_atom()
           renamed = %{inner_sf | name: numbered_name}
-          generate_sub_field(renamed, parent_path)
+          generate_sub_field(renamed, parent_path, jason?)
         end)
 
         Enum.each(cf.conditional_fields, fn inner_cf ->
-          generate_for_entities([inner_cf], parent_path)
+          generate_for_entities([inner_cf], parent_path, jason?)
         end)
 
       _ ->
@@ -58,13 +60,13 @@ defmodule GuardedStruct.Transformers.GenerateSubFieldModules do
     end)
   end
 
-  defp generate_sub_field(%SubField{} = sf, parent_path) do
+  defp generate_sub_field(%SubField{} = sf, parent_path, jason?) do
     submodule = Module.concat(parent_path ++ [Codegen.atom_to_module(sf.name)])
 
     new_path = parent_path ++ [Codegen.atom_to_module(sf.name)]
 
     # Recurse for nested sub_fields and conditional_fields inside this one.
-    generate_for_entities(sf.sub_fields ++ sf.conditional_fields, new_path)
+    generate_for_entities(sf.sub_fields ++ sf.conditional_fields, new_path, jason?)
 
     Codegen.validate_entities!(sf.fields ++ sf.sub_fields ++ sf.conditional_fields)
 
@@ -75,7 +77,7 @@ defmodule GuardedStruct.Transformers.GenerateSubFieldModules do
         false,
         sf.error == true,
         info_path(submodule),
-        %{authorized_fields: sf.authorized_fields == true}
+        %{authorized_fields: sf.authorized_fields == true, jason: jason?}
       )
 
     Module.create(submodule, body, file: file_for(sf), line: line_for(sf))

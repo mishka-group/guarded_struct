@@ -63,7 +63,14 @@ defmodule GuardedStruct.Transformers.Codegen do
     {keys, defstruct_kw, types, enforce_keys, fields_runtime} =
       build_struct_pieces(entities, block_enforce)
 
-    _jason? = Map.get(options, :jason, false) == true
+    jason? = Map.get(options, :jason, false) == true
+
+    derive_jason_ast =
+      if jason? do
+        quote do
+          if Code.ensure_loaded?(Jason.Encoder), do: @derive(Jason.Encoder)
+        end
+      end
 
     example_pairs =
       entities
@@ -88,6 +95,7 @@ defmodule GuardedStruct.Transformers.Codegen do
       })
 
     quote do
+      unquote(derive_jason_ast)
       @enforce_keys unquote(enforce_keys)
       defstruct unquote(defstruct_kw)
 
