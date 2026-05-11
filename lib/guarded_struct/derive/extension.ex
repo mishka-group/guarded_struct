@@ -55,6 +55,8 @@ defmodule GuardedStruct.Derive.Extension do
 
   @doc "Declare a validator op."
   defmacro validator(name, fun_ast) when is_atom(name) do
+    __MODULE__.__warn_shadow__(:validate, name, __CALLER__)
+
     quote do
       @__validator_ops__ unquote(name)
       def __validate__(unquote(name), input, field) do
@@ -81,6 +83,8 @@ defmodule GuardedStruct.Derive.Extension do
 
   @doc "Declare a sanitizer op."
   defmacro sanitizer(name, fun_ast) when is_atom(name) do
+    __MODULE__.__warn_shadow__(:sanitize, name, __CALLER__)
+
     quote do
       @__sanitizer_ops__ unquote(name)
       def __sanitize__(unquote(name), input) do
@@ -88,6 +92,35 @@ defmodule GuardedStruct.Derive.Extension do
       end
     end
   end
+
+  @doc false
+  # Compile-time check — if the custom op name collides with a built-in
+  # registered in `Derive.Registry`, emit a Spark warning. The built-in's
+  # pattern-matched function clause in `ValidationDerive` / `SanitizerDerive`
+  # always wins, so the custom validator/sanitizer would be dead code.
+  def __warn_shadow__(kind, name, caller) do
+    shadows? =
+      case kind do
+        :validate -> GuardedStruct.Derive.Registry.known_validate?(name)
+        :sanitize -> GuardedStruct.Derive.Registry.known_sanitize?(name)
+      end
+
+    if shadows? do
+      Spark.Warning.warn(
+        "#{kind_label(kind)} #{inspect(name)} in #{inspect(caller.module)} " <>
+          "shadows a built-in `#{kind}(#{name})` op. Built-in clauses match first, " <>
+          "so this custom #{kind_label(kind)} will NEVER be called. " <>
+          "Rename it to avoid the shadow.",
+        nil,
+        Macro.Env.stacktrace(caller)
+      )
+    end
+
+    :ok
+  end
+
+  defp kind_label(:validate), do: "validator"
+  defp kind_label(:sanitize), do: "sanitizer"
 
   defmacro __before_compile__(_env) do
     quote do

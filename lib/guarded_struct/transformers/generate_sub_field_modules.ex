@@ -25,7 +25,11 @@ defmodule GuardedStruct.Transformers.GenerateSubFieldModules do
 
     jason? = Transformer.get_option(dsl_state, [:guardedstruct], :jason) == true
 
-    generate_for_entities(entities, [base_module], jason?)
+    # Walk the entity tree and submit each Module.create as an async
+    # compile task on the dsl_state. Spark awaits all tasks before the
+    # next transformer (GenerateBuilder) runs, so sibling submodules
+    # compile in parallel while preserving the parent → builder order.
+    dsl_state = generate_for_entities(entities, [base_module], jason?, dsl_state)
 
     {:ok, dsl_state}
   end
@@ -37,36 +41,40 @@ defmodule GuardedStruct.Transformers.GenerateSubFieldModules do
   defp resolve_module_ast(parent, name) when is_atom(name), do: Module.concat(parent, name)
   defp resolve_module_ast(_parent, mod) when is_atom(mod), do: mod
 
-  defp generate_for_entities(entities, parent_path, jason?) do
-    Enum.each(entities, fn
-      %SubField{} = sf ->
-        generate_sub_field(sf, parent_path, jason?)
+  defp generate_for_entities(entities, parent_path, jason?, dsl_state) do
+    Enum.reduce(entities, dsl_state, fn
+      %SubField{} = sf, acc ->
+        generate_sub_field(sf, parent_path, jason?, acc)
 
-      %ConditionalField{} = cf ->
-        cf.sub_fields
-        |> Enum.with_index(1)
-        |> Enum.each(fn {inner_sf, idx} ->
-          numbered_name = "#{cf.name}#{idx}" |> String.to_atom()
-          renamed = %{inner_sf | name: numbered_name}
-          generate_sub_field(renamed, parent_path, jason?)
+      %ConditionalField{} = cf, acc ->
+        acc =
+          cf.sub_fields
+          |> Enum.with_index(1)
+          |> Enum.reduce(acc, fn {inner_sf, idx}, inner_acc ->
+            numbered_name = "#{cf.name}#{idx}" |> String.to_atom()
+            renamed = %{inner_sf | name: numbered_name}
+            generate_sub_field(renamed, parent_path, jason?, inner_acc)
+          end)
+
+        Enum.reduce(cf.conditional_fields, acc, fn inner_cf, inner_acc ->
+          generate_for_entities([inner_cf], parent_path, jason?, inner_acc)
         end)
 
-        Enum.each(cf.conditional_fields, fn inner_cf ->
-          generate_for_entities([inner_cf], parent_path, jason?)
-        end)
-
-      _ ->
-        :ok
+      _, acc ->
+        acc
     end)
   end
 
-  defp generate_sub_field(%SubField{} = sf, parent_path, jason?) do
+  defp generate_sub_field(%SubField{} = sf, parent_path, jason?, dsl_state) do
     submodule = Module.concat(parent_path ++ [Codegen.atom_to_module(sf.name)])
-
     new_path = parent_path ++ [Codegen.atom_to_module(sf.name)]
 
-    # Recurse for nested sub_fields and conditional_fields inside this one.
-    generate_for_entities(sf.sub_fields ++ sf.conditional_fields, new_path, jason?)
+    # Recurse first so child submodule tasks are registered on dsl_state
+    # before the parent's own task is added. Order of task creation is
+    # cosmetic only (Spark awaits all of them); the parent's compiled
+    # output doesn't reference children at compile time.
+    dsl_state =
+      generate_for_entities(sf.sub_fields ++ sf.conditional_fields, new_path, jason?, dsl_state)
 
     Codegen.validate_entities!(sf.fields ++ sf.sub_fields ++ sf.conditional_fields)
 
@@ -80,7 +88,12 @@ defmodule GuardedStruct.Transformers.GenerateSubFieldModules do
         %{authorized_fields: sf.authorized_fields == true, jason: jason?}
       )
 
-    Module.create(submodule, body, file: file_for(sf), line: line_for(sf))
+    file = file_for(sf)
+    line = line_for(sf)
+
+    Transformer.async_compile(dsl_state, fn ->
+      Module.create(submodule, body, file: file, line: line)
+    end)
   end
 
   defp info_path(submodule), do: Module.split(submodule) |> Enum.map(&String.to_atom/1)
