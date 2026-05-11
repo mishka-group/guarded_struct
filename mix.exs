@@ -117,9 +117,6 @@ defmodule GuardedStruct.MixProject do
       # property-based testing
       {:stream_data, "~> 1.1", only: [:dev, :test]},
 
-      # benchmarks
-      {:benchee, "~> 1.3", only: :dev},
-
       # tested when jason: true is opted into; the lib itself doesn't depend
       # on Jason — Code.ensure_loaded?(Jason.Encoder) gates the @derive.
       {:jason, "~> 1.4", only: [:dev, :test]},
