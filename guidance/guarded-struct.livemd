@@ -24,7 +24,6 @@ Mix.install([
 | `virtual_field` (closes #5) | _Virtual fields_ |
 | `GuardedStruct.Validate` standalone API (closes #2) | _Standalone validation_ |
 | Erlang Record support (closes #6) | _Erlang Records_ |
-| JSON Schema / TypeScript export (closes #3) | _Schema export_ |
 | Custom validators / sanitizers via Spark DSL | _Custom derive ops_ |
 | Strict op-name verification | _Strict mode_ |
 | Splode error wrapping | _Splode errors_ |
@@ -1553,42 +1552,6 @@ WithRecord.builder(%{user: rec})
 ```
 
 The `record=tag` form checks that the input is a tagged tuple with the given tag. The bare `validate(record)` accepts any tagged tuple.
-
-## Schema export
-
-Emit JSON Schema or TypeScript declarations from any GuardedStruct module:
-
-```elixir
-defmodule Person do
-  use GuardedStruct
-  guardedstruct do
-    field(:name, String.t(), enforce: true, derive: "validate(string, max_len=80)")
-    field(:age, integer(), derive: "validate(integer, min_len=0)")
-    field(:role, String.t(), derive: "validate(enum=String[admin::user::guest])")
-  end
-end
-
-GuardedStruct.Schema.json_schema(Person)
-# %{
-#   "$schema" => "https://json-schema.org/draft/2020-12/schema",
-#   "type" => "object",
-#   "properties" => %{
-#     "name" => %{"type" => "string", "maxLength" => 80},
-#     "age" => %{"type" => "integer", "minimum" => 0},
-#     "role" => %{"type" => "string", "enum" => ["admin", "user", "guest"]}
-#   },
-#   "required" => ["name"]
-# }
-
-GuardedStruct.Schema.typescript(Person)
-# "export interface Person {\n  name: string;\n  age?: number;\n  role?: \"admin\" | \"user\" | \"guest\";\n}\n"
-```
-
-CLI variant via Igniter (writes the file with diff preview):
-
-```sh
-mix guarded_struct.gen.schema MyApp.Person --format=json --out=priv/person.json
-```
 
 ## Custom derive ops
 

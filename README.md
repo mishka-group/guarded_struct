@@ -312,34 +312,6 @@ GuardedStruct.Validate.partial(User, %{name: "Alice", email: "alice@x.com"})
 # missing fields skipped; no enforce_keys check
 ```
 
-## JSON Schema / TypeScript export
-
-```elixir
-GuardedStruct.Schema.json_schema(User)
-# %{
-#   "$schema" => "https://json-schema.org/draft/2020-12/schema",
-#   "type" => "object",
-#   "properties" => %{
-#     "name" => %{"type" => "string", "maxLength" => 80},
-#     "email" => %{"type" => "string", "format" => "email"},
-#     ...
-#   },
-#   "required" => ["name", "email"]
-# }
-
-GuardedStruct.Schema.typescript(User)
-# "export interface User {\n  name: string;\n  age?: number;\n  ...\n}\n"
-```
-
-CLI:
-
-```sh
-mix guarded_struct.gen.schema MyApp.User --format=json --out=priv/schema.json
-mix guarded_struct.gen.schema MyApp.User --format=typescript --out=assets/types.ts
-```
-
-Built on [Igniter](https://hex.pm/packages/igniter) — diffs the result before write.
-
 ## Ash integration
 
 ```elixir

@@ -28,109 +28,17 @@ test/support/fixtures/
 
 What lives in this doc:
 
-1. JSON Schema / OpenAPI / TypeScript generator
-2. Mix tasks (installer + scaffolder + schema emitter)
-3. Compile-time strict modes (config-level switches)
-4. Application env / configuration keys
-5. Protocol consolidation tweak
-6. Tooling integration (`mix lint`, cheat sheets, LiveBook, autocomplete)
-7. Dependencies added
-8. Bug-fix highlights worth flagging on the release notes
+1. Mix tasks (installer + scaffolder)
+2. Compile-time strict modes (config-level switches)
+3. Application env / configuration keys
+4. Protocol consolidation tweak
+5. Tooling integration (`mix lint`, cheat sheets, LiveBook, autocomplete)
+6. Dependencies added
+7. Bug-fix highlights worth flagging on the release notes
 
 ---
 
-## 1 · Schema generators — `GuardedStruct.Schema`
-
-> Files:
-> - `lib/guarded_struct/schema.ex`
-> - `lib/mix/tasks/guarded_struct.gen.schema.ex` (Igniter mix task wrapper)
->
-> Tests: `test/schema_test.exs`.
-> Closes issue **#3**.
-
-Emit a JSON Schema / OpenAPI envelope / TypeScript declaration from any
-`GuardedStruct` module. Useful for:
-
-- API spec generation (front-end TypeScript types, OpenAPI docs)
-- JSON Schema validation outside the Elixir runtime
-- Auto-doc generation for partner integrations
-
-| Function | Output |
-|---|---|
-| `Schema.json_schema/1` | JSON Schema 2020-12 map |
-| `Schema.openapi/1` | OpenAPI 3.1 `components.schemas` envelope |
-| `Schema.typescript/1` | TypeScript `interface` declaration |
-
-```elixir
-defmodule MyApp.User do
-  use GuardedStruct
-  guardedstruct do
-    field :name,  String.t(), enforce: true, derives: "validate(string, max_len=80)"
-    field :email, String.t(), enforce: true, derives: "validate(email_r)"
-    field :age,   integer(),                  derives: "validate(integer)"
-  end
-end
-
-GuardedStruct.Schema.json_schema(MyApp.User)
-# => %{
-#      "$schema" => "https://json-schema.org/draft/2020-12/schema",
-#      "title"   => "MyApp.User",
-#      "type"    => "object",
-#      "properties" => %{
-#        "name"  => %{"type" => "string", "maxLength" => 80},
-#        "email" => %{"type" => "string", "format" => "email"},
-#        "age"   => %{"type" => "integer"}
-#      },
-#      "required" => ["name", "email"]
-#    }
-
-GuardedStruct.Schema.openapi([MyApp.User, MyApp.Order])
-# => %{
-#      "openapi" => "3.1.0",
-#      "info"    => %{"title" => "GuardedStruct schemas", "version" => "1.0.0"},
-#      "components" => %{
-#        "schemas" => %{
-#          "MyApp_User"  => %{...},
-#          "MyApp_Order" => %{...}
-#        }
-#      }
-#    }
-
-GuardedStruct.Schema.typescript(MyApp.User)
-# => "export interface MyAppUser {\n  name: string;\n  email: string;\n  age?: number;\n}\n"
-```
-
-Mapping rules (op → schema constraint):
-
-| Derive op | JSON Schema | TypeScript |
-|---|---|---|
-| `validate(string)` | `"type": "string"` | `string` |
-| `validate(integer)` | `"type": "integer"` | `number` |
-| `validate(float)` / `validate(number)` | `"type": "number"` | `number` |
-| `validate(boolean)` | `"type": "boolean"` | `boolean` |
-| `validate(map)` | `"type": "object"` | `Record<string, any>` |
-| `validate(list)` | `"type": "array"` | `any[]` |
-| `validate(max_len=N)` | `maxLength: N` (string) / `maxItems: N` (array) / `maximum: N` (number) | — |
-| `validate(min_len=N)` | similar `min*` constraints | — |
-| `validate(url)` | `"format": "uri"` | — |
-| `validate(uuid)` | `"format": "uuid"` | — |
-| `validate(email_r)` / `email` | `"format": "email"` | — |
-| `validate(date)` | `"format": "date"` | — |
-| `validate(datetime)` | `"format": "date-time"` | — |
-| `validate(ipv4)` | `"format": "ipv4"` | — |
-| `validate(regex=...)` | `"pattern": "..."` | — |
-| `validate(enum=String[a::b])` | `"enum": ["a", "b"]` | `"a" \| "b"` |
-| `validate(enum=Integer[1::2])` | `"enum": [1, 2]` | `number` |
-| `enforce: true` | field name in `"required"` | non-optional |
-| `default: v` | `"default": v` | — |
-
-For sub_fields: schema recursively walks the auto-generated submodule and
-inlines it. For `structs: true` sub_fields, emits `"type": "array"` with
-`items` set to the submodule's schema.
-
----
-
-## 2 · Mix tasks (Igniter-based)
+## 1 · Mix tasks (Igniter-based)
 
 > Under `lib/mix/tasks/`. All gracefully degrade if `:igniter` isn't loaded.
 
@@ -138,9 +46,8 @@ inlines it. For `structs: true` sub_fields, emits `"type": "array"` with
 |---|---|---|
 | `mix guarded_struct.install` | Add dep, register `lint` alias, seed `derive_extensions: []` | `test/mix/tasks/guarded_struct.install_test.exs` |
 | `mix guarded_struct.gen.struct` | Scaffold a starter module from CLI; `name!:type` syntax for enforce | `test/mix/tasks/guarded_struct.gen.struct_test.exs` |
-| `mix guarded_struct.gen.schema` | Emit JSON Schema / TypeScript / OpenAPI for a module | `test/mix/tasks/guarded_struct.gen.schema_test.exs` |
 
-### 2a · `mix guarded_struct.install`
+### 1a · `mix guarded_struct.install`
 
 ```sh
 # Bare install — adds dep + lint alias + seeds config :guarded_struct, derive_extensions: []
@@ -151,7 +58,7 @@ mix igniter.install guarded_struct --strict          # strict_derive_ops: true
 mix igniter.install guarded_struct --strict-paths    # strict_core_key_paths: true
 ```
 
-### 2b · `mix guarded_struct.gen.struct`
+### 1b · `mix guarded_struct.gen.struct`
 
 ```sh
 mix guarded_struct.gen.struct MyApp.User name!:string age:integer email:email
@@ -167,25 +74,9 @@ Supported type tokens: `string`, `integer`, `float`, `boolean`, `uuid`,
 `email`, `url`, `date`, `datetime`, `map`, `list`, `any`. Each maps to a
 `{type, derives:}` pair.
 
-### 2c · `mix guarded_struct.gen.schema`
-
-```sh
-# JSON Schema (default format) printed to stdout
-mix guarded_struct.gen.schema MyApp.User
-
-# Write to file
-mix guarded_struct.gen.schema MyApp.User --format=json --out=priv/user.json
-
-# TypeScript interface
-mix guarded_struct.gen.schema MyApp.User --format=typescript --out=apps/web/types/user.ts
-
-# OpenAPI 3.1 components envelope
-mix guarded_struct.gen.schema MyApp.User --format=openapi --out=priv/openapi/user.json
-```
-
 ---
 
-## 3 · Compile-time strict modes (opt-in config switches)
+## 2 · Compile-time strict modes (opt-in config switches)
 
 > Application-env switches, off by default for back-compat.
 
@@ -229,7 +120,7 @@ field :dest, String.t(), from: "root::nope"
 
 ---
 
-## 4 · Application env / configuration keys
+## 3 · Application env / configuration keys
 
 | Key | One-line description |
 |---|---|
@@ -252,7 +143,7 @@ is fixture-tested in `test/derive_extensions_per_module_test.exs`.
 
 ---
 
-## 5 · Protocol consolidation tweak
+## 4 · Protocol consolidation tweak
 
 > File: `mix.exs` — `consolidate_protocols: Mix.env() != :test`.
 
@@ -262,7 +153,7 @@ otherwise be frozen. Required for the `jason: true` opt to work in tests.
 
 ---
 
-## 6 · Tooling integration
+## 5 · Tooling integration
 
 | Tool | One-line description |
 |---|---|
@@ -277,7 +168,7 @@ otherwise be frozen. Required for the `jason: true` opt to work in tests.
 
 ---
 
-## 7 · Dependencies added
+## 6 · Dependencies added
 
 > File: `mix.exs`.
 
@@ -296,7 +187,7 @@ Optional deps unchanged: `html_sanitize_ex`, `email_checker`, `ex_url`,
 
 ---
 
-## 8 · Bug-fix highlights (release-note material)
+## 7 · Bug-fix highlights (release-note material)
 
 - **`__information__/0`** now populates `conditional_keys` with the actual
   `conditional_field` names (was always `[]` in 0.0.x).
