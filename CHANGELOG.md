@@ -69,20 +69,6 @@ Validate.partial(User, %{name: "", email: "alice@x.com"})
 # subset validation; missing fields skipped (no enforce_keys check)
 ```
 
-### `GuardedStruct.Schema` (closes #3)
-
-Emit JSON Schema or TypeScript declarations from any `GuardedStruct` module:
-
-```elixir
-GuardedStruct.Schema.json_schema(MyStruct)
-# %{"$schema" => "...", "type" => "object", "properties" => %{...}, "required" => [...]}
-
-GuardedStruct.Schema.typescript(MyStruct)
-# "export interface MyStruct {\n  name: string;\n  age?: number;\n}\n"
-```
-
-Plus a `mix guarded_struct.gen.schema MyApp.MyStruct --format=json --out=priv/schema.json` task built on Igniter.
-
 ### Custom validators / sanitizers via Spark-native DSL
 
 ```elixir

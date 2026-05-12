@@ -90,27 +90,14 @@ GuardedStruct.Validate.partial(MyStruct, %{name: "Alice", email: "alice@x.com"})
 # missing fields skipped — no enforce_keys check
 ```
 
-### 5. `GuardedStruct.Schema` — JSON Schema / TypeScript emitter
-
-```elixir
-GuardedStruct.Schema.json_schema(MyStruct)
-GuardedStruct.Schema.typescript(MyStruct)
-```
-
-Plus the Mix task:
-
-```sh
-mix guarded_struct.gen.schema MyApp.MyStruct --format=json --out=priv/schema.json
-```
-
-### 6. Erlang Records
+### 5. Erlang Records
 
 ```elixir
 field :user_record, :tuple, derives: "validate(record)"        # any tagged tuple
 field :user_record, :tuple, derives: "validate(record=user)"   # specific tag
 ```
 
-### 7. Custom validators / sanitizers via Spark-native DSL
+### 6. Custom validators / sanitizers via Spark-native DSL
 
 If you'd been using `Application.put_env(:guarded_struct, :validate_derive, MyMod)` with a hand-rolled `validate/3` callback, you can now write:
 
@@ -131,7 +118,7 @@ config :guarded_struct, derive_extensions: [MyApp.Derives]
 
 The legacy `Application.put_env` mechanism still works — both can coexist.
 
-### 8. Ash extension
+### 7. Ash extension
 
 ```elixir
 use Ash.Resource, extensions: [GuardedStruct.AshResource]
@@ -143,7 +130,7 @@ end
 
 Generates `__guarded_validate__/1`, `__guarded_information__/0`, `__guarded_fields__/0` under the `__guarded_*` namespace (no clash with Ash's own callbacks).
 
-### 9. Splode error wrapping (opt-in)
+### 8. Splode error wrapping (opt-in)
 
 ```elixir
 case MyStruct.builder(input) do
@@ -154,7 +141,7 @@ end
 
 Gives you `Splode.traverse_errors/2`, `set_path/2`, JSON serialisation. The `builder/1` return shape still defaults to the legacy `{:error, [%{field, action, message}]}` tuple — wrapping is opt-in.
 
-### 10. Strict op-name verification
+### 9. Strict op-name verification
 
 Opt-in compile-time check for typos:
 

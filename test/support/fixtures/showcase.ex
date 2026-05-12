@@ -15,7 +15,6 @@ defmodule GuardedStructFixtures.Showcase do
       detailed map, and the detailed map's `:overrides` is itself a
       conditional (map OR list of overrides)
     * `main_validator/1` auto-discovery — enforces invitation token length
-    * `Schema.json_schema/1` / `Schema.openapi/1` work over this shape
     * `Diff.diff/2` / `Validate.partial/2` work over this shape
   """
 

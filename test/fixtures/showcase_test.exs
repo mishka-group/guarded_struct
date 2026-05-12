@@ -7,8 +7,7 @@ defmodule GuardedStructFixtures.ShowcaseTest do
   `dynamic_field`, and `main_validator/1`.
 
   Doubles as an integration test for the public API surface used over
-  this kind of schema: `Schema.json_schema/1`, `Schema.openapi/1`,
-  `Schema.typescript/1`, `Diff.diff/2`, `Diff.apply/2`, `Validate.run/2`,
+  this kind of schema: `Diff.diff/2`, `Diff.apply/2`, `Validate.run/2`,
   `Validate.field/4`, `Validate.partial/2`, `Errors.from_tuple/1`,
   `Info.fields/1`, `__information__/0`, `example/0`.
   """
@@ -16,7 +15,7 @@ defmodule GuardedStructFixtures.ShowcaseTest do
   # async: false — wires the CustomDerives extensions via Application.put_env
   use ExUnit.Case, async: false
 
-  alias GuardedStruct.{Diff, Errors, Info, Schema, Validate}
+  alias GuardedStruct.{Diff, Errors, Info, Validate}
   alias GuardedStructFixtures.{CustomDerives, Showcase}
 
   setup do
@@ -197,34 +196,6 @@ defmodule GuardedStructFixtures.ShowcaseTest do
       decoded = Jason.decode!(json)
       assert decoded["name"] == "Acme Corp"
       refute Map.has_key?(decoded, "invitation_token")
-    end
-
-    test "Schema.json_schema/1 produces a JSON Schema 2020-12 doc" do
-      # `:name` is `enforce: true` → must appear in `required`.
-      schema = Schema.json_schema(Showcase.EnterpriseAccount)
-      assert schema["$schema"] =~ "json-schema.org"
-      assert schema["type"] == "object"
-      assert "name" in schema["required"]
-    end
-
-    test "Schema.openapi/1 envelopes multiple schemas" do
-      # `components.schemas` keys are the inspect'd module name with
-      # `.` replaced by `_`. Both modules must be present.
-      doc = Schema.openapi([Showcase.EnterpriseAccount, Showcase.Member])
-      assert doc["openapi"] == "3.1.0"
-      schemas = doc["components"]["schemas"]
-      account_key = Showcase.EnterpriseAccount |> inspect() |> String.replace(".", "_")
-      member_key = Showcase.Member |> inspect() |> String.replace(".", "_")
-      assert is_map(schemas[account_key])
-      assert is_map(schemas[member_key])
-    end
-
-    test "Schema.typescript/1 emits a typed interface" do
-      # Sanity check that the typescript emitter produces an interface
-      # block mentioning the `:name` field.
-      ts = Schema.typescript(Showcase.EnterpriseAccount)
-      assert ts =~ "export interface"
-      assert ts =~ "name"
     end
 
     test "Diff.diff/2 captures changes between two accounts" do

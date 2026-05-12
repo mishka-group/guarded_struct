@@ -4,7 +4,7 @@
   <img src="https://img.buymeacoffee.com/button-api/?text=Buy us coffee&emoji=☕&slug=mishkagroup&button_colour=FFDD00&font_colour=000000&font_family=Cookie&outline_colour=000000&coffee_colour=ffffff" alt="Buy Me A Coffee" height="50" width="210">
 </a>
 
-Build Elixir structs with validation, sanitization, nested sub-structs, conditional fields, pattern-keyed maps, JSON Schema generation, and an Ash extension. Built on [Spark](https://hex.pm/packages/spark).
+Build Elixir structs with validation, sanitization, nested sub-structs, conditional fields, pattern-keyed maps, and an Ash extension. Built on [Spark](https://hex.pm/packages/spark).
 
 ## What does it look like
 
@@ -68,7 +68,6 @@ Upgrading from `0.0.x`? See [`MIGRATION.md`](./MIGRATION.md). Existing code keep
 - **Pattern-keyed maps** (regex `field` names) for free-form keys with uniform validation
 - **i18n** for every error message via `GuardedStruct.Messages`
 - **Ash extension** to use the same DSL inside an `Ash.Resource`
-- **JSON Schema / TypeScript** export from any module
 - **Atom-attack safe** by default (regex field keys stay as strings)
 
 ## Core features
