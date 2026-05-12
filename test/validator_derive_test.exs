@@ -1,50 +1,11 @@
 defmodule GuardedStructTest.ValidatorDeriveTest do
   use ExUnit.Case, async: true
 
+  # TestAuthStruct lives in test/support/ as a shared fixture — used by
+  # this file AND test/global_test.exs.
+  alias GuardedStructTest.Support.TestAuthStruct
+
   ############# (▰˘◡˘▰) ValidatorDeriveTest GuardedStructTest Data (▰˘◡˘▰) ##############
-  defmodule TestAuthStruct do
-    use GuardedStruct
-
-    guardedstruct do
-      field(:action, String.t(), derives: "validate(not_empty)")
-
-      sub_field(:path, struct(), main_validator: {TestAuthStruct, :main_validator}) do
-        field(:role, String.t(), validator: {TestAuthStruct, :validator})
-        field(:custom_path, String.t(), derives: "validate(not_empty)")
-
-        sub_field(:rel, struct()) do
-          field(:social, String.t(), derives: "validate(not_empty)")
-        end
-      end
-
-      field(:changed, String.t(),
-        derives: "validate(not_empty)",
-        validator: {__MODULE__, :test_validator}
-      )
-    end
-
-    def test_validator(:changed, value) do
-      if is_binary(value),
-        do: {:ok, :changed, value <> "::Changed"},
-        else: {:error, :changed, "No, never"}
-    end
-
-    def validator(:role, value) do
-      if is_binary(value), do: {:ok, :role, value}, else: {:error, :role, "No, never"}
-    end
-
-    def validator(field, value) do
-      {:ok, field, value}
-    end
-
-    def main_validator(value) do
-      if Map.get(value, :changed) == 555_555 or Map.get(value, :action) == 25 do
-        {:error, %{message: "there is an Error", field: :global, action: :main_validator}}
-      else
-        {:ok, value}
-      end
-    end
-  end
 
   defmodule TestUserAuthStruct do
     use GuardedStruct
@@ -456,7 +417,7 @@ defmodule GuardedStructTest.ValidatorDeriveTest do
       TestAuthStruct.builder(%{changed: 1})
 
     {:ok,
-     %GuardedStructTest.ValidatorDeriveTest.TestAuthStruct{
+     %GuardedStructTest.Support.TestAuthStruct{
        changed: "https://github.com/mishka-group::Changed",
        path: nil,
        action: nil

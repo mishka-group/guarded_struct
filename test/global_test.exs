@@ -6,7 +6,7 @@
 defmodule GuardedStructTest.GlobalTest do
   use ExUnit.Case, async: true
   alias GuardedStruct.Derive.ValidationDerive
-  alias GuardedStructTest.ValidatorDeriveTest.TestAuthStruct
+  alias GuardedStructTest.Support.TestAuthStruct
 
   ############# (▰˘◡˘▰) GlobalTest GuardedStructTest Data (▰˘◡˘▰) ##############
   defmodule TestUserAuthStruct do
