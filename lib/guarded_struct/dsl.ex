@@ -65,10 +65,22 @@ defmodule GuardedStruct.Dsl do
     schema: [
       name: [type: :any, required: true],
       type: [type: :quoted, default: quote(do: map())],
+      enforce: [type: :boolean],
       default: [type: :quoted, default: Macro.escape(%{})],
       derives: [type: :string, default: "validate(map)"],
       derive: [type: :string],
       validator: [type: {:tuple, [:atom, :atom]}],
+      auto: [
+        type:
+          {:or,
+           [
+             {:tuple, [:atom, :atom]},
+             {:tuple, [:atom, :atom, :any]}
+           ]}
+      ],
+      from: [type: :string],
+      on: [type: :string],
+      domain: [type: :string],
       hint: [type: :string]
     ]
   }

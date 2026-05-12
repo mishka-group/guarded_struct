@@ -43,22 +43,24 @@ defmodule GuardedStructFixtures.DecoratedAllEntitiesTest do
       assert meta.__derive_ops__ == %{validate: [:string, {:min_len, 8}]}
     end
 
-    test "runtime: virtual_field value flows through; struct excludes it" do
-      # NOTE on virtual_field + derive: the decorator's payload is correctly
-      # injected (see the __fields__/0 test above), but the runtime drops
-      # virtual_field keys from the struct BEFORE run_derives/2 runs. So
-      # the validate(string, min_len=8) doesn't fire at runtime today.
-      # This test asserts the SHAPE: virtual_field is validated only by
-      # `main_validator/1` and any per-field `validator:` opt; its derive
-      # ops appear in __fields__/0 for introspection (e.g. JSON schema).
+    test "runtime: min_len=8 derive actually enforces on the virtual value" do
+      # virtual_field's `derives:` now fires at runtime (fixed via two-pass
+      # derive in Runtime — virtual fields are derived on the merged map
+      # BEFORE wrap drops them).
       assert {:ok, struct} =
                D.OnVirtualField.builder(%{keep: "x", password_confirmation: "longenough"})
 
+      # Virtual fields still don't appear on the final struct
       refute Map.has_key?(struct, :password_confirmation)
 
-      # main_validator/1 rejects non-binary confirmation; derive doesn't fire
-      assert {:error, _} =
-               D.OnVirtualField.builder(%{keep: "x", password_confirmation: nil})
+      # Short password (5 chars) rejected by the derive's min_len=8
+      assert {:error, errs} =
+               D.OnVirtualField.builder(%{keep: "x", password_confirmation: "short"})
+
+      assert Enum.any?(
+               errs,
+               &(&1[:field] == :password_confirmation and &1[:action] == :min_len)
+             )
     end
   end
 

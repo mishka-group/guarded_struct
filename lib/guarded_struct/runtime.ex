@@ -285,11 +285,28 @@ defmodule GuardedStruct.Runtime do
       {derive_errors, struct_value} =
         case run_main_validator(validator_attrs, module) do
           {:ok, after_main} ->
-            sv = wrap.(Map.merge(after_main, sub_field_data))
+            merged = Map.merge(after_main, sub_field_data)
 
-            case run_derives(sv, fields_meta) do
-              {:ok, derived} -> {[], derived}
-              {:error, errs} -> {errs, sv}
+            # Pass 1 — derive on the raw merged map for VIRTUAL fields only.
+            # Virtuals are dropped by `wrap.()`, so this is the one chance
+            # to validate them. Defaults aren't relevant here (virtuals
+            # don't get default-substituted through struct/2).
+            virtual_meta = Enum.filter(fields_meta, &(&1[:kind] == :virtual_field))
+
+            virtual_errs =
+              case run_derives(merged, virtual_meta) do
+                {:ok, _} -> []
+                {:error, errs} -> errs
+              end
+
+            # Pass 2 — wrap into struct (so struct/2 applies field defaults),
+            # then derive on the wrapped struct for NON-virtual fields.
+            sv = wrap.(merged)
+            non_virtual_meta = Enum.reject(fields_meta, &(&1[:kind] == :virtual_field))
+
+            case run_derives(sv, non_virtual_meta) do
+              {:ok, derived} -> {virtual_errs, derived}
+              {:error, errs} -> {virtual_errs ++ errs, sv}
             end
 
           {:error, errs} when is_list(errs) ->
