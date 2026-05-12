@@ -96,9 +96,7 @@ defmodule GuardedStructFixtures.MixedDecoratorInline do
         do: {:ok, attrs}
 
     def main_validator(_attrs),
-      do:
-        {:error,
-         [%{field: :virtual, action: :missing, message: "totp_a and totp_b required"}]}
+      do: {:error, [%{field: :virtual, action: :missing, message: "totp_a and totp_b required"}]}
   end
 
   # ----------------------------------------------------------------

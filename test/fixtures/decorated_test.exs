@@ -112,6 +112,7 @@ defmodule GuardedStructFixtures.DecoratedTest do
 
       # @derives "sanitize(strip_tags, trim) validate(string, not_empty, max_len=200)"
       title = find_field(fields, :title)
+
       assert title.derive ==
                "sanitize(strip_tags, trim) validate(string, not_empty, max_len=200)"
 
@@ -167,7 +168,8 @@ defmodule GuardedStructFixtures.DecoratedTest do
       for f <- Decorated.BlogPost.__fields__() do
         case f.derive do
           nil ->
-            assert f.__derive_ops__ == nil, "field #{inspect(f.name)} has nil derive but non-nil ops"
+            assert f.__derive_ops__ == nil,
+                   "field #{inspect(f.name)} has nil derive but non-nil ops"
 
           "" ->
             assert f.__derive_ops__ == nil

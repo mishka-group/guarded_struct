@@ -176,8 +176,12 @@ defmodule GuardedStructFixtures.DynamicFieldFullOptsTest do
 
       guardedstruct do
         field(:id, String.t(), enforce: true)
-        field(:account_type, String.t(), enforce: true,
-          derives: "validate(enum=String[free::pro::enterprise])")
+
+        field(:account_type, String.t(),
+          enforce: true,
+          derives: "validate(enum=String[free::pro::enterprise])"
+        )
+
         field(:trace_data, map(), derives: "validate(map)")
 
         dynamic_field(:metadata,

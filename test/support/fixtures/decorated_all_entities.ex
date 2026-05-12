@@ -171,20 +171,25 @@ defmodule GuardedStructFixtures.DecoratedAllEntities do
 
     guardedstruct do
       @derives "validate(string, max_len=10)"
-      field(:top, String.t())                                     # level 1
+      # level 1
+      field(:top, String.t())
 
       @derives "validate(map)"
-      sub_field(:l1, struct()) do                                 # level 1 on sub_field
+      # level 1 on sub_field
+      sub_field(:l1, struct()) do
         @derives "validate(string, max_len=20)"
-        field(:tag, String.t())                                   # level 2
+        # level 2
+        field(:tag, String.t())
 
         sub_field(:l2, struct()) do
           @derives "validate(string, max_len=30)"
-          field(:tag, String.t())                                 # level 3
+          # level 3
+          field(:tag, String.t())
 
           sub_field(:l3, struct()) do
             @derives "validate(string, max_len=40)"
-            field(:tag, String.t())                               # level 4
+            # level 4
+            field(:tag, String.t())
           end
         end
       end
@@ -237,8 +242,6 @@ defmodule GuardedStructFixtures.DecoratedAllEntities do
       do: {:ok, attrs}
 
     def main_validator(_),
-      do:
-        {:error,
-         [%{field: :totp, action: :missing, message: "totp required"}]}
+      do: {:error, [%{field: :totp, action: :missing, message: "totp required"}]}
   end
 end

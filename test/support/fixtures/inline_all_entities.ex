@@ -45,18 +45,14 @@ defmodule GuardedStructFixtures.InlineAllEntities do
 
     guardedstruct do
       field(:keep, String.t(), enforce: true)
-      virtual_field(:password_confirmation, String.t(),
-        derives: "validate(string, min_len=8)"
-      )
+      virtual_field(:password_confirmation, String.t(), derives: "validate(string, min_len=8)")
     end
 
     def main_validator(%{password_confirmation: pw} = attrs) when is_binary(pw),
       do: {:ok, attrs}
 
     def main_validator(_),
-      do:
-        {:error,
-         [%{field: :password_confirmation, action: :missing, message: "required"}]}
+      do: {:error, [%{field: :password_confirmation, action: :missing, message: "required"}]}
   end
 
   # ----------------------------------------------------------------
