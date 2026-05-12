@@ -1,520 +1,223 @@
-# `guarded_struct` v0.1.0 — what's new
+# `guarded_struct` v0.1.0 — what's new (focused review)
 
-This document covers **only what changed or was added** in `0.1.0` compared
-to the `0.0.x` macro-based line. Pre-existing features (`field`, `sub_field`,
-`conditional_field`, the derive op registry, `builder/1`, `keys/0`,
-`__information__/0`, the `Messages` i18n backend, `Helper.Extra`) are
-unchanged in surface and are not re-documented here.
+This is the **post-review** version of the options doc. The earlier, more
+exhaustive version covered every new feature; we've since locked the
+fixture-tested features in via dedicated tests under `test/support/fixtures/`
++ `test/fixtures/`. What remains here is the surface that hasn't been
+fixture-tested — primarily **generators** (schema emission, scaffolders,
+installer), config-level switches, tooling, and dep changes.
 
-Each entry: **what it is** · **where it lives** · **real example**.
+For everything else (DSL features, runtime behaviors, the `derives:` engine,
+custom extensions, etc.) see the per-fixture test files — each is a
+self-contained, asserted spec of one feature area:
 
----
-
-## 1 · Spark DSL rewrite (architecture)
-
-The whole macro core was replaced with a `Spark.Dsl.Extension`. Public API
-is unchanged — `use GuardedStruct`, `guardedstruct opts do … end`, `field`,
-`sub_field`, `conditional_field`, `builder/1` all work identically.
-
-**Concrete user-facing wins:**
-
-- Editor autocomplete inside `guardedstruct do … end` (closes **#1**) via
-  `Spark.ElixirSense.Plugin` — free, no setup.
-- Compile-time errors now have file:line:column via `Spark.Error.DslError`
-  (was: stack-traces pointing at macro internals).
-- All derive strings, `from:`/`on:` paths, and `domain:` expressions are
-  parsed **once at compile time**, not on every `builder/1` call.
-- `enum=Map[…]` / `enum=Tuple[…]` / `equal=Map::…` operands pre-evaluated
-  at compile time → zero `Code.eval_string/1` calls on the runtime hot path.
-
-> Files: `lib/guarded_struct/dsl.ex`, all of `lib/guarded_struct/transformers/`,
-> `lib/guarded_struct/verifiers/`.
-
----
-
-## 2 · New section option — `jason: true`
-
-> Schema: `lib/guarded_struct/dsl.ex` · injection: `lib/guarded_struct.ex:71`.
-> Tests: `test/jason_encoder_test.exs`.
-
-Opt-in auto-emission of `@derive Jason.Encoder` for the struct.
-
-```elixir
-defmodule Order do
-  use GuardedStruct
-  guardedstruct jason: true do
-    field :id,    String.t(), enforce: true
-    field :total, integer(),  enforce: true
-  end
-end
-
-{:ok, o} = Order.builder(%{id: "abc", total: 99})
-Jason.encode!(o)   # => ~s({"id":"abc","total":99})
+```
+test/support/fixtures/
+├── forms.ex                       → virtual_field + validator transform + main_validator + jason
+├── cross_field.ex                 → from / on / auto / domain + enforce-cascade
+├── decorated.ex                   → @derives decorator
+├── decorated_all_entities.ex      → @derives on every entity type at every depth
+├── inline_all_entities.ex         → inline derives: on every entity type at every depth
+├── mixed_decorator_inline.ex      → mixing both forms
+├── conditionals.ex                → nested conditional_field (Block + 7-level Document)
+├── dynamic.ex                     → dynamic_field + pattern-keyed map
+├── records.ex                     → Erlang Record support
+├── custom_derives.ex              → Derive.Extension (custom ops)
+└── showcase.ex                    → integration showcase (jason, Diff, Validate, Errors, Info)
 ```
 
----
+What lives in this doc:
 
-## 3 · `derives:` is the canonical option name (soft deprecation of `derive:`)
-
-> Resolver: `lib/guarded_struct/transformers/parse_derive.ex` (`resolve/2`).
-> Tests: `test/derives_deprecation_test.exs`.
-
-The plural form `derives:` is now canonical. `derive:` still works but
-emits a `Spark.Warning.warn_deprecated/4` warning at compile time.
-
-| Form | Status |
-|---|---|
-| `derives: "..."` | ✅ canonical |
-| `derive: "..."` | ⚠️ soft-deprecated, removed in a future release |
-| Both on one field | `derives:` wins, no warning |
-
-```elixir
-# new
-field :email, String.t(), derives: "sanitize(trim) validate(email_r)"
-
-# still works, but warns at compile time
-field :email, String.t(), derive: "sanitize(trim) validate(email_r)"
-```
+1. JSON Schema / OpenAPI / TypeScript generator
+2. Mix tasks (installer + scaffolder + schema emitter)
+3. Compile-time strict modes (config-level switches)
+4. Application env / configuration keys
+5. Protocol consolidation tweak
+6. Tooling integration (`mix lint`, cheat sheets, LiveBook, autocomplete)
+7. Dependencies added
+8. Bug-fix highlights worth flagging on the release notes
 
 ---
 
-## 4 · `@derive_rules` / `@derives` decorator
-
-> AST walker: `lib/guarded_struct.ex` (`transform_derive_rules/1`).
-> Tests: `test/derive_rules_decorator_test.exs`.
-
-One-shot decorator that injects `derives:` into the **immediately-following**
-`field` / `sub_field` / `conditional_field`. Cleaner than inline when the
-rule is long. Consumed only by the next field, like `@doc`.
-
-```elixir
-guardedstruct do
-  @derive_rules "validate(string, max_len=10)"
-  field :name, String.t()
-
-  @derives "validate(integer, min_len=0)"
-  field :age, integer()
-
-  field :plain, String.t()                 # not decorated
-end
-```
-
-If both the decorator and an inline `derives:` are present, the inline
-wins (decorator is silently skipped).
-
----
-
-## 5 · New entity — `virtual_field` (closes #5)
-
-> File: `lib/guarded_struct/dsl/virtual_field.ex`.
-> Tests: `test/virtual_field_test.exs`.
-
-Validated through the full pipeline but **excluded from `defstruct`**.
-Useful for `password_confirm`-style values consumed only by `auto:` or
-`main_validator/1`.
-
-```elixir
-guardedstruct do
-  field :password,        String.t(), enforce: true
-  field :hashed_password, String.t(),
-    auto: {MyApp.Auth, :hash, :virtual_password}
-
-  virtual_field :virtual_password, String.t(),
-    derives: "validate(string, min_len=8)"
-end
-```
-
-`:virtual_password` validates, feeds `auto:`, then disappears — never
-in `%User{}`.
-
----
-
-## 6 · New entity — `dynamic_field`
-
-> Schema: `lib/guarded_struct/dsl.ex` (`@dynamic_field`).
-> Tests: `test/virtual_field_test.exs` (the `WithDynamic` block).
-
-Shorthand for a free-form map field. Defaults to `%{}`, type `map()`,
-`derives: "validate(map)"` — all overridable.
-
-```elixir
-guardedstruct do
-  field :id, String.t(), enforce: true
-  dynamic_field :metadata     # equivalent to map() with default %{}
-end
-
-Doc.builder(%{id: "x", metadata: %{any: "shape", you: "want"}})
-```
-
-Keys at runtime are unrestricted (no atom-table-exhaustion DoS).
-
----
-
-## 7 · Pattern-keyed map fields — regex `field` names (closes #11)
-
-> Codegen: `lib/guarded_struct/transformers/codegen.ex` (Regex branch).
-> Tests: `test/pattern_map_test.exs`.
-
-A `field` whose first arg is a regex declares a pattern-keyed map. The
-module's `builder/1` returns a **plain validated map** (no struct, since
-Elixir struct keys are fixed at compile time).
-
-```elixir
-defmodule ShardsMap do
-  use GuardedStruct
-  guardedstruct do
-    field ~r/^shard_\d+$/, struct(),
-      struct: Shard,
-      derives: "validate(map, not_empty)"
-  end
-end
-
-ShardsMap.builder(%{
-  "shard_1" => %{node: "10.0.0.1"},
-  "shard_2" => %{node: "10.0.0.2"}
-})
-# => {:ok, %{"shard_1" => %Shard{...}, "shard_2" => %Shard{...}}}
-```
-
-- Returns a plain map, not a struct.
-- Keys stay as strings (atom-table-exhaustion safe).
-- Mixing atom-keyed and regex-keyed `field`s in one `guardedstruct`
-  raises `Spark.Error.DslError` at compile time.
-
----
-
-## 8 · Nested `conditional_field` (closes #7, #8, #25)
-
-> Wiring: `recursive_as: :conditional_fields` in `lib/guarded_struct/dsl.ex`.
-> Tests: `test/nested_conditional_field_test.exs`, `test/nested_sub_field_test.exs`.
-
-The headline 0.0.x bug: `conditional_field` inside `conditional_field`
-used to raise `unsupported_conditional_field` at parse time. Now it
-works to arbitrary depth.
-
-```elixir
-guardedstruct do
-  conditional_field :payment, any() do
-    sub_field :payment, struct() do
-      conditional_field :detail, any() do            # nested!
-        field :detail, String.t(), hint: "string variant"
-        sub_field :detail, struct(), hint: "map variant" do
-          field :id, String.t()
-        end
-      end
-    end
-  end
-end
-```
-
-`__information__/0`'s `conditional_keys` is now populated correctly
-(was always `[]` in 0.0.x — fixed in 0.1.0).
-
----
-
-## 9 · New validator op — `record=Tag` (closes #6)
-
-> File: `lib/guarded_struct/derive/validation_derive.ex`.
-> Tests: `test/record_test.exs`.
-
-Validates Erlang Records / Elixir `Record.defrecord/2` tagged tuples.
-
-```elixir
-require Record
-Record.defrecord(:user, name: nil, age: nil)
-
-defmodule Wrapper do
-  use GuardedStruct
-  guardedstruct do
-    field :u, :tuple, derives: "validate(record=user)"
-  end
-end
-
-Wrapper.builder(%{u: user(name: "Alice", age: 30)})
-# => {:ok, %Wrapper{u: {:user, "Alice", 30}}}
-```
-
----
-
-## 10 · `GuardedStruct.Validate` — schema without `builder/1` (closes #2)
-
-> File: `lib/guarded_struct/validate.ex`.
-> Tests: `test/validate_test.exs`.
-
-Three-tier API for using a schema without going through the full builder.
-
-| Function | One-line description |
-|---|---|
-| `Validate.run/2` | Apply a derive op-string to one value, no module needed |
-| `Validate.field/4` | Validate one named field of a `guardedstruct` module; modes `:strict` / `:isolated`; pass `context:` for cross-field deps |
-| `Validate.partial/2` | Validate a subset of fields — missing fields skipped (no enforce_keys check) |
-
-```elixir
-GuardedStruct.Validate.run("validate(string, email_r)", "x@y.io")
-# => {:ok, "x@y.io"}
-
-GuardedStruct.Validate.field(User, :email, "x@y.io")
-# => {:ok, "x@y.io"}
-
-GuardedStruct.Validate.field(User, :child_email, "p@x.io",
-  context: %{account_type: "personal"})
-# resolves cross-field on:/domain: deps from context
-
-GuardedStruct.Validate.field(User, :child_email, "p@x.io", mode: :isolated)
-# skips cross-field deps entirely
-
-GuardedStruct.Validate.partial(User, %{email: "x@y.io"})
-# => {:ok, %{email: "x@y.io"}} — missing `:name` doesn't error
-```
-
----
-
-## 11 · `GuardedStruct.Diff` — field-level diff/patch
-
-> File: `lib/guarded_struct/diff.ex`.
-> Tests: `test/diff_test.exs`.
-
-| Function | One-line description |
-|---|---|
-| `Diff.diff/2` | Field-by-field change map, recurses into sub_field structs |
-| `Diff.apply/2` | Apply a diff back onto a struct |
-| `Diff.equal?/2` | Field-by-field equality (short-circuits) |
-
-```elixir
-a = %User{name: "Alice", age: 30}
-b = %User{name: "Alice", age: 31}
-
-GuardedStruct.Diff.diff(a, b)
-# => %{age: {:changed, 30, 31}}
-
-GuardedStruct.Diff.apply(a, %{age: {:changed, 30, 31}})
-# => %User{name: "Alice", age: 31}
-```
-
----
-
-## 12 · `GuardedStruct.Errors` — Splode error wrapper
+## 1 · Schema generators — `GuardedStruct.Schema`
 
 > Files:
-> - `lib/guarded_struct/errors.ex` — `Splode` root class
-> - `lib/guarded_struct/errors/invalid.ex`
-> - `lib/guarded_struct/errors/validation.ex`
-> - `lib/guarded_struct/errors/unknown.ex`
+> - `lib/guarded_struct/schema.ex`
+> - `lib/mix/tasks/guarded_struct.gen.schema.ex` (Igniter mix task wrapper)
 >
-> Tests: `test/errors_test.exs`.
-
-Opt-in conversion of `builder/1`'s `{:error, [...]}` list into typed
-Splode exceptions with `traverse_errors`, `set_path`, JSON-encodable
-shape.
-
-```elixir
-case User.builder(input) do
-  {:error, errs} ->
-    class = GuardedStruct.Errors.from_tuple(errs)
-    GuardedStruct.Errors.traverse_errors(class, &Exception.message/1)
-  ok -> ok
-end
-```
-
----
-
-## 13 · `GuardedStruct.Schema` — JSON Schema / OpenAPI / TypeScript (closes #3)
-
-> File: `lib/guarded_struct/schema.ex`.
 > Tests: `test/schema_test.exs`.
+> Closes issue **#3**.
+
+Emit a JSON Schema / OpenAPI envelope / TypeScript declaration from any
+`GuardedStruct` module. Useful for:
+
+- API spec generation (front-end TypeScript types, OpenAPI docs)
+- JSON Schema validation outside the Elixir runtime
+- Auto-doc generation for partner integrations
 
 | Function | Output |
 |---|---|
 | `Schema.json_schema/1` | JSON Schema 2020-12 map |
 | `Schema.openapi/1` | OpenAPI 3.1 `components.schemas` envelope |
-| `Schema.typescript/1` | TypeScript `interface` source |
-
-```elixir
-GuardedStruct.Schema.json_schema(User)
-# => %{"$schema" => "...", "type" => "object", "properties" => ..., "required" => [...]}
-
-GuardedStruct.Schema.openapi([User, Order])
-# => %{"openapi" => "3.1.0", "components" => %{"schemas" => %{"User" => ..., "Order" => ...}}}
-
-GuardedStruct.Schema.typescript(User)
-# => "export interface User {\n  name: string;\n  age?: number;\n}\n"
-```
-
----
-
-## 14 · `GuardedStruct.AshResource` — Ash extension
-
-> Files:
-> - `lib/guarded_struct/ash_resource.ex`
-> - `lib/guarded_struct/ash_resource/info.ex`
-> - `lib/guarded_struct/transformers/generate_ash_validator.ex`
->
-> Tests: `test/ash_resource_test.exs`.
-
-Bolts the `guardedstruct do … end` block onto an Ash resource without
-redefining its `defstruct`. Exposes three hooks:
-
-| Function | One-line description |
-|---|---|
-| `__guarded_validate__/1` | Run the validate pipeline on input attrs |
-| `__guarded_information__/0` | Same metadata as standalone, separate namespace |
-| `__guarded_fields__/0` | Internal field-meta list (Ash namespace) |
+| `Schema.typescript/1` | TypeScript `interface` declaration |
 
 ```elixir
 defmodule MyApp.User do
-  use Ash.Resource, domain: MyApp.Domain,
-    extensions: [GuardedStruct.AshResource]
-
-  attributes do
-    uuid_primary_key :id
-    attribute :email, :string, allow_nil?: false
-  end
-
-  guardedstruct do
-    field :email, :string,
-      derives: "sanitize(trim, downcase) validate(string, email_r)"
-  end
-end
-
-MyApp.User.__guarded_validate__(%{email: "  ALICE@X.IO  "})
-# => {:ok, %{email: "alice@x.io"}}
-```
-
----
-
-## 15 · `GuardedStruct.Derive.Extension` — custom validators / sanitizers
-
-> File: `lib/guarded_struct/derive/extension.ex`.
-> Tests: `test/derive_extension_test.exs`.
-
-Spark-native DSL for declaring custom `validate(my_op)` / `sanitize(my_op)`
-ops. Replaces the legacy `Application.put_env(:guarded_struct, :validate_derive, …)`
-plugin path (which still works for back-compat).
-
-```elixir
-defmodule MyApp.Derives do
-  use GuardedStruct.Derive.Extension
-
-  validator :slug, fn s ->
-    is_binary(s) and Regex.match?(~r/^[a-z0-9-]+$/, s)
-  end
-
-  sanitizer :slugify, fn s when is_binary(s) ->
-    s |> String.downcase() |> String.replace(~r/[^a-z0-9-]+/u, "-")
-  end
-end
-
-# config/config.exs
-config :guarded_struct, derive_extensions: [MyApp.Derives]
-
-# any module:
-field :slug, String.t(), derives: "sanitize(slugify) validate(slug)"
-```
-
----
-
-## 16 · `GuardedStruct.Info` — Spark info accessors
-
-> File: `lib/guarded_struct/info.ex`.
-
-Typed accessors over compiled DSL state.
-
-| Function | One-line description |
-|---|---|
-| `Info.fields/1` | Spark-derived list of all field entities |
-| `Info.enforce_keys/1` | Required field names for a module |
-| `Info.field/2` | Look up one field's meta by name |
-| `Info.field?/2` | `true`/`false` — does this field exist? |
-
-```elixir
-GuardedStruct.Info.field?(User, :email)            # => true
-GuardedStruct.Info.field(User, :email).derives     # => "validate(email_r)"
-```
-
----
-
-## 17 · Telemetry events on `builder/1`
-
-> Emission: `lib/guarded_struct/runtime.ex` (`with_telemetry/2`).
-> Tests: `test/telemetry_test.exs`.
-
-| Event | Measurements | Metadata |
-|---|---|---|
-| `[:guarded_struct, :builder, :start]` | `system_time` | `module` |
-| `[:guarded_struct, :builder, :stop]` | `duration` | `module, result, error_count` |
-| `[:guarded_struct, :builder, :exception]` | `duration` | `module, kind, reason, stacktrace` |
-
-Only top-level `builder/1` emits — nested sub_field builds don't, so
-you don't drown in events.
-
-```elixir
-:telemetry.attach(
-  "log-builds",
-  [:guarded_struct, :builder, :stop],
-  &MyApp.Logger.on_build/4,
-  nil
-)
-```
-
----
-
-## 18 · Generated `example/0` REPL helper
-
-> Emission: `lib/guarded_struct/transformers/codegen.ex` (`example_value_ast/2`).
-> Tests: `test/example_helper_test.exs`.
-
-Every `guardedstruct` module gets a free `example/0` that returns a
-struct using `default:` values + type-based fallbacks (`String.t() → ""`,
-`integer() → 0`, etc.). Recurses for `sub_field`s. Pattern-keyed map
-modules emit `def example, do: %{}`.
-
-```elixir
-defmodule User do
   use GuardedStruct
   guardedstruct do
-    field :name, String.t(), default: "Anon"
-    field :age,  integer(),  default: 0
-    field :email, String.t()
-    sub_field :auth, struct() do
-      field :role, String.t(), default: "user"
-    end
+    field :name,  String.t(), enforce: true, derives: "validate(string, max_len=80)"
+    field :email, String.t(), enforce: true, derives: "validate(email_r)"
+    field :age,   integer(),                  derives: "validate(integer)"
   end
 end
 
-User.example()
-# => %User{name: "Anon", age: 0, email: "", auth: %User.Auth{role: "user"}}
+GuardedStruct.Schema.json_schema(MyApp.User)
+# => %{
+#      "$schema" => "https://json-schema.org/draft/2020-12/schema",
+#      "title"   => "MyApp.User",
+#      "type"    => "object",
+#      "properties" => %{
+#        "name"  => %{"type" => "string", "maxLength" => 80},
+#        "email" => %{"type" => "string", "format" => "email"},
+#        "age"   => %{"type" => "integer"}
+#      },
+#      "required" => ["name", "email"]
+#    }
+
+GuardedStruct.Schema.openapi([MyApp.User, MyApp.Order])
+# => %{
+#      "openapi" => "3.1.0",
+#      "info"    => %{"title" => "GuardedStruct schemas", "version" => "1.0.0"},
+#      "components" => %{
+#        "schemas" => %{
+#          "MyApp_User"  => %{...},
+#          "MyApp_Order" => %{...}
+#        }
+#      }
+#    }
+
+GuardedStruct.Schema.typescript(MyApp.User)
+# => "export interface MyAppUser {\n  name: string;\n  email: string;\n  age?: number;\n}\n"
 ```
 
-Useful in iex/livebook and as a fixture in tests.
+Mapping rules (op → schema constraint):
+
+| Derive op | JSON Schema | TypeScript |
+|---|---|---|
+| `validate(string)` | `"type": "string"` | `string` |
+| `validate(integer)` | `"type": "integer"` | `number` |
+| `validate(float)` / `validate(number)` | `"type": "number"` | `number` |
+| `validate(boolean)` | `"type": "boolean"` | `boolean` |
+| `validate(map)` | `"type": "object"` | `Record<string, any>` |
+| `validate(list)` | `"type": "array"` | `any[]` |
+| `validate(max_len=N)` | `maxLength: N` (string) / `maxItems: N` (array) / `maximum: N` (number) | — |
+| `validate(min_len=N)` | similar `min*` constraints | — |
+| `validate(url)` | `"format": "uri"` | — |
+| `validate(uuid)` | `"format": "uuid"` | — |
+| `validate(email_r)` / `email` | `"format": "email"` | — |
+| `validate(date)` | `"format": "date"` | — |
+| `validate(datetime)` | `"format": "date-time"` | — |
+| `validate(ipv4)` | `"format": "ipv4"` | — |
+| `validate(regex=...)` | `"pattern": "..."` | — |
+| `validate(enum=String[a::b])` | `"enum": ["a", "b"]` | `"a" \| "b"` |
+| `validate(enum=Integer[1::2])` | `"enum": [1, 2]` | `number` |
+| `enforce: true` | field name in `"required"` | non-optional |
+| `default: v` | `"default": v` | — |
+
+For sub_fields: schema recursively walks the auto-generated submodule and
+inlines it. For `structs: true` sub_fields, emits `"type": "array"` with
+`items` set to the submodule's schema.
 
 ---
 
-## 19 · Compile-time strict modes (opt-in)
+## 2 · Mix tasks (Igniter-based)
 
-> Config: read by transformers at compile time.
+> Under `lib/mix/tasks/`. All gracefully degrade if `:igniter` isn't loaded.
 
-### `:strict_derive_ops` — typo suggestion + unknown-op rejection
+| Task | One-line description | Test |
+|---|---|---|
+| `mix guarded_struct.install` | Add dep, register `lint` alias, seed `derive_extensions: []` | `test/mix/tasks/guarded_struct.install_test.exs` |
+| `mix guarded_struct.gen.struct` | Scaffold a starter module from CLI; `name!:type` syntax for enforce | `test/mix/tasks/guarded_struct.gen.struct_test.exs` |
+| `mix guarded_struct.gen.schema` | Emit JSON Schema / TypeScript / OpenAPI for a module | `test/mix/tasks/guarded_struct.gen.schema_test.exs` |
 
-> File: `lib/guarded_struct/transformers/verify_derive_ops.ex`.
-> Tests: `test/verify_derive_ops_test.exs`.
+### 2a · `mix guarded_struct.install`
 
-Unknown derive ops fail with `Spark.Error.DslError` + a "did you mean…"
-suggestion via `String.jaro_distance/2` (threshold 0.7, top-3).
-Automatically skipped if a `derive_extensions:` plugin is registered.
+```sh
+# Bare install — adds dep + lint alias + seeds config :guarded_struct, derive_extensions: []
+mix igniter.install guarded_struct
+
+# With strict-mode flags — turns on compile-time op-name validation
+mix igniter.install guarded_struct --strict          # strict_derive_ops: true
+mix igniter.install guarded_struct --strict-paths    # strict_core_key_paths: true
+```
+
+### 2b · `mix guarded_struct.gen.struct`
+
+```sh
+mix guarded_struct.gen.struct MyApp.User name!:string age:integer email:email
+# => creates lib/my_app/user.ex with:
+#    field :name,  String.t(), enforce: true, derives: "validate(string)"
+#    field :age,   integer(),                derives: "validate(integer)"
+#    field :email, String.t(),               derives: "validate(email_r)"
+```
+
+The `name!:type` syntax (trailing `!`) marks the field `enforce: true`.
+
+Supported type tokens: `string`, `integer`, `float`, `boolean`, `uuid`,
+`email`, `url`, `date`, `datetime`, `map`, `list`, `any`. Each maps to a
+`{type, derives:}` pair.
+
+### 2c · `mix guarded_struct.gen.schema`
+
+```sh
+# JSON Schema (default format) printed to stdout
+mix guarded_struct.gen.schema MyApp.User
+
+# Write to file
+mix guarded_struct.gen.schema MyApp.User --format=json --out=priv/user.json
+
+# TypeScript interface
+mix guarded_struct.gen.schema MyApp.User --format=typescript --out=apps/web/types/user.ts
+
+# OpenAPI 3.1 components envelope
+mix guarded_struct.gen.schema MyApp.User --format=openapi --out=priv/openapi/user.json
+```
+
+---
+
+## 3 · Compile-time strict modes (opt-in config switches)
+
+> Application-env switches, off by default for back-compat.
+
+Two opt-in compile-time checks that turn silent runtime failures into
+loud compile errors:
+
+### `:strict_derive_ops`
+
+> File: `lib/guarded_struct/transformers/verify_derive_ops.ex`
+> Tests: `test/verify_derive_ops_test.exs`
+
+Catches typos in `derives:` op names at compile time, with a
+"did-you-mean" suggestion via `String.jaro_distance/2`. Auto-skipped if
+a `derive_extensions:` plugin is configured (those can declare any
+op name).
 
 ```elixir
 # config/config.exs
 config :guarded_struct, strict_derive_ops: true
 
-field :age, integer(), derives: "validate(intger)"   # typo
+# Then this becomes a compile error:
+field :age, integer(), derives: "validate(intger)"
 # ** (Spark.Error.DslError) unknown derive op(s) on field :age: validate=:intger
 #    Did you mean `:integer`?
 ```
 
-### `:strict_core_key_paths` — `from:` / `on:` path verification
+### `:strict_core_key_paths`
 
-> File: `lib/guarded_struct/transformers/verify_core_key_paths.ex`.
-> Tests: `test/verify_core_key_paths_test.exs`.
+> File: `lib/guarded_struct/transformers/verify_core_key_paths.ex`
+> Tests: `test/verify_core_key_paths_test.exs`
+
+Verifies `from:` / `on:` paths reference real fields at compile time.
 
 ```elixir
 config :guarded_struct, strict_core_key_paths: true
@@ -526,80 +229,14 @@ field :dest, String.t(), from: "root::nope"
 
 ---
 
-## 20 · Compile-time param-type validation
-
-> File: `lib/guarded_struct/derive/op_param_validator.ex`.
-> Tests: `test/op_param_validator_test.exs`.
-
-Catches malformed parameterised derive ops at compile time, not at the
-first failing call.
-
-```elixir
-field :name, String.t(), derives: "validate(max_len=foo)"
-# ** (Spark.Error.DslError) `:max_len` expects a non-negative integer,
-#    got "foo" on field :name.
-```
-
-Catches: `max_len`, `min_len`, `regex`, `enum`, `equal`, `record`, `tag`,
-`custom` shape errors.
-
----
-
-## 21 · Cycle detection for `struct:` / `structs:`
-
-> File: `lib/guarded_struct/verifiers/verify_no_struct_cycles.ex`.
-> Tests: `test/verify_no_struct_cycles_test.exs`.
-
-Post-compile verifier that walks transitive `struct:` / `structs:`
-references and rejects self-cycles or A→B→A loops.
-
-```elixir
-defmodule A do
-  use GuardedStruct
-  guardedstruct do
-    field :b, struct(), struct: B
-  end
-end
-defmodule B do
-  use GuardedStruct
-  guardedstruct do
-    field :a, struct(), struct: A   # cycle
-  end
-end
-# ** (Spark.Error.DslError) struct cycle detected: A → B → A
-```
-
----
-
-## 22 · Mix tasks (Igniter-based)
-
-> Under `lib/mix/tasks/`. All gracefully degrade if `:igniter` isn't loaded.
-
-| Task | One-line description |
-|---|---|
-| `mix guarded_struct.install` | Add dep, register `lint` alias, seed `derive_extensions: []`; flags `--strict`, `--strict-paths` |
-| `mix guarded_struct.gen.struct` | Scaffold a starter module from CLI; `name!:type` syntax for enforce |
-| `mix guarded_struct.gen.schema` | Emit JSON Schema / TypeScript / OpenAPI for a module |
-
-```sh
-mix igniter.install guarded_struct --strict --strict-paths
-
-mix guarded_struct.gen.struct MyApp.User name!:string age:integer email:email
-# => emits lib/my_app/user.ex with fields + sensible `derives:` defaults
-
-mix guarded_struct.gen.schema MyApp.User --format=openapi --out=priv/api.json
-```
-
----
-
-## 23 · Application env / configuration keys
+## 4 · Application env / configuration keys
 
 | Key | One-line description |
 |---|---|
 | `derive_extensions: [Mod, ...]` | Custom-op modules registered via `Derive.Extension` |
 | `strict_derive_ops: true` | Reject unknown derive ops at compile time |
 | `strict_core_key_paths: true` | Reject unresolved `from:` / `on:` paths at compile time |
-| `message_backend: Mod` | i18n backend module (existed in 0.0.4, full coverage restored) |
+| `message_backend: Mod` | i18n backend module (Gettext, Cldr, or custom) |
 
 ```elixir
 # config/config.exs
@@ -610,31 +247,37 @@ config :guarded_struct,
   message_backend: MyApp.GuardedStructMessages
 ```
 
----
-
-## 24 · Parser hardening (bug fix)
-
-> File: `lib/guarded_struct/derive/parser.ex`.
-> Caught by `test/parser_property_test.exs`.
-
-Property-based test caught a real crash — invalid UTF-8 inputs raised
-`UnicodeConversionError`. Fixed by:
-- `:binary.bin_to_list/1` instead of `String.to_charlist/1`
-- Top-level `rescue _ -> nil` honouring the lenient parser contract
-- `Code.string_to_quoted/2` called with `emit_warnings: false` for fuzz inputs
+Per-module override (via `use GuardedStruct, derive_extensions: [...]`)
+is fixture-tested in `test/derive_extensions_per_module_test.exs`.
 
 ---
 
-## 25 · Protocol consolidation tweak
+## 5 · Protocol consolidation tweak
 
 > File: `mix.exs` — `consolidate_protocols: Mix.env() != :test`.
 
-Lets test fixtures register `Jason.Encoder` implementations after the
-protocol set is normally frozen, so `jason: true` actually works in tests.
+Disables protocol consolidation in the test env so test fixtures can
+register `Jason.Encoder` implementations after the protocol set would
+otherwise be frozen. Required for the `jason: true` opt to work in tests.
 
 ---
 
-## 26 · Dependencies added
+## 6 · Tooling integration
+
+| Tool | One-line description |
+|---|---|
+| `mix lint` alias | Chains `mix spark.formatter` then `mix format` (seeded by installer) |
+| `mix spark.formatter` | Works without `--extensions` flag — wired via mix alias |
+| `mix spark.cheat_sheets` | Auto-generates `documentation/dsls/*.md` cheat sheets |
+| `documentation/dsls/DSL-GuardedStruct.md` | Generated DSL cheat sheet |
+| `documentation/dsls/DSL-GuardedStruct.AshResource.md` | Generated Ash-extension cheat sheet |
+| `guidance/guarded-struct.livemd` | LiveBook tour with a "What's new in 0.1.0" section |
+| `.formatter.exs` | `import_deps: [:spark]` so the `guardedstruct` block formats correctly |
+| ElixirSense / Lexical autocomplete | Free via `Spark.ElixirSense.Plugin` (closes **#1**) |
+
+---
+
+## 7 · Dependencies added
 
 > File: `mix.exs`.
 
@@ -643,7 +286,7 @@ protocol set is normally frozen, so `jason: true` actually works in tests.
 | `{:spark, "~> 2.7"}` | runtime | DSL extension framework |
 | `{:splode, "~> 0.3"}` | runtime | Error class hierarchy |
 | `{:telemetry, "~> 1.0"}` | runtime | Builder events |
-| `{:igniter, "~> 0.7"}` | dev/test | Installer + scaffolder mix tasks |
+| `{:igniter, "~> 0.8.0"}` | dev/test | Installer + scaffolder mix tasks |
 | `{:sourceror, "~> 1.7"}` | dev/test | Source-mapping for installer |
 | `{:stream_data, "~> 1.0"}` | test | Property-based parser tests |
 | `{:jason, "~> 1.0"}` | test | `jason: true` opt-in test coverage |
@@ -653,70 +296,19 @@ Optional deps unchanged: `html_sanitize_ex`, `email_checker`, `ex_url`,
 
 ---
 
-## 27 · Tooling integration
+## 8 · Bug-fix highlights (release-note material)
 
-| Tool | One-line description |
-|---|---|
-| `mix lint` alias | Chains `mix spark.formatter` then `mix format` (seeded by installer) |
-| `mix spark.formatter` | Works without `--extensions` flag — wired via mix alias |
-| `mix spark.cheat_sheets` | Auto-generates `documentation/dsls/*.md` cheat sheets |
-| `documentation/dsls/DSL-GuardedStruct.md` | Generated DSL cheat sheet |
-| `documentation/dsls/DSL-GuardedStruct.AshResource.md` | Generated Ash-extension cheat sheet |
-| `guidance/guarded-struct.livemd` | LiveBook tour with "What's new in 0.1.0" section |
-| ElixirSense / Lexical autocomplete | Free via `Spark.ElixirSense.Plugin` (closes **#1**) |
-
----
-
-## 28 · Bug fixes worth flagging
-
-- `__information__/0`'s `conditional_keys` is now populated correctly
-  (was always `[]` in 0.0.x).
+- **`__information__/0`** now populates `conditional_keys` with the actual
+  `conditional_field` names (was always `[]` in 0.0.x).
 - All 14 orchestration-layer `Messages` callbacks (`required_fields`,
   `authorized_fields`, `builder`, `check_dependent_keys`, etc.) are
   reachable again — some were dead code in 0.0.x.
-- `MyStruct.Error.message/1` format matches master and uses
+- `<MyMod>.Error.message/1` format matches master and uses
   `translated_message(:message_exception)` for i18n.
-- Parser no longer crashes on invalid UTF-8 (see §24).
-- Pre-evaluated `enum=Map[…]` / `equal=Map::…` — zero runtime
-  `Code.eval_string/1` calls in the hot path.
-
----
-
-# Index — new files in `0.1.0`
-
-```
-lib/guarded_struct/dsl.ex                                  · Spark extension definition
-lib/guarded_struct/dsl/virtual_field.ex                    · NEW virtual_field target
-lib/guarded_struct/validate.ex                             · NEW standalone Validate.run/field/partial
-lib/guarded_struct/diff.ex                                 · NEW Diff helpers
-lib/guarded_struct/errors.ex                               · NEW Splode root class
-lib/guarded_struct/errors/{invalid,validation,unknown}.ex  · NEW Splode subclasses
-lib/guarded_struct/schema.ex                               · NEW json_schema / openapi / typescript
-lib/guarded_struct/ash_resource.ex                         · NEW Ash extension
-lib/guarded_struct/ash_resource/info.ex                    · NEW Ash-namespaced info
-lib/guarded_struct/info.ex                                 · NEW Spark.InfoGenerator wrapper
-lib/guarded_struct/runtime.ex                              · build/3 + NEW telemetry wrapper
-lib/guarded_struct/derive/op_evaluator.ex                  · NEW compile-time pre-evaluator
-lib/guarded_struct/derive/op_param_validator.ex            · NEW compile-time param-type check
-lib/guarded_struct/derive/extension.ex                     · NEW custom-op DSL (Spark-native)
-lib/guarded_struct/transformers/parse_derive.ex            · NEW canonicaliser + deprecation
-lib/guarded_struct/transformers/verify_derive_ops.ex       · NEW strict mode + typo suggestion
-lib/guarded_struct/transformers/parse_core_keys.ex         · NEW
-lib/guarded_struct/transformers/verify_core_key_paths.ex   · NEW strict path check
-lib/guarded_struct/transformers/parse_domain.ex            · NEW
-lib/guarded_struct/transformers/generate_sub_field_modules.ex · NEW
-lib/guarded_struct/transformers/generate_builder.ex        · NEW
-lib/guarded_struct/transformers/codegen.ex                 · NEW (incl. example/0 + regex-named field)
-lib/guarded_struct/transformers/generate_ash_validator.ex  · NEW
-lib/guarded_struct/verifiers/verify_validator_mfa.ex       · NEW post-compile MFA check
-lib/guarded_struct/verifiers/verify_auto_mfa.ex            · NEW post-compile MFA check
-lib/guarded_struct/verifiers/verify_no_struct_cycles.ex    · NEW cycle detection
-lib/mix/tasks/guarded_struct.install.ex                    · NEW Igniter installer
-lib/mix/tasks/guarded_struct.gen.struct.ex                 · NEW Igniter scaffolder
-lib/mix/tasks/guarded_struct.gen.schema.ex                 · NEW json/typescript/openapi emitter
-```
-
-(Pre-existing files like `lib/messages.ex`, `lib/guarded_struct/helper/extra.ex`,
-`lib/guarded_struct/derive/{registry,parser,sanitizer_derive,validation_derive}.ex`
-were either preserved verbatim or rewritten internally without changing
-their public surface, so they're not relisted here.)
+- Parser no longer crashes on invalid UTF-8 (`:binary.bin_to_list` +
+  top-level rescue). Caught by `test/parser_property_test.exs`.
+- `enum=Map[…]` / `equal=Map::…` operands are pre-evaluated at compile
+  time — zero `Code.eval_string/1` calls in the runtime hot path.
+- **`virtual_field` `derives:` now actually fires at runtime** (was
+  silently dropped before `run_derives/2` in earlier 0.1.0 work; fixed
+  via two-pass derive in `Runtime`).
