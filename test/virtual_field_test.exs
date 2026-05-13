@@ -68,9 +68,10 @@ defmodule GuardedStructTest.VirtualFieldTest do
   test "dynamic_field defaults to %{} and accepts any map" do
     {:ok, %WithDynamic{name: "x", metadata: %{}}} = WithDynamic.builder(%{name: "x"})
 
-    # Input map keys get atomized by the runtime regardless of value-side
-    # contents, so a dynamic_field map ends up with all-atom keys.
-    {:ok, %WithDynamic{metadata: %{a: 1, b: 2}}} =
+    # SECURITY: dynamic_field values are LEFT AS-IS — string keys stay as
+    # strings, atom keys stay as atoms, mixed stays mixed. This prevents
+    # atom-table-exhaustion DoS via attacker-controlled keys. See SECURITY.md.
+    {:ok, %WithDynamic{metadata: %{:a => 1, "b" => 2}}} =
       WithDynamic.builder(%{name: "x", metadata: %{"b" => 2, a: 1}})
   end
 

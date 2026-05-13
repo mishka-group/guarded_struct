@@ -46,13 +46,13 @@ defmodule GuardedStruct.MixProject do
 
   defp description() do
     "Build Elixir structs with validation, sanitization, nested sub-structs, " <>
-      "conditional fields, pattern-keyed maps, JSON Schema generation, " <>
-      "and an Ash extension. Built on Spark."
+      "conditional fields, pattern-keyed maps, and an Ash extension. " <>
+      "Built on Spark."
   end
 
   defp package() do
     [
-      files: ~w(lib .formatter.exs mix.exs LICENSE README* CHANGELOG* MIGRATION*),
+      files: ~w(lib .formatter.exs mix.exs LICENSE README* CHANGELOG* MIGRATION* SECURITY*),
       licenses: ["Apache-2.0"],
       maintainers: ["Shahryar Tavakkoli"],
       links: %{
@@ -60,6 +60,7 @@ defmodule GuardedStruct.MixProject do
         "GitHub" => @source_url,
         "Changelog" => "#{@source_url}/blob/master/CHANGELOG.md",
         "Migration guide" => "#{@source_url}/blob/master/MIGRATION.md",
+        "Security policy" => "#{@source_url}/blob/master/SECURITY.md",
         "LiveBook document" => "#{@source_url}/blob/master/guidance/guarded-struct.livemd"
       }
     ]
@@ -83,7 +84,6 @@ defmodule GuardedStruct.MixProject do
       groups_for_modules: [
         Core: [GuardedStruct, GuardedStruct.Info],
         Validation: [GuardedStruct.Validate],
-        "Schema generation": [GuardedStruct.Schema],
         "Errors (Splode)": [
           GuardedStruct.Errors,
           GuardedStruct.Errors.Validation,

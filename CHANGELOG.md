@@ -48,6 +48,8 @@ Validated through the full pipeline but excluded from `defstruct`. Useful for `p
 
 Shorthand for a `field` whose value is a free-form map (default `%{}`, type `map()`, derive `validate(map)`).
 
+`dynamic_field` values are **identity-preserved** — whatever you submit (string keys, atom keys, mixed, nested) round-trips byte-identical to `builder/1`'s output. No string-to-atom conversion of inner keys at any depth, to prevent atom-table-exhaustion DoS. See the "Atom-attack safety" section of the `GuardedStruct` module @moduledoc for details.
+
 ### `GuardedStruct.Validate` (closes #2)
 
 Three-tier API for using a schema without going through `builder/1`:

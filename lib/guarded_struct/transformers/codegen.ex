@@ -335,7 +335,7 @@ defmodule GuardedStruct.Transformers.Codegen do
       Enum.map(struct_entities, fn
         %Field{} = f ->
           %{
-            kind: :field,
+            kind: if(f.__dynamic__, do: :dynamic_field, else: :field),
             name: f.name,
             derive: f.derives || f.derive,
             __derive_ops__: f.__derive_ops__,

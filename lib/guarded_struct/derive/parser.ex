@@ -121,20 +121,64 @@ defmodule GuardedStruct.Derive.Parser do
     ast |> Macro.update_meta(fn _ -> [] end) |> Macro.to_string()
   end
 
-  @spec convert_to_atom_map({:ok, map()} | {:error, any(), any()} | map()) ::
-          {:error, any(), any()} | map()
-  def convert_to_atom_map({:error, _, _} = error), do: error
-  def convert_to_atom_map({:ok, map}) when is_map(map), do: convert_to_atom_map(map)
+  @doc """
+  Recursively convert string keys to atoms in a map.
 
-  def convert_to_atom_map(map) when is_struct(map) do
-    for {k, v} <- Map.from_struct(map), into: %{}, do: {convert_key(k), convert_value(v)}
+  ## Atom-attack safety
+
+  This function is **doubly defensive** against atom-table-exhaustion DoS:
+
+    1. It uses `String.to_existing_atom/1` — string keys are converted to
+       atoms ONLY if the atom already exists in the atom table. Unknown
+       keys (e.g. attacker-controlled inputs) stay as strings.
+
+    2. `convert_to_atom_map/2` accepts an optional `passthrough_keys` list.
+       Values whose key is in that list are LEFT ENTIRELY UNTOUCHED — no
+       recursion, no key conversion at any depth. The runtime uses this
+       to mark `dynamic_field` values, so their free-form inner shapes
+       round-trip exactly as the user submitted them.
+
+  See the "Atom-attack safety" section of the `GuardedStruct` module
+  `@moduledoc` for the threat model and the recommended pattern when
+  consuming user-supplied data into a `dynamic_field`.
+  """
+  @spec convert_to_atom_map(
+          {:ok, map()} | {:error, any(), any()} | map(),
+          [atom()]
+        ) :: {:error, any(), any()} | map()
+  def convert_to_atom_map(map_or_result, passthrough_keys \\ [])
+
+  def convert_to_atom_map({:error, _, _} = error, _), do: error
+
+  def convert_to_atom_map({:ok, map}, pt) when is_map(map),
+    do: convert_to_atom_map(map, pt)
+
+  def convert_to_atom_map(map, pt) when is_struct(map) do
+    do_convert(Map.from_struct(map), pt)
   end
 
-  def convert_to_atom_map(map) when is_map(map) do
-    for {k, v} <- map, into: %{}, do: {convert_key(k), convert_value(v)}
+  def convert_to_atom_map(map, pt) when is_map(map) do
+    do_convert(map, pt)
   end
 
-  defp convert_key(key) when is_binary(key), do: String.to_atom(key)
+  defp do_convert(map, passthrough_keys) do
+    passthrough = MapSet.new(passthrough_keys)
+
+    for {k, v} <- map, into: %{} do
+      atom_key = convert_key(k)
+      new_value = if MapSet.member?(passthrough, atom_key), do: v, else: convert_value(v)
+      {atom_key, new_value}
+    end
+  end
+
+  # Convert binary keys to atoms ONLY if the atom already exists in the
+  # atom table. Unknown / attacker-controlled keys stay as strings.
+  defp convert_key(key) when is_binary(key) do
+    String.to_existing_atom(key)
+  rescue
+    ArgumentError -> key
+  end
+
   defp convert_key(key), do: key
 
   defp convert_value(%{__struct__: s} = m) when s in [NaiveDateTime, DateTime, Date], do: m

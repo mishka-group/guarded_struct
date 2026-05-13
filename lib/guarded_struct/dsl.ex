@@ -62,6 +62,9 @@ defmodule GuardedStruct.Dsl do
     name: :dynamic_field,
     target: GuardedStruct.Dsl.Field,
     args: [:name],
+    # Marks every `dynamic_field` entry distinct from a regular `field`.
+    # The runtime uses this to skip recursive atom-conversion of the value.
+    auto_set_fields: [__dynamic__: true],
     schema: [
       name: [type: :any, required: true],
       type: [type: :quoted, default: quote(do: map())],

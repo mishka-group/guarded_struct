@@ -70,6 +70,8 @@ guardedstruct do
 end
 ```
 
+**Security note**: `dynamic_field` values are **identity-preserved** — whatever map you submit is exactly what you get back. No string-to-atom conversion of keys at any depth, to prevent atom-table-exhaustion DoS. Read these values with string keys. See the "Atom-attack safety" section of the `GuardedStruct` module @moduledoc for full details.
+
 ### 4. `GuardedStruct.Validate` — schema-without-builder
 
 Three-tier API:

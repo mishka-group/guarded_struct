@@ -16,6 +16,80 @@ defmodule GuardedStruct do
 
       MyStruct.builder(%{name: "Mishka"})
       # => {:ok, %MyStruct{name: "Mishka", title: "untitled"}}
+
+  ## Atom-attack safety
+
+  GuardedStruct accepts both atom-keyed and string-keyed input maps for
+  convenience (e.g. JSON payloads come with string keys). The runtime
+  must convert string keys to atoms to match your declared field names —
+  and that conversion is the classic atom-table-exhaustion DoS vector
+  in Elixir.
+
+  ### How GuardedStruct defends — two layers
+
+  **Layer 1.** `Parser.convert_to_atom_map/2` uses `String.to_existing_atom/1`
+  rather than `String.to_atom/1`. String keys are converted ONLY if the
+  atom already exists (i.e. matches a `field`/`sub_field`/`conditional_field`
+  declaration elsewhere in your codebase). Unknown / attacker-controlled
+  keys stay as strings — they cannot grow the atom table.
+
+  **Layer 2.** `dynamic_field` values are **identity-preserved** —
+  whatever map you submit (string keys, atom keys, mixed, nested) is
+  byte-identical to what comes back from `builder/1`. No key conversion
+  at any depth.
+
+      defmodule Doc do
+        use GuardedStruct
+        guardedstruct do
+          field         :id,       String.t(), enforce: true
+          dynamic_field :metadata
+        end
+      end
+
+      Doc.builder(%{id: "x", metadata: %{"foo" => 1, :bar => 2, "baz" => %{"nested" => 3}}})
+      # => {:ok, %Doc{id: "x", metadata: %{"foo" => 1, :bar => 2, "baz" => %{"nested" => 3}}}}
+      #                                    ↑              ↑           ↑
+      #                              string stays      atom stays      deep nested string STAYS
+
+  ### How to consume `dynamic_field` values safely
+
+  When the input came from JSON / any untrusted source, your dynamic_field
+  ends up with string keys exactly as the sender wrote them:
+
+      def receive(%{"id" => id, "metadata" => meta}) do
+        {:ok, doc} = Doc.builder(%{id: id, metadata: meta})
+        name = doc.metadata["customer_name"]   # ← read with string keys
+        plan = doc.metadata["plan_tier"]
+      end
+
+  If you need atom keys for ergonomics (e.g. `doc.metadata.foo`
+  dot-access), convert AT THE BOUNDARY where you know which keys are
+  safe:
+
+      safe_keys = ~w(customer_name plan_tier signup_source)a   # ← compile-time list
+
+      atomized =
+        for k <- safe_keys, into: %{} do
+          {k, Map.get(doc.metadata, Atom.to_string(k))}
+        end
+
+  That converts only the keys YOU declared in source — the atom table
+  cannot grow from user input regardless of what the request body
+  contains.
+
+  ### What NOT to do
+
+      # ❌ NEVER do this on user-controlled maps:
+      metadata = doc.metadata |> Map.new(fn {k, v} -> {String.to_atom(k), v} end)
+      #                                              ^^^^^^^^^^^^^^^^^
+      #                       creates a new atom from EVERY key the user sent.
+
+  The library protects you on the way IN. Don't undo that protection on
+  the way OUT.
+
+  ### Reporting a vulnerability
+
+  See `SECURITY.md` for the security policy and how to report.
   """
 
   use Spark.Dsl, default_extensions: [extensions: [GuardedStruct.Dsl]]

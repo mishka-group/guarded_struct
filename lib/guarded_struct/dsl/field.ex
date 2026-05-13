@@ -21,7 +21,12 @@ defmodule GuardedStruct.Dsl.Field do
     :__derive_ops__,
     :__from_path__,
     :__on_path__,
-    :__domain_ops__
+    :__domain_ops__,
+    # Set to true ONLY for entries from the `dynamic_field` DSL keyword
+    # (via Spark `auto_set_fields:`). Used by the runtime to skip
+    # recursive atom-conversion of the value — preventing atom-table
+    # exhaustion from attacker-controlled keys inside the free-form map.
+    __dynamic__: false
   ]
 
   @type t :: %__MODULE__{
@@ -44,6 +49,7 @@ defmodule GuardedStruct.Dsl.Field do
           __derive_ops__: map() | nil,
           __from_path__: [atom()] | nil,
           __on_path__: [atom()] | nil,
-          __domain_ops__: list() | nil
+          __domain_ops__: list() | nil,
+          __dynamic__: boolean()
         }
 end

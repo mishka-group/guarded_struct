@@ -353,6 +353,8 @@ Defaults to English. Every error site in both the orchestration and derive layer
 
 - [Migration guide](./MIGRATION.md) — `0.0.x` → `0.1.0`
 - [Changelog](./CHANGELOG.md)
+- [Security policy](./SECURITY.md) — supported versions + how to report a vulnerability
+- **Atom-attack safety** — see the `GuardedStruct` module's `@moduledoc` ("Atom-attack safety" section) on [hexdocs](https://hexdocs.pm/guarded_struct/GuardedStruct.html#module-atom-attack-safety)
 - [LiveBook walkthrough](https://github.com/mishka-group/guarded_struct/blob/master/guidance/guarded-struct.livemd) — interactive examples
 - DSL reference (in hexdocs) — `documentation/dsls/`
 - [Blog post](https://mishka.tools/blog/guardedstruct-advanced-elixir-struct-data-validation-and-sanitization) — original motivation and design

@@ -251,9 +251,17 @@ defmodule GuardedStruct.Runtime do
     keys = info.keys
     enforce_keys = info.enforce_keys
 
-    full_attrs_atomized = Parser.convert_to_atom_map(full_attrs)
+    # Names of `dynamic_field` entries — their inner map values are left
+    # UNTOUCHED during atom-conversion. See the "Atom-attack safety"
+    # section of the `GuardedStruct` module `@moduledoc` for the rationale.
+    dynamic_field_names =
+      fields_meta
+      |> Enum.filter(&(&1[:kind] == :dynamic_field))
+      |> Enum.map(& &1.name)
 
-    with {:ok, normalized} <- normalize_keys(attrs),
+    full_attrs_atomized = Parser.convert_to_atom_map(full_attrs, dynamic_field_names)
+
+    with {:ok, normalized} <- normalize_keys(attrs, dynamic_field_names),
          {:ok, attrs_after_authorized} <-
            authorized_fields(normalized, keys, section_opts.authorized_fields),
          :ok <- check_enforce_keys(attrs_after_authorized, enforce_keys),
@@ -359,10 +367,10 @@ defmodule GuardedStruct.Runtime do
     Map.get(info, :options, %{authorized_fields: false})
   end
 
-  defp normalize_keys(attrs) when is_map(attrs) do
+  defp normalize_keys(attrs, dynamic_field_names) when is_map(attrs) do
     case Map.keys(attrs) |> List.first() do
       nil -> {:ok, attrs}
-      _ -> {:ok, Parser.convert_to_atom_map(attrs)}
+      _ -> {:ok, Parser.convert_to_atom_map(attrs, dynamic_field_names)}
     end
   end
 
