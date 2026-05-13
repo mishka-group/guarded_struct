@@ -103,6 +103,23 @@ is a process-local flag — concurrency-safe (sibling processes don't see
 it), re-entrancy-safe (saved+restored across nested calls), zero overhead
 for standalone callers.
 
+## Update actions — `require_atomic? false`
+
+`GuardedStruct.AshResource.Change` runs an imperative Elixir pipeline.
+Ash 3.x's update planner requires changes to declare atomic-safety, and
+ours opts out via `atomic/3` returning `{:not_atomic, reason}`. On any
+UPDATE action that uses this change, set `require_atomic? false`:
+
+    actions do
+      update :update do
+        accept [:email]
+        require_atomic? false
+      end
+    end
+
+CREATE actions don't need this flag — Ash only enforces atomic mode on
+updates.
+
 ## sub_field vs Ash relationships
 
 `sub_field` inside an Ash resource creates an **embedded value type**, not

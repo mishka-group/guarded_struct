@@ -139,7 +139,11 @@ defmodule GuardedStruct.MixProject do
       # our extension actually works end-to-end with real Ash + the ETS
       # data layer (no DB needed). Existing FakeFramework tests still cover
       # the no-Ash path.
-      {:ash, "~> 3.0", only: :test}
+      #
+      # `:dev, :test` (not just `:test`) so `mix format` in dev can pick up
+      # Ash's `.formatter.exs` via `import_deps: [..., :ash]` and keep Ash
+      # DSL calls paren-free.
+      {:ash, "~> 3.0", only: [:dev, :test]}
     ]
   end
 end

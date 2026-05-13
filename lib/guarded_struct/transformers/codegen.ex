@@ -73,8 +73,8 @@ defmodule GuardedStruct.Transformers.Codegen do
       if json? do
         quote do
           cond do
-            Code.ensure_loaded?(Jason.Encoder) -> @derive(Jason.Encoder)
-            Code.ensure_loaded?(JSON.Encoder) -> @derive(JSON.Encoder)
+            Code.ensure_loaded?(Jason.Encoder) -> @derive Jason.Encoder
+            Code.ensure_loaded?(JSON.Encoder) -> @derive JSON.Encoder
             true -> :ok
           end
         end

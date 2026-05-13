@@ -133,30 +133,26 @@ defmodule GuardedStruct.AshResource.Change do
   # `Ash.Error.Changes.InvalidAttribute` so Ash wraps it as
   # `Ash.Error.Invalid` instead of `Ash.Error.Unknown`.
   defp to_ash_error(%{field: field, message: message} = err) do
-    apply(Ash.Error.Changes.InvalidAttribute, :exception,
+    apply(Ash.Error.Changes.InvalidAttribute, :exception, [
       [
-        [
-          field: field,
-          message: message,
-          value: Map.get(err, :value),
-          vars: vars_for(err)
-        ]
+        field: field,
+        message: message,
+        value: Map.get(err, :value),
+        vars: vars_for(err)
       ]
-    )
+    ])
   end
 
   defp to_ash_error(%{fields: fields, action: :required_fields} = _err) do
     # Ash already enforces required fields via `allow_nil?: false`. Our
     # equivalent fires when guardedstruct's enforce_keys catch a missing
     # value. Surface as a single InvalidChanges error.
-    apply(Ash.Error.Changes.InvalidChanges, :exception,
+    apply(Ash.Error.Changes.InvalidChanges, :exception, [
       [
-        [
-          fields: fields,
-          message: "required by guardedstruct: #{Enum.join(fields, ", ")}"
-        ]
+        fields: fields,
+        message: "required by guardedstruct: #{Enum.join(fields, ", ")}"
       ]
-    )
+    ])
   end
 
   defp to_ash_error(other), do: other

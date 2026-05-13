@@ -318,7 +318,11 @@ defmodule GuardedStruct.Info do
 
     case meta.kind do
       :sub_field ->
-        Map.put(base, :sub_module, Module.concat(parent_module, Codegen.atom_to_module(meta.name)))
+        Map.put(
+          base,
+          :sub_module,
+          Module.concat(parent_module, Codegen.atom_to_module(meta.name))
+        )
 
       _ ->
         base
