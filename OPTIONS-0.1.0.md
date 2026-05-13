@@ -37,37 +37,24 @@ What lives in this doc:
 
 ---
 
-## 1 · Mix tasks (Igniter-based)
+## 1 · Mix task — `mix guarded_struct.install` (Igniter-based)
 
-> Under `lib/mix/tasks/`. All gracefully degrade if `:igniter` isn't loaded.
+> File: `lib/mix/tasks/guarded_struct.install.ex`. Gracefully degrades if
+> `:igniter` isn't loaded.
+> Test: `test/mix/tasks/guarded_struct.install_test.exs`.
 
-| Task | One-line description | Test |
-|---|---|---|
-| `mix guarded_struct.install` | Add dep, register `lint` alias, seed `derive_extensions: []` | `test/mix/tasks/guarded_struct.install_test.exs` |
-| `mix guarded_struct.gen.struct` | Scaffold a starter module from CLI; `name!:type` syntax for enforce | `test/mix/tasks/guarded_struct.gen.struct_test.exs` |
-
-### 1a · `mix guarded_struct.install`
+One-command project setup:
 
 ```sh
-# Bare install — adds dep + lint alias + seeds config :guarded_struct, derive_extensions: []
+# Adds dep + lint alias + seeds config :guarded_struct, derive_extensions: []
 mix igniter.install guarded_struct
 ```
 
-### 1b · `mix guarded_struct.gen.struct`
-
-```sh
-mix guarded_struct.gen.struct MyApp.User name!:string age:integer email:email
-# => creates lib/my_app/user.ex with:
-#    field :name,  String.t(), enforce: true, derives: "validate(string)"
-#    field :age,   integer(),                derives: "validate(integer)"
-#    field :email, String.t(),               derives: "validate(email_r)"
-```
-
-The `name!:type` syntax (trailing `!`) marks the field `enforce: true`.
-
-Supported type tokens: `string`, `integer`, `float`, `boolean`, `uuid`,
-`email`, `url`, `date`, `datetime`, `map`, `list`, `any`. Each maps to a
-`{type, derives:}` pair.
+What it does:
+1. Adds `{:guarded_struct, "~> 0.1.0"}` to `mix.exs` deps (if not already)
+2. Registers a `lint` alias chaining `mix spark.formatter` then `mix format`
+3. Seeds `config :guarded_struct, derive_extensions: []` in `config/config.exs`
+   so users have an obvious place to plug in custom validators
 
 ---
 
