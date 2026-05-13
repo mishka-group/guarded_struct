@@ -158,7 +158,7 @@ defmodule GuardedStructTest.ValidatorDeriveTest do
       assert TestStructAnotherMainValidatorBuilder.builder(%{name: "mishka", title: "org"})
   end
 
-  test "use builder to Sanitize - derive: sanitize(trim, lowercase)" do
+  test "use builder to Sanitize - derive: sanitize(trim, downcase)" do
     defmodule TestStructWithSanitizeDerive do
       use GuardedStruct
 

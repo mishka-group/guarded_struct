@@ -144,9 +144,21 @@ defmodule GuardedStruct.Derive.Extension do
   defp load_extensions(list) do
     list
     |> List.wrap()
-    |> Enum.filter(&Code.ensure_loaded?/1)
+    |> Enum.filter(&ensure_extension_loaded?/1)
     |> Enum.filter(&function_exported?(&1, :__derive_extension__?, 0))
   end
+
+  # `Code.ensure_compiled?/1` waits for in-flight compilation of the parent
+  # module — required when an extension and the module using it live in the
+  # SAME source file (e.g. `defmodule MyExt do ... end` and a sibling
+  # `defmodule UsesIt do use GuardedStruct, derive_extensions: [MyExt] end`).
+  # `Code.ensure_loaded?/1` would return false because the .beam file isn't
+  # on disk yet during the parent's compile pass.
+  defp ensure_extension_loaded?(mod) when is_atom(mod) do
+    match?({:module, _}, Code.ensure_compiled(mod))
+  end
+
+  defp ensure_extension_loaded?(_), do: false
 
   @doc """
   Resolve a per-module `derive_extensions:` opt — the raw list user wrote

@@ -141,22 +141,6 @@ end
 
 Gives you `Splode.traverse_errors/2`, `set_path/2`, JSON serialisation. The `builder/1` return shape still defaults to the legacy `{:error, [%{field, action, message}]}` tuple — wrapping is opt-in.
 
-### 9. Strict op-name verification
-
-Opt-in compile-time check for typos:
-
-```elixir
-# config/config.exs
-config :guarded_struct, strict_derive_ops: true
-```
-
-```elixir
-field :name, String.t(), derives: "validate(stirng)"
-# ** (Spark.Error.DslError) unknown derive op(s) on field :name: validate=:stirng
-```
-
-Automatically skipped when a `:validate_derive` / `:sanitize_derive` Application env plug-in is registered.
-
 ## Soft deprecations
 
 ### `derive:` option renamed to `derives:`

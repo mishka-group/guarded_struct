@@ -248,20 +248,6 @@ defmodule MyApp.MyValidator do
 end
 ```
 
-### Strict op-name verification
-
-Opt in at the application level to catch typos at compile time:
-
-```elixir
-# config/config.exs
-config :guarded_struct, strict_derive_ops: true
-```
-
-```elixir
-field :name, String.t(), derives: "validate(stirng)"
-# ** (Spark.Error.DslError) unknown derive op(s) on field :name: validate=:stirng
-```
-
 ## Core keys
 
 The four core keys (`auto`, `from`, `on`, `domain`) cross-link fields:

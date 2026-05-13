@@ -29,12 +29,11 @@ test/support/fixtures/
 What lives in this doc:
 
 1. Mix tasks (installer + scaffolder)
-2. Compile-time strict modes (config-level switches)
-3. Application env / configuration keys
-4. Protocol consolidation tweak
-5. Tooling integration (`mix lint`, cheat sheets, LiveBook, autocomplete)
-6. Dependencies added
-7. Bug-fix highlights worth flagging on the release notes
+2. Application env / configuration keys
+3. Protocol consolidation tweak
+4. Tooling integration (`mix lint`, cheat sheets, LiveBook, autocomplete)
+5. Dependencies added
+6. Bug-fix highlights worth flagging on the release notes
 
 ---
 
@@ -52,10 +51,6 @@ What lives in this doc:
 ```sh
 # Bare install — adds dep + lint alias + seeds config :guarded_struct, derive_extensions: []
 mix igniter.install guarded_struct
-
-# With strict-mode flags — turns on compile-time op-name validation
-mix igniter.install guarded_struct --strict          # strict_derive_ops: true
-mix igniter.install guarded_struct --strict-paths    # strict_core_key_paths: true
 ```
 
 ### 1b · `mix guarded_struct.gen.struct`
@@ -76,65 +71,17 @@ Supported type tokens: `string`, `integer`, `float`, `boolean`, `uuid`,
 
 ---
 
-## 2 · Compile-time strict modes (opt-in config switches)
-
-> Application-env switches, off by default for back-compat.
-
-Two opt-in compile-time checks that turn silent runtime failures into
-loud compile errors:
-
-### `:strict_derive_ops`
-
-> File: `lib/guarded_struct/transformers/verify_derive_ops.ex`
-> Tests: `test/verify_derive_ops_test.exs`
-
-Catches typos in `derives:` op names at compile time, with a
-"did-you-mean" suggestion via `String.jaro_distance/2`. Auto-skipped if
-a `derive_extensions:` plugin is configured (those can declare any
-op name).
-
-```elixir
-# config/config.exs
-config :guarded_struct, strict_derive_ops: true
-
-# Then this becomes a compile error:
-field :age, integer(), derives: "validate(intger)"
-# ** (Spark.Error.DslError) unknown derive op(s) on field :age: validate=:intger
-#    Did you mean `:integer`?
-```
-
-### `:strict_core_key_paths`
-
-> File: `lib/guarded_struct/transformers/verify_core_key_paths.ex`
-> Tests: `test/verify_core_key_paths_test.exs`
-
-Verifies `from:` / `on:` paths reference real fields at compile time.
-
-```elixir
-config :guarded_struct, strict_core_key_paths: true
-
-field :dest, String.t(), from: "root::nope"
-# ** (Spark.Error.DslError) `from: "nope"` on field :dest references
-#    `:nope`, which is not a declared field.
-```
-
----
-
-## 3 · Application env / configuration keys
+## 2 · Application env / configuration keys
 
 | Key | One-line description |
 |---|---|
 | `derive_extensions: [Mod, ...]` | Custom-op modules registered via `Derive.Extension` |
-| `strict_derive_ops: true` | Reject unknown derive ops at compile time |
-| `strict_core_key_paths: true` | Reject unresolved `from:` / `on:` paths at compile time |
 | `message_backend: Mod` | i18n backend module (Gettext, Cldr, or custom) |
 
 ```elixir
 # config/config.exs
 config :guarded_struct,
   derive_extensions: [MyApp.Derives],
-  strict_derive_ops: true,
-  strict_core_key_paths: true,
   message_backend: MyApp.GuardedStructMessages
 ```
 
@@ -143,7 +90,7 @@ is fixture-tested in `test/derive_extensions_per_module_test.exs`.
 
 ---
 
-## 4 · Protocol consolidation tweak
+## 3 · Protocol consolidation tweak
 
 > File: `mix.exs` — `consolidate_protocols: Mix.env() != :test`.
 
@@ -153,7 +100,7 @@ otherwise be frozen. Required for the `jason: true` opt to work in tests.
 
 ---
 
-## 5 · Tooling integration
+## 4 · Tooling integration
 
 | Tool | One-line description |
 |---|---|
@@ -168,7 +115,7 @@ otherwise be frozen. Required for the `jason: true` opt to work in tests.
 
 ---
 
-## 6 · Dependencies added
+## 5 · Dependencies added
 
 > File: `mix.exs`.
 
@@ -187,7 +134,7 @@ Optional deps unchanged: `html_sanitize_ex`, `email_checker`, `ex_url`,
 
 ---
 
-## 7 · Bug-fix highlights (release-note material)
+## 6 · Bug-fix highlights (release-note material)
 
 - **`__information__/0`** now populates `conditional_keys` with the actual
   `conditional_field` names (was always `[]` in 0.0.x).

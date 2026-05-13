@@ -18,13 +18,6 @@ if Code.ensure_loaded?(Igniter) do
       2. Registers a `lint` alias chaining `mix spark.formatter` then `mix format`
       3. Seeds `config :guarded_struct, derive_extensions: []` in `config/config.exs`
          so users have an obvious place to plug in custom validators
-
-    ## Options
-
-      * `--strict` — also set `config :guarded_struct, strict_derive_ops: true`
-        to catch typos in derive op names at compile time
-      * `--strict-paths` — also set `config :guarded_struct, strict_core_key_paths: true`
-        to verify `from:`/`on:` paths reference real fields
     """
 
     use Igniter.Mix.Task
@@ -35,16 +28,13 @@ if Code.ensure_loaded?(Igniter) do
         group: :guarded_struct,
         example: @example,
         positional: [],
-        schema: [strict: :boolean, strict_paths: :boolean],
-        defaults: [strict: false, strict_paths: false]
+        schema: [],
+        defaults: []
       }
     end
 
     @impl Igniter.Mix.Task
     def igniter(igniter) do
-      strict? = igniter.args.options[:strict]
-      strict_paths? = igniter.args.options[:strict_paths]
-
       igniter
       |> Igniter.Project.TaskAliases.add_alias("lint", ["spark.formatter", "format"])
       |> Igniter.Project.Config.configure_new(
@@ -53,8 +43,6 @@ if Code.ensure_loaded?(Igniter) do
         [:derive_extensions],
         []
       )
-      |> maybe_set_strict(strict?)
-      |> maybe_set_strict_paths(strict_paths?)
       |> Igniter.add_notice("""
       guarded_struct installed.
 
@@ -74,30 +62,6 @@ if Code.ensure_loaded?(Igniter) do
       Then call MyApp.User.builder(%{name: "Alice", email: "alice@example.com"}).
       See https://hexdocs.pm/guarded_struct for the full guide.
       """)
-    end
-
-    defp maybe_set_strict(igniter, false), do: igniter
-
-    defp maybe_set_strict(igniter, true) do
-      Igniter.Project.Config.configure_new(
-        igniter,
-        "config.exs",
-        :guarded_struct,
-        [:strict_derive_ops],
-        true
-      )
-    end
-
-    defp maybe_set_strict_paths(igniter, false), do: igniter
-
-    defp maybe_set_strict_paths(igniter, true) do
-      Igniter.Project.Config.configure_new(
-        igniter,
-        "config.exs",
-        :guarded_struct,
-        [:strict_core_key_paths],
-        true
-      )
     end
   end
 else

@@ -196,9 +196,7 @@ defmodule GuardedStruct.Dsl do
     sections: [@section],
     transformers: [
       GuardedStruct.Transformers.ParseDerive,
-      GuardedStruct.Transformers.VerifyDeriveOps,
       GuardedStruct.Transformers.ParseCoreKeys,
-      GuardedStruct.Transformers.VerifyCoreKeyPaths,
       GuardedStruct.Transformers.ParseDomain,
       GuardedStruct.Transformers.GenerateSubFieldModules,
       GuardedStruct.Transformers.GenerateBuilder

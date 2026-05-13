@@ -70,24 +70,4 @@ defmodule GuardedStructTest.DeriveExtensionTest do
     assert :slug in MapSet.to_list(GuardedStruct.Derive.Extension.all_extension_validators())
   end
 
-  test "extension ops pass strict op-name verification" do
-    Application.put_env(:guarded_struct, :strict_derive_ops, true)
-    on_exit(fn -> Application.delete_env(:guarded_struct, :strict_derive_ops) end)
-
-    # Compile a module with strict mode on; the extension-registered :slug
-    # op should NOT trigger the unknown-op error.
-    [{mod, _}] =
-      Code.compile_string("""
-      defmodule StrictWithSlug do
-        use GuardedStruct
-
-        guardedstruct do
-          field(:slug, String.t(), derives: "validate(slug)")
-        end
-      end
-      """)
-
-    assert mod == StrictWithSlug
-    assert {:ok, _} = mod.builder(%{slug: "ok-slug"})
-  end
 end

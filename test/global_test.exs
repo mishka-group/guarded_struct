@@ -51,13 +51,13 @@ defmodule GuardedStructTest.GlobalTest do
         field(:server, String.t(), derives: "validate(regex=#{~c"^[a-zA-Z]+@mishka\\.group$"})")
 
         field(:identity_provider, String.t(),
-          derives: "sanitize(strip_tags, trim, lowercase) validate(not_empty)"
+          derives: "sanitize(strip_tags, trim, downcase) validate(not_empty)"
         )
 
         sub_field(:role, struct(), enforce: true) do
           field(:name, String.t(),
             derives:
-              "sanitize(strip_tags, trim, lowercase) validate(enum=Atom[admin::user::banned])"
+              "sanitize(strip_tags, trim, downcase) validate(enum=Atom[admin::user::banned])"
           )
 
           field(:action, String.t(), derives: "validate(string_boolean)")

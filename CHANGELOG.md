@@ -112,21 +112,6 @@ end
 
 `__guarded_validate__/1` returns validated attrs map; `__guarded_information__/0` and `__guarded_fields__/0` expose the same metadata as the standalone API but under a separate namespace.
 
-### Strict op-name verification
-
-Opt-in compile-time check for typos in `derive:` strings:
-
-```elixir
-# config/config.exs
-config :guarded_struct, strict_derive_ops: true
-
-field :name, String.t(), derive: "validate(stirng)"
-# ** (Spark.Error.DslError) unknown derive op(s) on field :name: validate=:stirng
-#    Built-in validate ops are listed in `GuardedStruct.Derive.Registry`
-```
-
-Skipped automatically if a `:validate_derive` / `:sanitize_derive` Application env plug-in is registered (those modules can declare any op name).
-
 ## Soft deprecations
 
 - **`derive:` option renamed to `derives:`**. Both work in `0.1.0`; the legacy `derive:` emits a compile-time deprecation warning via `Spark.Warning.warn_deprecated/4` and will be removed in a future release. The plural form aligns with the `@derives` decorator. When both are present on the same field, `derives:` wins silently.

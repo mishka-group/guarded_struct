@@ -3,9 +3,8 @@ defmodule Mix.Tasks.GuardedStruct.InstallTest do
   import Igniter.Test
 
   # Igniter's compose_task path evaluates the test-project's virtual
-  # config.exs against the host process's Application env. Without explicit
-  # cleanup, the install task's `--strict` / `--strict-paths` flags leak
-  # globally and break subsequent fixture compilation in other test files.
+  # config.exs against the host process's Application env. We snapshot
+  # and restore to keep the suite hermetic.
   setup do
     snapshot = Application.get_all_env(:guarded_struct)
 
@@ -43,41 +42,6 @@ defmodule Mix.Tasks.GuardedStruct.InstallTest do
     content = Rewrite.Source.get(config, :content)
     assert content =~ ":guarded_struct"
     assert content =~ "derive_extensions"
-  end
-
-  test "without --strict, does not set strict_derive_ops" do
-    igniter =
-      test_project()
-      |> Igniter.compose_task("guarded_struct.install", [])
-
-    config = igniter.rewrite.sources["config/config.exs"]
-    content = Rewrite.Source.get(config, :content)
-
-    refute content =~ "strict_derive_ops"
-  end
-
-  test "with --strict, sets strict_derive_ops: true" do
-    igniter =
-      test_project()
-      |> Igniter.compose_task("guarded_struct.install", ["--strict"])
-
-    config = igniter.rewrite.sources["config/config.exs"]
-    content = Rewrite.Source.get(config, :content)
-
-    assert content =~ "strict_derive_ops"
-    assert content =~ "true"
-  end
-
-  test "with --strict-paths, sets strict_core_key_paths: true" do
-    igniter =
-      test_project()
-      |> Igniter.compose_task("guarded_struct.install", ["--strict-paths"])
-
-    config = igniter.rewrite.sources["config/config.exs"]
-    content = Rewrite.Source.get(config, :content)
-
-    assert content =~ "strict_core_key_paths"
-    assert content =~ "true"
   end
 
   test "emits a quick-start notice" do

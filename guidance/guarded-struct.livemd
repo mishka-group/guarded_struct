@@ -25,7 +25,6 @@ Mix.install([
 | `GuardedStruct.Validate` standalone API (closes #2) | _Standalone validation_ |
 | Erlang Record support (closes #6) | _Erlang Records_ |
 | Custom validators / sanitizers via Spark DSL | _Custom derive ops_ |
-| Strict op-name verification | _Strict mode_ |
 | Splode error wrapping | _Splode errors_ |
 | Ash extension | _Ash integration_ |
 
@@ -1585,25 +1584,6 @@ end
 ```
 
 The legacy `Application.put_env(:guarded_struct, :validate_derive, MyMod)` plug-in mechanism still works — both can coexist.
-
-## Strict mode
-
-Opt in to compile-time op-name verification:
-
-```elixir
-# config/config.exs
-# config :guarded_struct, strict_derive_ops: true
-```
-
-Then a typo:
-
-```elixir
-field(:name, String.t(), derive: "validate(stirng)")
-# ** (Spark.Error.DslError) unknown derive op(s) on field :name: validate=:stirng
-#    Built-in validate ops are listed in `GuardedStruct.Derive.Registry`.
-```
-
-Automatically skipped if a `:validate_derive` / `:sanitize_derive` Application env plug-in is registered.
 
 ## Splode errors
 
