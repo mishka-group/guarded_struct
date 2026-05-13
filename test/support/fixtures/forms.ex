@@ -6,7 +6,7 @@ defmodule GuardedStructFixtures.Forms do
     * `virtual_field` — `password_confirmation` is validated but excluded from `defstruct`
     * Per-field `validator:` — hashes the password on accept (transforms the value)
     * `main_validator/1` auto-discovery — cross-field check that password == confirmation
-    * `jason: true` — `Signup` is JSON-encodable
+    * `json: true` — `Signup` is JSON-encodable
   """
 
   defmodule Hasher do
@@ -30,7 +30,7 @@ defmodule GuardedStructFixtures.Forms do
   defmodule Signup do
     use GuardedStruct
 
-    guardedstruct jason: true do
+    guardedstruct json: true do
       field(:email, String.t(),
         enforce: true,
         derives: "sanitize(trim, downcase) validate(string, email_r, max_len=320)"

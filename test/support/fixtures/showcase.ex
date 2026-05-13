@@ -4,7 +4,7 @@ defmodule GuardedStructFixtures.Showcase do
   most of 0.1.0's new surface in a single coherent schema.
 
   Combines:
-    * `jason: true` — JSON-encodable for API
+    * `json: true` — JSON-encodable for API
     * `@derives` decorator — clean DSL
     * `virtual_field` — `:invitation_token` validated but not persisted
     * `auto:` — `:id` minted at build time, `:created_at` timestamped
@@ -51,7 +51,7 @@ defmodule GuardedStructFixtures.Showcase do
   defmodule EnterpriseAccount do
     use GuardedStruct
 
-    guardedstruct jason: true do
+    guardedstruct json: true do
       field(:id, String.t(), auto: {GuardedStructTest.Support.UUID, :generate})
 
       @derives "sanitize(trim) validate(string, not_empty, max_len=100)"

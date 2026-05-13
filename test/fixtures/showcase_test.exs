@@ -1,7 +1,7 @@
 defmodule GuardedStructFixtures.ShowcaseTest do
   @moduledoc """
   Tests the `GuardedStructFixtures.Showcase` fixture — the
-  everything-at-once `EnterpriseAccount` schema combining `jason: true`,
+  everything-at-once `EnterpriseAccount` schema combining `json: true`,
   `@derives` decorator, `virtual_field`, `auto:`, `from:`,
   list-of-sub_field via `structs: true`, nested `conditional_field`,
   `dynamic_field`, and `main_validator/1`.
@@ -185,8 +185,8 @@ defmodule GuardedStructFixtures.ShowcaseTest do
   end
 
   describe "EnterpriseAccount — public API surface" do
-    test "JSON-encodes via Jason.Encoder (jason: true cascades to sub_fields)" do
-      # `jason: true` on the section also threads through to every
+    test "JSON-encodes via Jason.Encoder (json: true cascades to sub_fields)" do
+      # `json: true` on the section also threads through to every
       # generated sub_field submodule (Owner, Members, Plan1, ...).
       # Without that cascade, encoding the parent would fail when it
       # tries to encode the nested %Owner{}. Also confirms virtual

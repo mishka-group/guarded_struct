@@ -190,7 +190,15 @@ defmodule GuardedStruct.Dsl do
       main_validator: [type: {:tuple, [:atom, :atom]}],
       validate_derive: [type: {:or, [:atom, {:list, :atom}]}],
       sanitize_derive: [type: {:or, [:atom, {:list, :atom}]}],
-      jason: [type: :boolean, default: false]
+      json: [
+        type: :boolean,
+        default: false,
+        doc:
+          "When `true`, derives a JSON encoder. Uses `Jason.Encoder` if " <>
+            "`:jason` is in the user's deps; otherwise falls back to the " <>
+            "built-in `JSON.Encoder` on Elixir 1.18+. No-op if neither is " <>
+            "available."
+      ]
     ],
     entities: [@field, @virtual_field, @dynamic_field, @sub_field, @conditional_field]
   }

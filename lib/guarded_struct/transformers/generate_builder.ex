@@ -20,7 +20,7 @@ defmodule GuardedStruct.Transformers.GenerateBuilder do
     section_options = %{
       authorized_fields:
         Transformer.get_option(dsl_state, [:guardedstruct], :authorized_fields, false),
-      jason: Transformer.get_option(dsl_state, [:guardedstruct], :jason, false)
+      json: Transformer.get_option(dsl_state, [:guardedstruct], :json, false)
     }
 
     body =

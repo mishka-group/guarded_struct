@@ -63,12 +63,20 @@ defmodule GuardedStruct.Transformers.Codegen do
     {keys, defstruct_kw, types, enforce_keys, fields_runtime} =
       build_struct_pieces(entities, block_enforce)
 
-    jason? = Map.get(options, :jason, false) == true
+    json? = Map.get(options, :json, false) == true
 
-    derive_jason_ast =
-      if jason? do
+    # `json: true` opts into JSON encoding. Precedence:
+    #   1. Jason.Encoder  — if user has `:jason` in their deps
+    #   2. JSON.Encoder   — built-in on Elixir 1.18+
+    #   3. no-op          — neither available
+    derive_json_ast =
+      if json? do
         quote do
-          if Code.ensure_loaded?(Jason.Encoder), do: @derive(Jason.Encoder)
+          cond do
+            Code.ensure_loaded?(Jason.Encoder) -> @derive(Jason.Encoder)
+            Code.ensure_loaded?(JSON.Encoder) -> @derive(JSON.Encoder)
+            true -> :ok
+          end
         end
       end
 
@@ -95,7 +103,7 @@ defmodule GuardedStruct.Transformers.Codegen do
       })
 
     quote do
-      unquote(derive_jason_ast)
+      unquote(derive_json_ast)
       @enforce_keys unquote(enforce_keys)
       defstruct unquote(defstruct_kw)
 

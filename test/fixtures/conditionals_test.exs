@@ -79,7 +79,7 @@ defmodule GuardedStructFixtures.ConditionalsTest do
       assert info.conditional_keys == [:block]
       assert info.path == []
       assert info.key == :root
-      assert info.options == %{jason: false, authorized_fields: false}
+      assert info.options == %{json: false, authorized_fields: false}
     end
 
     test "__fields__/0 exposes the FULL conditional shape — all 3 variants" do

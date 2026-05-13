@@ -15,7 +15,7 @@ spark_locals_without_parens = [
   field: 3,
   from: 1,
   hint: 1,
-  jason: 1,
+  json: 1,
   main_validator: 1,
   module: 1,
   on: 1,

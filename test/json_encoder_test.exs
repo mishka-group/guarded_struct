@@ -1,5 +1,10 @@
-defmodule GuardedStructTest.JasonEncoderTest do
+defmodule GuardedStructTest.JsonEncoderTest do
   use ExUnit.Case, async: true
+
+  # In this test env `:jason` is a dep, so `Jason.Encoder` wins the
+  # precedence over the built-in `JSON.Encoder`. These tests verify the
+  # Jason path. The built-in `JSON.Encoder` fallback is exercised in
+  # downstream projects on Elixir 1.18+ that do NOT add Jason as a dep.
 
   defmodule Plain do
     use GuardedStruct
@@ -13,13 +18,26 @@ defmodule GuardedStructTest.JasonEncoderTest do
   defmodule WithJason do
     use GuardedStruct
 
-    guardedstruct jason: true do
+    guardedstruct json: true do
       field(:name, String.t(), enforce: true)
       field(:age, integer())
     end
   end
 
-  test "without jason: true, Jason.Encoder protocol is NOT derived" do
+  defmodule Nested do
+    use GuardedStruct
+
+    guardedstruct json: true do
+      field(:name, String.t(), enforce: true)
+
+      sub_field :address, struct() do
+        field(:city, String.t(), enforce: true)
+        field(:zip, String.t())
+      end
+    end
+  end
+
+  test "without json: true, no JSON encoder is derived" do
     {:ok, struct} = Plain.builder(%{name: "Alice", age: 30})
 
     assert_raise Protocol.UndefinedError, fn ->
@@ -27,7 +45,7 @@ defmodule GuardedStructTest.JasonEncoderTest do
     end
   end
 
-  test "with jason: true, Jason.encode! works on the struct" do
+  test "with json: true, Jason.encode! works on the struct" do
     {:ok, struct} = WithJason.builder(%{name: "Alice", age: 30})
 
     assert {:ok, json} = Jason.encode(struct)
@@ -52,5 +70,19 @@ defmodule GuardedStructTest.JasonEncoderTest do
 
     json = Jason.encode!(struct)
     assert json =~ "\"age\":null"
+  end
+
+  test "nested sub_field encodes recursively" do
+    {:ok, struct} =
+      Nested.builder(%{
+        name: "Dave",
+        address: %{city: "Berlin", zip: "10115"}
+      })
+
+    decoded = struct |> Jason.encode!() |> Jason.decode!()
+
+    assert decoded["name"] == "Dave"
+    assert decoded["address"]["city"] == "Berlin"
+    assert decoded["address"]["zip"] == "10115"
   end
 end

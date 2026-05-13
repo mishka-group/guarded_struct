@@ -239,14 +239,14 @@ end
 
 ---
 
-## 11 · `jason: true` — JSON encoding for API responses
+## 11 · `json: true` — JSON encoding for API responses
 
-Auto-derive `Jason.Encoder` on the struct (and all sub_field submodules). For Phoenix/Plug response payloads.
+Auto-derive a JSON encoder on the struct (and all sub_field submodules). Precedence: `Jason.Encoder` if `:jason` is in the user's deps, otherwise the built-in `JSON.Encoder` on Elixir 1.18+. No-op if neither is available. For Phoenix/Plug response payloads.
 
 ```elixir
 defmodule Order do
   use GuardedStruct
-  guardedstruct jason: true do
+  guardedstruct json: true do
     field :id,    String.t(), enforce: true
     field :total, integer(),  enforce: true
   end
@@ -254,6 +254,8 @@ end
 
 {:ok, o} = Order.builder(%{id: "abc", total: 99})
 Jason.encode!(o)    # => ~s({"id":"abc","total":99})
+# or, on Elixir 1.18+ without Jason in deps:
+JSON.encode!(o)     # => ~s({"id":"abc","total":99})
 ```
 
 ---
@@ -395,7 +397,7 @@ config :guarded_struct,
 | `:html_sanitize_ex` ~> 1.5 | runtime | for `sanitize(strip_tags, basic_html, html5)` ops |
 | `:igniter` ~> 0.8 | dev/test | Installer mix task (§17) |
 | `:sourceror` ~> 1.7 | dev/test | For `mix spark.formatter` |
-| `:jason` ~> 1.4 | dev/test | Test coverage for `jason: true` (§11) |
+| `:jason` ~> 1.4 | dev/test | Test coverage for `json: true` (§11) |
 | `:stream_data` ~> 1.1 | dev/test | Property-based tests |
 
 Optional deps unchanged: `email_checker`, `ex_url`, `ex_phone_number`, `sweet_xml`.

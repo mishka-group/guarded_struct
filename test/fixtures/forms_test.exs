@@ -434,7 +434,7 @@ defmodule GuardedStructFixtures.FormsTest do
   # ============================================================
   # 5. Jason encoding — full decoded-map equality
   # ============================================================
-  describe "Signup JSON encoding (jason: true)" do
+  describe "Signup JSON encoding (json: true)" do
     test "decoded JSON contains EXACTLY the public fields (no virtuals)" do
       {:ok, signup} =
         Forms.Signup.builder(%{
@@ -582,7 +582,7 @@ defmodule GuardedStructFixtures.FormsTest do
       assert info.module == Forms.Signup
       assert info.keys == [:email, :password]
       assert Enum.sort(info.enforce_keys) == [:email, :password]
-      assert info.options.jason == true
+      assert info.options.json == true
       assert info.conditional_keys == []
     end
 
