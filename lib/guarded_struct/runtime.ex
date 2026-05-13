@@ -17,7 +17,30 @@ defmodule GuardedStruct.Runtime do
   def validate(module, attrs, error? \\ false)
 
   def validate(module, attrs, error?) when is_map(attrs) do
-    do_pipeline(module, attrs, attrs, :add, error?, [], _build_struct? = false)
+    # Auto-map cascade: every nested wrap call (sub_field, list-of-sub_field,
+    # external `struct:` ref, conditional) returns a plain map instead of a
+    # struct. Implemented via a process-dict flag so we don't have to thread
+    # the option through every function signature.
+    #
+    # Safety: `Process.put/2` returns the PRIOR value (or `nil`). We save it
+    # and restore on `after` so re-entrant calls (e.g. a validator MFA that
+    # itself calls `__guarded_change__/1` on a related resource) don't
+    # clobber the outer context. Concurrency-safe because process dicts are
+    # process-local — sibling tasks don't see this flag.
+    #
+    # Speed: one `Process.put` + one `Process.put`/`Process.delete` per
+    # top-level call. The wrap closure short-circuits on `build_struct? =
+    # false` so non-Ash callers pay zero dict lookups.
+    prior = Process.put(:guarded_as_map?, true)
+
+    try do
+      do_pipeline(module, attrs, attrs, :add, error?, [], _build_struct? = false)
+    after
+      case prior do
+        nil -> Process.delete(:guarded_as_map?)
+        v -> Process.put(:guarded_as_map?, v)
+      end
+    end
   end
 
   def validate(_module, _attrs, _error?) do
@@ -285,9 +308,18 @@ defmodule GuardedStruct.Runtime do
         |> Enum.filter(&(&1[:kind] == :virtual_field))
         |> Enum.map(& &1.name)
 
+      # The Ash-extension entry point (`validate/3`) sets `:guarded_as_map?`
+      # on the process dict, forcing every nested build to return a map
+      # rather than a struct — regardless of the `build_struct?` arg the
+      # submodule passes in via its own `builder/1`. Short-circuit:
+      # `build_struct? = false` is the original non-struct path (`validate/3`
+      # itself), so we don't need to consult the dict in that case.
+      wrap_as_struct? =
+        build_struct? and not Process.get(:guarded_as_map?, false)
+
       wrap = fn merged ->
         merged = Map.drop(merged, virtual_names)
-        if build_struct?, do: struct(module, merged), else: merged
+        if wrap_as_struct?, do: struct(module, merged), else: merged
       end
 
       {derive_errors, struct_value} =

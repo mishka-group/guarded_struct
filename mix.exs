@@ -132,7 +132,14 @@ defmodule GuardedStruct.MixProject do
       {:ex_phone_number, "~> 0.4.11", optional: true, only: :test},
       {:sweet_xml,
        github: "kbrw/sweet_xml", branch: "master", override: true, optional: true, only: :test},
-      {:igniter, "~> 0.8.0", only: [:dev, :test]}
+      {:igniter, "~> 0.8.0", only: [:dev, :test]},
+
+      # Real Ash for integration tests. We're a compile-time DSL extension
+      # so we don't dep on Ash at runtime; this is only for verifying that
+      # our extension actually works end-to-end with real Ash + the ETS
+      # data layer (no DB needed). Existing FakeFramework tests still cover
+      # the no-Ash path.
+      {:ash, "~> 3.0", only: :test}
     ]
   end
 end

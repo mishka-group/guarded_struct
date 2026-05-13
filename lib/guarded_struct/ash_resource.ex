@@ -81,6 +81,52 @@ defmodule GuardedStruct.AshResource do
   cast types. "Change" matches Ash's own terminology and is honest about
   the side-effect.
 
+  ## Auto-map cascade
+
+  Every nested `sub_field` returns a plain map (not a struct) at every depth
+  when called through `__guarded_change__/1`. This is automatic and unique
+  to the Ash extension — standalone `use GuardedStruct` callers still get
+  structs from `builder/1`.
+
+      MyResource.__guarded_change__(%{
+        profile: %{address: %{geo: %{lat: 1.0, lng: 2.0}}}
+      })
+      # {:ok, %{profile: %{address: %{geo: %{lat: 1.0, lng: 2.0}}}}}
+      #                              ^^^^ plain map, NOT a struct
+
+  This matches Ash's `:map` attribute type, so validated output drops
+  directly into `changeset.attributes` without conversion. Implementation
+  is a process-local flag — concurrency-safe (sibling processes don't see
+  it), re-entrancy-safe (saved+restored across nested calls), zero overhead
+  for standalone callers.
+
+  ## Update actions — `require_atomic? false`
+
+  `GuardedStruct.AshResource.Change` runs an imperative Elixir pipeline.
+  Ash 3.x's update planner requires changes to declare atomic-safety, and
+  ours opts out via `atomic/3` returning `{:not_atomic, reason}`. On any
+  UPDATE action that uses this change, set `require_atomic? false`:
+
+      actions do
+        update :update do
+          accept [:email]
+          require_atomic? false
+        end
+      end
+
+  CREATE actions don't need this flag — Ash only enforces atomic mode on
+  updates.
+
+  ## sub_field vs Ash relationships
+
+  `sub_field` inside an Ash resource creates an **embedded value type**, not
+  a related Ash resource. The generated submodule is a standalone
+  GuardedStruct (it has `defstruct`, `builder/1`, full GuardedStruct API)
+  but it is NOT an Ash resource (no actions, no changesets, no table). Use
+  `sub_field` for nested map shapes inside a single resource's attrs. For
+  separate tables and relationships, use Ash's own `relationships do
+  has_one :preferences, ... end`.
+
   ## Companion modules
 
   * `GuardedStruct.AshResource.Change` — the `Ash.Resource.Change` module

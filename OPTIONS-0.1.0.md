@@ -374,6 +374,69 @@ MyApp.User.__guarded_change__(%{email: " ALICE@X.io "})
 
 The function is called `__guarded_change__` (not `__guarded_validate__`) because it can both validate AND transform values — sanitize ops trim/downcase/slugify, derives cast types.
 
+### Update actions — `require_atomic? false`
+
+`GuardedStruct.AshResource.Change` runs an imperative Elixir pipeline (sanitize → validate → derive → main_validator). It cannot be expressed as atomic SQL, so on UPDATE actions you must set `require_atomic? false`:
+
+```elixir
+actions do
+  defaults [:read, :destroy]
+  create :create, accept: [:email, :nickname]
+
+  update :update do
+    accept [:email, :nickname]
+    require_atomic? false   # ← required for guardedstruct on updates
+  end
+end
+```
+
+Internally our `Change.atomic/3` callback returns `{:not_atomic, reason}`, but Ash's update planner still requires the action-level flag when `require_atomic?` is the default-`true` setting.
+
+### Auto-map cascade — Ash-friendly nested payloads
+
+In the Ash extension, **every** nested `sub_field` returns a plain map, not a struct — at all depths. This is automatic; no flag to set.
+
+```elixir
+defmodule MyApp.User do
+  use Ash.Resource, extensions: [GuardedStruct.AshResource]
+
+  guardedstruct do
+    field :email, :string
+    sub_field :profile, :map do
+      field :name, :string
+      sub_field :address, :map do
+        field :city, :string
+        sub_field :geo, :map do
+          field :lat, :float
+          field :lng, :float
+        end
+      end
+    end
+  end
+end
+
+MyApp.User.__guarded_change__(%{
+  email: "a@b.com",
+  profile: %{name: "Alice", address: %{city: "Berlin", geo: %{lat: 52.5, lng: 13.4}}}
+})
+# => {:ok, %{
+#      email: "a@b.com",
+#      profile: %{                            # plain map, NOT %MyApp.User.Profile{}
+#        name: "Alice",
+#        address: %{                          # plain map, NOT %MyApp.User.Profile.Address{}
+#          city: "Berlin",
+#          geo: %{lat: 52.5, lng: 13.4}       # plain map, all the way down
+#        }
+#      }
+#    }}
+```
+
+Why this matters: Ash's `:map` attribute type expects plain maps. With the cascade, GuardedStruct's validated output drops straight into an Ash changeset's `:map` columns without any post-processing.
+
+Standalone `use GuardedStruct` is unaffected — `builder/1` still returns structs at every level.
+
+**Implementation**: the cascade is implemented via a process-dictionary flag set inside the top-level `__guarded_change__/1` entry. It's process-local (concurrency-safe — sibling processes don't see it), re-entrancy-safe (saved+restored across nested calls), and exception-safe (cleared via `try/after`). Zero overhead for standalone callers.
+
 ---
 
 ## 16 · Telemetry events — production observability
