@@ -190,7 +190,8 @@ defmodule GuardedStruct.Transformers.Codegen do
         %{
           kind: :pattern_field,
           pattern: f.name,
-          type: f.type,
+          type: Macro.to_string(f.type),
+          enforce: f.enforce,
           derive: f.derives || f.derive,
           __derive_ops__: f.__derive_ops__,
           validator: f.validator,
@@ -345,6 +346,8 @@ defmodule GuardedStruct.Transformers.Codegen do
           %{
             kind: if(f.__dynamic__, do: :dynamic_field, else: :field),
             name: f.name,
+            type: Macro.to_string(f.type),
+            enforce: f.enforce,
             derive: f.derives || f.derive,
             __derive_ops__: f.__derive_ops__,
             __from_path__: f.__from_path__,
@@ -366,6 +369,8 @@ defmodule GuardedStruct.Transformers.Codegen do
           %{
             kind: :sub_field,
             name: sf.name,
+            type: Macro.to_string(sf.type),
+            enforce: sf.enforce,
             derive: sf.derives || sf.derive,
             __derive_ops__: sf.__derive_ops__,
             __from_path__: sf.__from_path__,
@@ -391,6 +396,8 @@ defmodule GuardedStruct.Transformers.Codegen do
           %{
             kind: :conditional_field,
             name: cf.name,
+            type: Macro.to_string(cf.type),
+            enforce: cf.enforce,
             derive: cf.derives || cf.derive,
             __derive_ops__: cf.__derive_ops__,
             __from_path__: cf.__from_path__,
@@ -419,6 +426,8 @@ defmodule GuardedStruct.Transformers.Codegen do
         %{
           kind: :virtual_field,
           name: vf.name,
+          type: Macro.to_string(vf.type),
+          enforce: vf.enforce,
           derive: vf.derives || vf.derive,
           __derive_ops__: vf.__derive_ops__,
           __from_path__: vf.__from_path__,
