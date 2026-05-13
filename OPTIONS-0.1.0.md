@@ -314,7 +314,9 @@ User.example()                                   # => %User{name: "", age: 0, ..
 
 ## 15 · Ash resource extension
 
-Use the GuardedStruct DSL inside `Ash.Resource` to add field-level validate/sanitize rules without re-defining `defstruct`.
+Use the GuardedStruct DSL inside `Ash.Resource` to add field-level sanitize/validate rules without re-defining `defstruct`. Wire the pipeline into the changeset in one of two ways.
+
+### Manual wiring (Option A — default)
 
 ```elixir
 defmodule MyApp.User do
@@ -322,17 +324,55 @@ defmodule MyApp.User do
 
   attributes do
     uuid_primary_key :id
-    attribute :email, :string, allow_nil?: false
+    attribute :email, :string, allow_nil?: false, public?: true
   end
 
   guardedstruct do
     field :email, :string, derives: "sanitize(trim, downcase) validate(email_r)"
   end
-end
 
-MyApp.User.__guarded_validate__(%{email: " ALICE@X.io "})
+  # One line — applies to every :create and :update action.
+  changes do
+    change GuardedStruct.AshResource.Change
+  end
+end
+```
+
+Now `Ash.Changeset.for_create(MyApp.User, :create, %{email: "  Alice@X.io  "})` sanitizes and validates **before** Ash hits the data layer.
+
+### Auto-wiring (Option B — opt-in)
+
+Set `auto_wire true` inside the section and the change is injected for you:
+
+```elixir
+defmodule MyApp.User do
+  use Ash.Resource, domain: MyApp.Domain, extensions: [GuardedStruct.AshResource]
+
+  attributes do
+    uuid_primary_key :id
+    attribute :email, :string, allow_nil?: false, public?: true
+  end
+
+  guardedstruct do
+    auto_wire true   # ← Spark inline setter; no `changes do ... end` needed
+
+    field :email, :string, derives: "sanitize(trim, downcase) validate(email_r)"
+  end
+end
+```
+
+Under the hood this calls `Ash.Resource.Builder.add_change/3` from a Spark transformer, equivalent to writing the `changes do change ... end` block by hand. `auto_wire` defaults to **false** — no magic unless you opt in.
+
+### Direct API
+
+Either wiring mode also exposes a direct API for cases where you want to validate outside an Ash action (e.g. in tests, scripts, or a Phoenix LiveView form):
+
+```elixir
+MyApp.User.__guarded_change__(%{email: " ALICE@X.io "})
 # => {:ok, %{email: "alice@x.io"}}
 ```
+
+The function is called `__guarded_change__` (not `__guarded_validate__`) because it can both validate AND transform values — sanitize ops trim/downcase/slugify, derives cast types.
 
 ---
 

@@ -198,6 +198,17 @@ defmodule GuardedStruct.Dsl do
             "`:jason` is in the user's deps; otherwise falls back to the " <>
             "built-in `JSON.Encoder` on Elixir 1.18+. No-op if neither is " <>
             "available."
+      ],
+      auto_wire: [
+        type: :boolean,
+        default: false,
+        doc:
+          "Only effective inside the `GuardedStruct.AshResource` extension. " <>
+            "When `true`, injects `GuardedStruct.AshResource.Change` into the " <>
+            "resource's top-level `changes` section so every `:create` and " <>
+            "`:update` action automatically runs the GuardedStruct pipeline. " <>
+            "Equivalent to writing `changes do change GuardedStruct.AshResource.Change end` " <>
+            "by hand. No-op outside the Ash extension."
       ]
     ],
     entities: [@field, @virtual_field, @dynamic_field, @sub_field, @conditional_field]

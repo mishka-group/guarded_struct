@@ -107,12 +107,24 @@ defmodule MyApp.Resource do
   use Ash.Resource, extensions: [GuardedStruct.AshResource]
 
   guardedstruct do
-    field :name, String.t(), enforce: true, derive: "validate(string)"
+    field :name, :string, enforce: true, derives: "validate(string)"
+  end
+
+  changes do
+    change GuardedStruct.AshResource.Change
   end
 end
 ```
 
-`__guarded_validate__/1` returns validated attrs map; `__guarded_information__/0` and `__guarded_fields__/0` expose the same metadata as the standalone API but under a separate namespace.
+The extension generates **prefixed** functions to avoid clashing with Ash's own callbacks:
+
+* `__guarded_change__/1` — runs the full GuardedStruct pipeline (sanitize → validate → derive → main_validator) and returns `{:ok, transformed_attrs} | {:error, errors}`. Named `change` (not `validate`) because the pipeline can transform values, not just inspect them.
+* `__guarded_information__/0` and `__guarded_fields__/0` — introspection, mirroring the standalone API.
+
+The companion `GuardedStruct.AshResource.Change` module is a ready-made `Ash.Resource.Change` that bridges `__guarded_change__/1` into the changeset pipeline. Two wiring modes:
+
+* **Manual (default)** — write `changes do change GuardedStruct.AshResource.Change end` once. Explicit, inspectable via `Ash.Resource.Info.changes/1`.
+* **Auto-wire** — set `auto_wire true` at the top of `guardedstruct`. A Spark transformer injects the change for you via `Ash.Resource.Builder.add_change/3`. No `changes do ... end` block needed. Default is `false`.
 
 ## Soft deprecations
 

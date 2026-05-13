@@ -126,11 +126,17 @@ The legacy `Application.put_env` mechanism still works — both can coexist.
 use Ash.Resource, extensions: [GuardedStruct.AshResource]
 
 guardedstruct do
-  field :name, String.t(), enforce: true, derives: "validate(string)"
+  field :name, :string, enforce: true, derives: "validate(string)"
+end
+
+changes do
+  change GuardedStruct.AshResource.Change   # wire into create/update
 end
 ```
 
-Generates `__guarded_validate__/1`, `__guarded_information__/0`, `__guarded_fields__/0` under the `__guarded_*` namespace (no clash with Ash's own callbacks).
+Generates `__guarded_change__/1`, `__guarded_information__/0`, `__guarded_fields__/0` under the `__guarded_*` namespace (no clash with Ash's own callbacks). The companion `GuardedStruct.AshResource.Change` module bridges the pipeline into Ash's changeset flow.
+
+Prefer zero wiring? Set `auto_wire true` at the top of the `guardedstruct` block and the change is injected for you. See OPTIONS §15.
 
 ### 8. Splode error wrapping (opt-in)
 

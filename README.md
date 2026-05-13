@@ -305,19 +305,26 @@ defmodule MyApp.Resources.User do
   use Ash.Resource, extensions: [GuardedStruct.AshResource]
 
   guardedstruct do
-    field :name, String.t(), enforce: true,
+    field :name, :string, enforce: true,
       derives: "sanitize(trim) validate(string, max_len=80)"
-    field :email, String.t(), enforce: true, derives: "validate(email_r)"
+    field :email, :string, enforce: true, derives: "validate(email_r)"
+  end
+
+  # Wire the pipeline into create/update changesets:
+  changes do
+    change GuardedStruct.AshResource.Change
   end
 
   # ... your Ash actions, attributes, etc.
 end
 
-# The validation pipeline lives under the __guarded_*__ namespace so it
-# doesn't clash with Ash's own callbacks:
-MyApp.Resources.User.__guarded_validate__(%{name: "Alice", email: "alice@x.com"})
+# The pipeline lives under the __guarded_*__ namespace so it doesn't clash
+# with Ash's own callbacks. Direct call (skipping Ash's changeset machinery):
+MyApp.Resources.User.__guarded_change__(%{name: "Alice", email: "alice@x.com"})
 # => {:ok, %{name: "Alice", email: "alice@x.com"}}
 ```
+
+Prefer zero wiring? Set `auto_wire true` inside the `guardedstruct` block and the change is injected for you. See OPTIONS §15 for the trade-offs.
 
 ## Errors as Splode exceptions (opt-in)
 

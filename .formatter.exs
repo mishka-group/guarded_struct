@@ -1,6 +1,7 @@
 spark_locals_without_parens = [
   authorized_fields: 1,
   auto: 1,
+  auto_wire: 1,
   conditional_field: 2,
   conditional_field: 3,
   default: 1,

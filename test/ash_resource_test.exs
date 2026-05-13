@@ -59,10 +59,10 @@ defmodule GuardedStructTest.AshResourceTest do
     end
   end
 
-  describe "__guarded_validate__/1" do
+  describe "__guarded_change__/1" do
     test "valid input → {:ok, sanitized_attrs}" do
       assert {:ok, attrs} =
-               FakeAshResource.__guarded_validate__(%{email: "  Foo@Bar.COM  "})
+               FakeAshResource.__guarded_change__(%{email: "  Foo@Bar.COM  "})
 
       # Sanitize ran (trim + downcase).
       assert attrs.email == "foo@bar.com"
@@ -70,12 +70,12 @@ defmodule GuardedStructTest.AshResourceTest do
 
     test "missing required field → {:error, required_fields}" do
       assert {:error, %{action: :required_fields, fields: [:email]}} =
-               FakeAshResource.__guarded_validate__(%{})
+               FakeAshResource.__guarded_change__(%{})
     end
 
     test "derive failure → {:error, list of errors}" do
       assert {:error, errs} =
-               FakeAshResource.__guarded_validate__(%{
+               FakeAshResource.__guarded_change__(%{
                  email: "valid@example.com",
                  nickname: 123
                })
@@ -86,7 +86,7 @@ defmodule GuardedStructTest.AshResourceTest do
     test "sub_field validation works through the Ash variant too" do
       # `theme` has an enum derive — wrong value should fail.
       assert {:error, errors} =
-               FakeAshResource.__guarded_validate__(%{
+               FakeAshResource.__guarded_change__(%{
                  email: "valid@example.com",
                  preferences: %{theme: "blue"}
                })
@@ -96,7 +96,7 @@ defmodule GuardedStructTest.AshResourceTest do
 
       # And valid sub_field input passes through.
       assert {:ok, attrs} =
-               FakeAshResource.__guarded_validate__(%{
+               FakeAshResource.__guarded_change__(%{
                  email: "valid@example.com",
                  preferences: %{theme: "dark"}
                })
@@ -121,7 +121,7 @@ defmodule GuardedStructTest.AshResourceTest do
       refute GuardedStruct.AshResource.Info.field?(FakeAshResource, :no_such)
     end
 
-    test "validate/2 delegates to __guarded_validate__/1" do
+    test "validate/2 delegates to __guarded_change__/1" do
       assert {:ok, _} =
                GuardedStruct.AshResource.Info.validate(FakeAshResource, %{
                  email: "ok@x.com"

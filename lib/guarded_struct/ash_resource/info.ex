@@ -66,9 +66,9 @@ defmodule GuardedStruct.AshResource.Info do
   @doc """
   Run the validation pipeline on `attrs` and return `{:ok, validated_map}`
   or `{:error, errors}`. Convenience wrapper over the resource's own
-  `__guarded_validate__/1`.
+  `__guarded_change__/1`.
   """
   def validate(module, attrs, error? \\ false) do
-    module.__guarded_validate__(attrs, error?)
+    module.__guarded_change__(attrs, error?)
   end
 end

@@ -3,9 +3,14 @@ defmodule GuardedStruct.Transformers.GenerateAshValidator do
 
   # Codegen for the `GuardedStruct.AshResource` extension. Mirrors
   # `GuardedStruct.Transformers.GenerateBuilder` but emits
-  # `__guarded_validate__/1` and `__guarded_fields__/0` (plus the runtime
+  # `__guarded_change__/1` and `__guarded_fields__/0` (plus the runtime
   # metadata accessor `__guarded_information__/0`) instead of `defstruct`
   # + `builder/2`.
+  #
+  # The function is called `__guarded_change__` (not `__guarded_validate__`)
+  # because it can both *validate* AND *transform* values — sanitize ops
+  # trim/downcase/slugify, derive auto-fills, etc. "Change" matches Ash's
+  # terminology (the function fires inside an `Ash.Resource.Change`).
   #
   # Function names are namespaced with `__guarded_*` so they don't collide
   # with Ash's `__resource__/1`, `__struct__/1`, etc. Code that needs them
@@ -57,11 +62,11 @@ defmodule GuardedStruct.Transformers.GenerateAshValidator do
         if Module.defines?(__MODULE__, {:__guarded_fields__, 0}, :def),
           do: defoverridable(__guarded_fields__: 0)
 
-        if Module.defines?(__MODULE__, {:__guarded_validate__, 1}, :def),
-          do: defoverridable(__guarded_validate__: 1)
+        if Module.defines?(__MODULE__, {:__guarded_change__, 1}, :def),
+          do: defoverridable(__guarded_change__: 1)
 
-        if Module.defines?(__MODULE__, {:__guarded_validate__, 2}, :def),
-          do: defoverridable(__guarded_validate__: 2)
+        if Module.defines?(__MODULE__, {:__guarded_change__, 2}, :def),
+          do: defoverridable(__guarded_change__: 2)
 
         def __guarded_information__ do
           Map.put(unquote(info_map), :module, __MODULE__)
@@ -70,14 +75,16 @@ defmodule GuardedStruct.Transformers.GenerateAshValidator do
         def __guarded_fields__, do: unquote(Macro.escape(fields_runtime))
 
         @doc """
-        Run the GuardedStruct validation/sanitization/derive pipeline against
-        `attrs` and return either `{:ok, validated_attrs}` or
-        `{:error, errors}`.
+        Apply the full GuardedStruct pipeline (sanitize → validate → derive →
+        main_validator) to `attrs` and return either `{:ok, transformed_attrs}`
+        or `{:error, errors}`. Wire this into an `Ash.Resource.Change` to plug
+        guardedstruct rules into Ash's changeset pipeline.
 
-        Wire this into an `Ash.Resource.Change` or `Ash.Resource.Validation`
-        to plug guardedstruct rules into Ash's action pipeline.
+        The function is named `__guarded_change__` because it does more than
+        validate — it can also transform values (trim, downcase, slugify,
+        auto-fill, etc.) before they reach the data layer.
         """
-        def __guarded_validate__(attrs, error? \\ false) do
+        def __guarded_change__(attrs, error? \\ false) do
           GuardedStruct.Runtime.validate(__MODULE__, attrs, error?)
         end
       end
