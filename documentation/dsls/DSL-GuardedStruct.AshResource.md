@@ -23,13 +23,13 @@ A Spark DSL extension that adds the GuardedStruct DSL to an Ash resource.
       # rules that Ash actions can reach via `__guarded_validate__/1`.
       guardedstruct do
         field :email, :string,
-          derive: "sanitize(trim, downcase) validate(string, not_empty, email_r)"
+          derives: "sanitize(trim, downcase) validate(string, not_empty, email_r)"
 
         field :nickname, :string,
-          derive: "sanitize(strip_tags, trim) validate(string, max_len=20)"
+          derives: "sanitize(strip_tags, trim) validate(string, max_len=20)"
 
         sub_field :preferences, :map do
-          field :theme, :string, derive: "validate(enum=String[light::dark])"
+          field :theme, :string, derives: "validate(enum=String[light::dark])"
         end
       end
     end
@@ -111,6 +111,7 @@ guardedstruct block at runtime:
 | [`main_validator`](#guardedstruct-main_validator){: #guardedstruct-main_validator } | `{atom, atom}` |  |  |
 | [`validate_derive`](#guardedstruct-validate_derive){: #guardedstruct-validate_derive } | `atom \| list(atom)` |  |  |
 | [`sanitize_derive`](#guardedstruct-sanitize_derive){: #guardedstruct-sanitize_derive } | `atom \| list(atom)` |  |  |
+| [`jason`](#guardedstruct-jason){: #guardedstruct-jason } | `boolean` | `false` |  |
 
 
 
@@ -138,6 +139,7 @@ field name, type
 |------|------|---------|------|
 | [`enforce`](#guardedstruct-field-enforce){: #guardedstruct-field-enforce } | `boolean` |  |  |
 | [`default`](#guardedstruct-field-default){: #guardedstruct-field-default } | `any` |  |  |
+| [`derives`](#guardedstruct-field-derives){: #guardedstruct-field-derives } | `String.t` |  |  |
 | [`derive`](#guardedstruct-field-derive){: #guardedstruct-field-derive } | `String.t` |  |  |
 | [`validator`](#guardedstruct-field-validator){: #guardedstruct-field-validator } | `{atom, atom}` |  |  |
 | [`auto`](#guardedstruct-field-auto){: #guardedstruct-field-auto } | `{atom, atom} \| {atom, atom, any}` |  |  |
@@ -178,6 +180,7 @@ virtual_field name, type
 |------|------|---------|------|
 | [`enforce`](#guardedstruct-virtual_field-enforce){: #guardedstruct-virtual_field-enforce } | `boolean` |  |  |
 | [`default`](#guardedstruct-virtual_field-default){: #guardedstruct-virtual_field-default } | `any` |  |  |
+| [`derives`](#guardedstruct-virtual_field-derives){: #guardedstruct-virtual_field-derives } | `String.t` |  |  |
 | [`derive`](#guardedstruct-virtual_field-derive){: #guardedstruct-virtual_field-derive } | `String.t` |  |  |
 | [`validator`](#guardedstruct-virtual_field-validator){: #guardedstruct-virtual_field-validator } | `{atom, atom}` |  |  |
 | [`auto`](#guardedstruct-virtual_field-auto){: #guardedstruct-virtual_field-auto } | `{atom, atom} \| {atom, atom, any}` |  |  |
@@ -213,9 +216,15 @@ dynamic_field name
 | Name | Type | Default | Docs |
 |------|------|---------|------|
 | [`type`](#guardedstruct-dynamic_field-type){: #guardedstruct-dynamic_field-type } | `any` | `{:map, [], []}` |  |
+| [`enforce`](#guardedstruct-dynamic_field-enforce){: #guardedstruct-dynamic_field-enforce } | `boolean` |  |  |
 | [`default`](#guardedstruct-dynamic_field-default){: #guardedstruct-dynamic_field-default } | `any` | `{:%{}, [], []}` |  |
-| [`derive`](#guardedstruct-dynamic_field-derive){: #guardedstruct-dynamic_field-derive } | `String.t` | `"validate(map)"` |  |
+| [`derives`](#guardedstruct-dynamic_field-derives){: #guardedstruct-dynamic_field-derives } | `String.t` | `"validate(map)"` |  |
+| [`derive`](#guardedstruct-dynamic_field-derive){: #guardedstruct-dynamic_field-derive } | `String.t` |  |  |
 | [`validator`](#guardedstruct-dynamic_field-validator){: #guardedstruct-dynamic_field-validator } | `{atom, atom}` |  |  |
+| [`auto`](#guardedstruct-dynamic_field-auto){: #guardedstruct-dynamic_field-auto } | `{atom, atom} \| {atom, atom, any}` |  |  |
+| [`from`](#guardedstruct-dynamic_field-from){: #guardedstruct-dynamic_field-from } | `String.t` |  |  |
+| [`on`](#guardedstruct-dynamic_field-on){: #guardedstruct-dynamic_field-on } | `String.t` |  |  |
+| [`domain`](#guardedstruct-dynamic_field-domain){: #guardedstruct-dynamic_field-domain } | `String.t` |  |  |
 | [`hint`](#guardedstruct-dynamic_field-hint){: #guardedstruct-dynamic_field-hint } | `String.t` |  |  |
 
 
@@ -255,6 +264,7 @@ sub_field name, type
 |------|------|---------|------|
 | [`enforce`](#guardedstruct-sub_field-enforce){: #guardedstruct-sub_field-enforce } | `boolean` |  |  |
 | [`default`](#guardedstruct-sub_field-default){: #guardedstruct-sub_field-default } | `any` |  |  |
+| [`derives`](#guardedstruct-sub_field-derives){: #guardedstruct-sub_field-derives } | `String.t` |  |  |
 | [`derive`](#guardedstruct-sub_field-derive){: #guardedstruct-sub_field-derive } | `String.t` |  |  |
 | [`validator`](#guardedstruct-sub_field-validator){: #guardedstruct-sub_field-validator } | `{atom, atom}` |  |  |
 | [`auto`](#guardedstruct-sub_field-auto){: #guardedstruct-sub_field-auto } | `{atom, atom} \| {atom, atom, any}` |  |  |
@@ -298,6 +308,7 @@ conditional_field name, type
 |------|------|---------|------|
 | [`enforce`](#guardedstruct-sub_field-conditional_field-enforce){: #guardedstruct-sub_field-conditional_field-enforce } | `boolean` |  |  |
 | [`default`](#guardedstruct-sub_field-conditional_field-default){: #guardedstruct-sub_field-conditional_field-default } | `any` |  |  |
+| [`derives`](#guardedstruct-sub_field-conditional_field-derives){: #guardedstruct-sub_field-conditional_field-derives } | `String.t` |  |  |
 | [`derive`](#guardedstruct-sub_field-conditional_field-derive){: #guardedstruct-sub_field-conditional_field-derive } | `String.t` |  |  |
 | [`validator`](#guardedstruct-sub_field-conditional_field-validator){: #guardedstruct-sub_field-conditional_field-validator } | `{atom, atom}` |  |  |
 | [`auto`](#guardedstruct-sub_field-conditional_field-auto){: #guardedstruct-sub_field-conditional_field-auto } | `{atom, atom} \| {atom, atom, any}` |  |  |
@@ -334,6 +345,7 @@ field name, type
 |------|------|---------|------|
 | [`enforce`](#guardedstruct-sub_field-conditional_field-field-enforce){: #guardedstruct-sub_field-conditional_field-field-enforce } | `boolean` |  |  |
 | [`default`](#guardedstruct-sub_field-conditional_field-field-default){: #guardedstruct-sub_field-conditional_field-field-default } | `any` |  |  |
+| [`derives`](#guardedstruct-sub_field-conditional_field-field-derives){: #guardedstruct-sub_field-conditional_field-field-derives } | `String.t` |  |  |
 | [`derive`](#guardedstruct-sub_field-conditional_field-field-derive){: #guardedstruct-sub_field-conditional_field-field-derive } | `String.t` |  |  |
 | [`validator`](#guardedstruct-sub_field-conditional_field-field-validator){: #guardedstruct-sub_field-conditional_field-field-validator } | `{atom, atom}` |  |  |
 | [`auto`](#guardedstruct-sub_field-conditional_field-field-auto){: #guardedstruct-sub_field-conditional_field-field-auto } | `{atom, atom} \| {atom, atom, any}` |  |  |
@@ -376,6 +388,7 @@ sub_field name, type
 |------|------|---------|------|
 | [`enforce`](#guardedstruct-sub_field-conditional_field-sub_field-enforce){: #guardedstruct-sub_field-conditional_field-sub_field-enforce } | `boolean` |  |  |
 | [`default`](#guardedstruct-sub_field-conditional_field-sub_field-default){: #guardedstruct-sub_field-conditional_field-sub_field-default } | `any` |  |  |
+| [`derives`](#guardedstruct-sub_field-conditional_field-sub_field-derives){: #guardedstruct-sub_field-conditional_field-sub_field-derives } | `String.t` |  |  |
 | [`derive`](#guardedstruct-sub_field-conditional_field-sub_field-derive){: #guardedstruct-sub_field-conditional_field-sub_field-derive } | `String.t` |  |  |
 | [`validator`](#guardedstruct-sub_field-conditional_field-sub_field-validator){: #guardedstruct-sub_field-conditional_field-sub_field-validator } | `{atom, atom}` |  |  |
 | [`auto`](#guardedstruct-sub_field-conditional_field-sub_field-auto){: #guardedstruct-sub_field-conditional_field-sub_field-auto } | `{atom, atom} \| {atom, atom, any}` |  |  |
@@ -415,6 +428,7 @@ field name, type
 |------|------|---------|------|
 | [`enforce`](#guardedstruct-sub_field-conditional_field-sub_field-field-enforce){: #guardedstruct-sub_field-conditional_field-sub_field-field-enforce } | `boolean` |  |  |
 | [`default`](#guardedstruct-sub_field-conditional_field-sub_field-field-default){: #guardedstruct-sub_field-conditional_field-sub_field-field-default } | `any` |  |  |
+| [`derives`](#guardedstruct-sub_field-conditional_field-sub_field-field-derives){: #guardedstruct-sub_field-conditional_field-sub_field-field-derives } | `String.t` |  |  |
 | [`derive`](#guardedstruct-sub_field-conditional_field-sub_field-field-derive){: #guardedstruct-sub_field-conditional_field-sub_field-field-derive } | `String.t` |  |  |
 | [`validator`](#guardedstruct-sub_field-conditional_field-sub_field-field-validator){: #guardedstruct-sub_field-conditional_field-sub_field-field-validator } | `{atom, atom}` |  |  |
 | [`auto`](#guardedstruct-sub_field-conditional_field-sub_field-field-auto){: #guardedstruct-sub_field-conditional_field-sub_field-field-auto } | `{atom, atom} \| {atom, atom, any}` |  |  |
@@ -465,6 +479,7 @@ sub_field name, type
 |------|------|---------|------|
 | [`enforce`](#guardedstruct-sub_field-sub_field-enforce){: #guardedstruct-sub_field-sub_field-enforce } | `boolean` |  |  |
 | [`default`](#guardedstruct-sub_field-sub_field-default){: #guardedstruct-sub_field-sub_field-default } | `any` |  |  |
+| [`derives`](#guardedstruct-sub_field-sub_field-derives){: #guardedstruct-sub_field-sub_field-derives } | `String.t` |  |  |
 | [`derive`](#guardedstruct-sub_field-sub_field-derive){: #guardedstruct-sub_field-sub_field-derive } | `String.t` |  |  |
 | [`validator`](#guardedstruct-sub_field-sub_field-validator){: #guardedstruct-sub_field-sub_field-validator } | `{atom, atom}` |  |  |
 | [`auto`](#guardedstruct-sub_field-sub_field-auto){: #guardedstruct-sub_field-sub_field-auto } | `{atom, atom} \| {atom, atom, any}` |  |  |
@@ -504,6 +519,7 @@ field name, type
 |------|------|---------|------|
 | [`enforce`](#guardedstruct-sub_field-sub_field-field-enforce){: #guardedstruct-sub_field-sub_field-field-enforce } | `boolean` |  |  |
 | [`default`](#guardedstruct-sub_field-sub_field-field-default){: #guardedstruct-sub_field-sub_field-field-default } | `any` |  |  |
+| [`derives`](#guardedstruct-sub_field-sub_field-field-derives){: #guardedstruct-sub_field-sub_field-field-derives } | `String.t` |  |  |
 | [`derive`](#guardedstruct-sub_field-sub_field-field-derive){: #guardedstruct-sub_field-sub_field-field-derive } | `String.t` |  |  |
 | [`validator`](#guardedstruct-sub_field-sub_field-field-validator){: #guardedstruct-sub_field-sub_field-field-validator } | `{atom, atom}` |  |  |
 | [`auto`](#guardedstruct-sub_field-sub_field-field-auto){: #guardedstruct-sub_field-sub_field-field-auto } | `{atom, atom} \| {atom, atom, any}` |  |  |
@@ -548,6 +564,7 @@ field name, type
 |------|------|---------|------|
 | [`enforce`](#guardedstruct-sub_field-field-enforce){: #guardedstruct-sub_field-field-enforce } | `boolean` |  |  |
 | [`default`](#guardedstruct-sub_field-field-default){: #guardedstruct-sub_field-field-default } | `any` |  |  |
+| [`derives`](#guardedstruct-sub_field-field-derives){: #guardedstruct-sub_field-field-derives } | `String.t` |  |  |
 | [`derive`](#guardedstruct-sub_field-field-derive){: #guardedstruct-sub_field-field-derive } | `String.t` |  |  |
 | [`validator`](#guardedstruct-sub_field-field-validator){: #guardedstruct-sub_field-field-validator } | `{atom, atom}` |  |  |
 | [`auto`](#guardedstruct-sub_field-field-auto){: #guardedstruct-sub_field-field-auto } | `{atom, atom} \| {atom, atom, any}` |  |  |
@@ -606,6 +623,7 @@ conditional_field name, type
 |------|------|---------|------|
 | [`enforce`](#guardedstruct-conditional_field-enforce){: #guardedstruct-conditional_field-enforce } | `boolean` |  |  |
 | [`default`](#guardedstruct-conditional_field-default){: #guardedstruct-conditional_field-default } | `any` |  |  |
+| [`derives`](#guardedstruct-conditional_field-derives){: #guardedstruct-conditional_field-derives } | `String.t` |  |  |
 | [`derive`](#guardedstruct-conditional_field-derive){: #guardedstruct-conditional_field-derive } | `String.t` |  |  |
 | [`validator`](#guardedstruct-conditional_field-validator){: #guardedstruct-conditional_field-validator } | `{atom, atom}` |  |  |
 | [`auto`](#guardedstruct-conditional_field-auto){: #guardedstruct-conditional_field-auto } | `{atom, atom} \| {atom, atom, any}` |  |  |
@@ -650,6 +668,7 @@ sub_field name, type
 |------|------|---------|------|
 | [`enforce`](#guardedstruct-conditional_field-sub_field-enforce){: #guardedstruct-conditional_field-sub_field-enforce } | `boolean` |  |  |
 | [`default`](#guardedstruct-conditional_field-sub_field-default){: #guardedstruct-conditional_field-sub_field-default } | `any` |  |  |
+| [`derives`](#guardedstruct-conditional_field-sub_field-derives){: #guardedstruct-conditional_field-sub_field-derives } | `String.t` |  |  |
 | [`derive`](#guardedstruct-conditional_field-sub_field-derive){: #guardedstruct-conditional_field-sub_field-derive } | `String.t` |  |  |
 | [`validator`](#guardedstruct-conditional_field-sub_field-validator){: #guardedstruct-conditional_field-sub_field-validator } | `{atom, atom}` |  |  |
 | [`auto`](#guardedstruct-conditional_field-sub_field-auto){: #guardedstruct-conditional_field-sub_field-auto } | `{atom, atom} \| {atom, atom, any}` |  |  |
@@ -693,6 +712,7 @@ conditional_field name, type
 |------|------|---------|------|
 | [`enforce`](#guardedstruct-conditional_field-sub_field-conditional_field-enforce){: #guardedstruct-conditional_field-sub_field-conditional_field-enforce } | `boolean` |  |  |
 | [`default`](#guardedstruct-conditional_field-sub_field-conditional_field-default){: #guardedstruct-conditional_field-sub_field-conditional_field-default } | `any` |  |  |
+| [`derives`](#guardedstruct-conditional_field-sub_field-conditional_field-derives){: #guardedstruct-conditional_field-sub_field-conditional_field-derives } | `String.t` |  |  |
 | [`derive`](#guardedstruct-conditional_field-sub_field-conditional_field-derive){: #guardedstruct-conditional_field-sub_field-conditional_field-derive } | `String.t` |  |  |
 | [`validator`](#guardedstruct-conditional_field-sub_field-conditional_field-validator){: #guardedstruct-conditional_field-sub_field-conditional_field-validator } | `{atom, atom}` |  |  |
 | [`auto`](#guardedstruct-conditional_field-sub_field-conditional_field-auto){: #guardedstruct-conditional_field-sub_field-conditional_field-auto } | `{atom, atom} \| {atom, atom, any}` |  |  |
@@ -729,6 +749,7 @@ field name, type
 |------|------|---------|------|
 | [`enforce`](#guardedstruct-conditional_field-sub_field-conditional_field-field-enforce){: #guardedstruct-conditional_field-sub_field-conditional_field-field-enforce } | `boolean` |  |  |
 | [`default`](#guardedstruct-conditional_field-sub_field-conditional_field-field-default){: #guardedstruct-conditional_field-sub_field-conditional_field-field-default } | `any` |  |  |
+| [`derives`](#guardedstruct-conditional_field-sub_field-conditional_field-field-derives){: #guardedstruct-conditional_field-sub_field-conditional_field-field-derives } | `String.t` |  |  |
 | [`derive`](#guardedstruct-conditional_field-sub_field-conditional_field-field-derive){: #guardedstruct-conditional_field-sub_field-conditional_field-field-derive } | `String.t` |  |  |
 | [`validator`](#guardedstruct-conditional_field-sub_field-conditional_field-field-validator){: #guardedstruct-conditional_field-sub_field-conditional_field-field-validator } | `{atom, atom}` |  |  |
 | [`auto`](#guardedstruct-conditional_field-sub_field-conditional_field-field-auto){: #guardedstruct-conditional_field-sub_field-conditional_field-field-auto } | `{atom, atom} \| {atom, atom, any}` |  |  |
@@ -771,6 +792,7 @@ sub_field name, type
 |------|------|---------|------|
 | [`enforce`](#guardedstruct-conditional_field-sub_field-conditional_field-sub_field-enforce){: #guardedstruct-conditional_field-sub_field-conditional_field-sub_field-enforce } | `boolean` |  |  |
 | [`default`](#guardedstruct-conditional_field-sub_field-conditional_field-sub_field-default){: #guardedstruct-conditional_field-sub_field-conditional_field-sub_field-default } | `any` |  |  |
+| [`derives`](#guardedstruct-conditional_field-sub_field-conditional_field-sub_field-derives){: #guardedstruct-conditional_field-sub_field-conditional_field-sub_field-derives } | `String.t` |  |  |
 | [`derive`](#guardedstruct-conditional_field-sub_field-conditional_field-sub_field-derive){: #guardedstruct-conditional_field-sub_field-conditional_field-sub_field-derive } | `String.t` |  |  |
 | [`validator`](#guardedstruct-conditional_field-sub_field-conditional_field-sub_field-validator){: #guardedstruct-conditional_field-sub_field-conditional_field-sub_field-validator } | `{atom, atom}` |  |  |
 | [`auto`](#guardedstruct-conditional_field-sub_field-conditional_field-sub_field-auto){: #guardedstruct-conditional_field-sub_field-conditional_field-sub_field-auto } | `{atom, atom} \| {atom, atom, any}` |  |  |
@@ -810,6 +832,7 @@ field name, type
 |------|------|---------|------|
 | [`enforce`](#guardedstruct-conditional_field-sub_field-conditional_field-sub_field-field-enforce){: #guardedstruct-conditional_field-sub_field-conditional_field-sub_field-field-enforce } | `boolean` |  |  |
 | [`default`](#guardedstruct-conditional_field-sub_field-conditional_field-sub_field-field-default){: #guardedstruct-conditional_field-sub_field-conditional_field-sub_field-field-default } | `any` |  |  |
+| [`derives`](#guardedstruct-conditional_field-sub_field-conditional_field-sub_field-field-derives){: #guardedstruct-conditional_field-sub_field-conditional_field-sub_field-field-derives } | `String.t` |  |  |
 | [`derive`](#guardedstruct-conditional_field-sub_field-conditional_field-sub_field-field-derive){: #guardedstruct-conditional_field-sub_field-conditional_field-sub_field-field-derive } | `String.t` |  |  |
 | [`validator`](#guardedstruct-conditional_field-sub_field-conditional_field-sub_field-field-validator){: #guardedstruct-conditional_field-sub_field-conditional_field-sub_field-field-validator } | `{atom, atom}` |  |  |
 | [`auto`](#guardedstruct-conditional_field-sub_field-conditional_field-sub_field-field-auto){: #guardedstruct-conditional_field-sub_field-conditional_field-sub_field-field-auto } | `{atom, atom} \| {atom, atom, any}` |  |  |
@@ -860,6 +883,7 @@ sub_field name, type
 |------|------|---------|------|
 | [`enforce`](#guardedstruct-conditional_field-sub_field-sub_field-enforce){: #guardedstruct-conditional_field-sub_field-sub_field-enforce } | `boolean` |  |  |
 | [`default`](#guardedstruct-conditional_field-sub_field-sub_field-default){: #guardedstruct-conditional_field-sub_field-sub_field-default } | `any` |  |  |
+| [`derives`](#guardedstruct-conditional_field-sub_field-sub_field-derives){: #guardedstruct-conditional_field-sub_field-sub_field-derives } | `String.t` |  |  |
 | [`derive`](#guardedstruct-conditional_field-sub_field-sub_field-derive){: #guardedstruct-conditional_field-sub_field-sub_field-derive } | `String.t` |  |  |
 | [`validator`](#guardedstruct-conditional_field-sub_field-sub_field-validator){: #guardedstruct-conditional_field-sub_field-sub_field-validator } | `{atom, atom}` |  |  |
 | [`auto`](#guardedstruct-conditional_field-sub_field-sub_field-auto){: #guardedstruct-conditional_field-sub_field-sub_field-auto } | `{atom, atom} \| {atom, atom, any}` |  |  |
@@ -899,6 +923,7 @@ field name, type
 |------|------|---------|------|
 | [`enforce`](#guardedstruct-conditional_field-sub_field-sub_field-field-enforce){: #guardedstruct-conditional_field-sub_field-sub_field-field-enforce } | `boolean` |  |  |
 | [`default`](#guardedstruct-conditional_field-sub_field-sub_field-field-default){: #guardedstruct-conditional_field-sub_field-sub_field-field-default } | `any` |  |  |
+| [`derives`](#guardedstruct-conditional_field-sub_field-sub_field-field-derives){: #guardedstruct-conditional_field-sub_field-sub_field-field-derives } | `String.t` |  |  |
 | [`derive`](#guardedstruct-conditional_field-sub_field-sub_field-field-derive){: #guardedstruct-conditional_field-sub_field-sub_field-field-derive } | `String.t` |  |  |
 | [`validator`](#guardedstruct-conditional_field-sub_field-sub_field-field-validator){: #guardedstruct-conditional_field-sub_field-sub_field-field-validator } | `{atom, atom}` |  |  |
 | [`auto`](#guardedstruct-conditional_field-sub_field-sub_field-field-auto){: #guardedstruct-conditional_field-sub_field-sub_field-field-auto } | `{atom, atom} \| {atom, atom, any}` |  |  |
@@ -943,6 +968,7 @@ field name, type
 |------|------|---------|------|
 | [`enforce`](#guardedstruct-conditional_field-sub_field-field-enforce){: #guardedstruct-conditional_field-sub_field-field-enforce } | `boolean` |  |  |
 | [`default`](#guardedstruct-conditional_field-sub_field-field-default){: #guardedstruct-conditional_field-sub_field-field-default } | `any` |  |  |
+| [`derives`](#guardedstruct-conditional_field-sub_field-field-derives){: #guardedstruct-conditional_field-sub_field-field-derives } | `String.t` |  |  |
 | [`derive`](#guardedstruct-conditional_field-sub_field-field-derive){: #guardedstruct-conditional_field-sub_field-field-derive } | `String.t` |  |  |
 | [`validator`](#guardedstruct-conditional_field-sub_field-field-validator){: #guardedstruct-conditional_field-sub_field-field-validator } | `{atom, atom}` |  |  |
 | [`auto`](#guardedstruct-conditional_field-sub_field-field-auto){: #guardedstruct-conditional_field-sub_field-field-auto } | `{atom, atom} \| {atom, atom, any}` |  |  |
@@ -991,6 +1017,7 @@ conditional_field name, type
 |------|------|---------|------|
 | [`enforce`](#guardedstruct-conditional_field-conditional_field-enforce){: #guardedstruct-conditional_field-conditional_field-enforce } | `boolean` |  |  |
 | [`default`](#guardedstruct-conditional_field-conditional_field-default){: #guardedstruct-conditional_field-conditional_field-default } | `any` |  |  |
+| [`derives`](#guardedstruct-conditional_field-conditional_field-derives){: #guardedstruct-conditional_field-conditional_field-derives } | `String.t` |  |  |
 | [`derive`](#guardedstruct-conditional_field-conditional_field-derive){: #guardedstruct-conditional_field-conditional_field-derive } | `String.t` |  |  |
 | [`validator`](#guardedstruct-conditional_field-conditional_field-validator){: #guardedstruct-conditional_field-conditional_field-validator } | `{atom, atom}` |  |  |
 | [`auto`](#guardedstruct-conditional_field-conditional_field-auto){: #guardedstruct-conditional_field-conditional_field-auto } | `{atom, atom} \| {atom, atom, any}` |  |  |
@@ -1027,6 +1054,7 @@ field name, type
 |------|------|---------|------|
 | [`enforce`](#guardedstruct-conditional_field-conditional_field-field-enforce){: #guardedstruct-conditional_field-conditional_field-field-enforce } | `boolean` |  |  |
 | [`default`](#guardedstruct-conditional_field-conditional_field-field-default){: #guardedstruct-conditional_field-conditional_field-field-default } | `any` |  |  |
+| [`derives`](#guardedstruct-conditional_field-conditional_field-field-derives){: #guardedstruct-conditional_field-conditional_field-field-derives } | `String.t` |  |  |
 | [`derive`](#guardedstruct-conditional_field-conditional_field-field-derive){: #guardedstruct-conditional_field-conditional_field-field-derive } | `String.t` |  |  |
 | [`validator`](#guardedstruct-conditional_field-conditional_field-field-validator){: #guardedstruct-conditional_field-conditional_field-field-validator } | `{atom, atom}` |  |  |
 | [`auto`](#guardedstruct-conditional_field-conditional_field-field-auto){: #guardedstruct-conditional_field-conditional_field-field-auto } | `{atom, atom} \| {atom, atom, any}` |  |  |
@@ -1069,6 +1097,7 @@ sub_field name, type
 |------|------|---------|------|
 | [`enforce`](#guardedstruct-conditional_field-conditional_field-sub_field-enforce){: #guardedstruct-conditional_field-conditional_field-sub_field-enforce } | `boolean` |  |  |
 | [`default`](#guardedstruct-conditional_field-conditional_field-sub_field-default){: #guardedstruct-conditional_field-conditional_field-sub_field-default } | `any` |  |  |
+| [`derives`](#guardedstruct-conditional_field-conditional_field-sub_field-derives){: #guardedstruct-conditional_field-conditional_field-sub_field-derives } | `String.t` |  |  |
 | [`derive`](#guardedstruct-conditional_field-conditional_field-sub_field-derive){: #guardedstruct-conditional_field-conditional_field-sub_field-derive } | `String.t` |  |  |
 | [`validator`](#guardedstruct-conditional_field-conditional_field-sub_field-validator){: #guardedstruct-conditional_field-conditional_field-sub_field-validator } | `{atom, atom}` |  |  |
 | [`auto`](#guardedstruct-conditional_field-conditional_field-sub_field-auto){: #guardedstruct-conditional_field-conditional_field-sub_field-auto } | `{atom, atom} \| {atom, atom, any}` |  |  |
@@ -1108,6 +1137,7 @@ field name, type
 |------|------|---------|------|
 | [`enforce`](#guardedstruct-conditional_field-conditional_field-sub_field-field-enforce){: #guardedstruct-conditional_field-conditional_field-sub_field-field-enforce } | `boolean` |  |  |
 | [`default`](#guardedstruct-conditional_field-conditional_field-sub_field-field-default){: #guardedstruct-conditional_field-conditional_field-sub_field-field-default } | `any` |  |  |
+| [`derives`](#guardedstruct-conditional_field-conditional_field-sub_field-field-derives){: #guardedstruct-conditional_field-conditional_field-sub_field-field-derives } | `String.t` |  |  |
 | [`derive`](#guardedstruct-conditional_field-conditional_field-sub_field-field-derive){: #guardedstruct-conditional_field-conditional_field-sub_field-field-derive } | `String.t` |  |  |
 | [`validator`](#guardedstruct-conditional_field-conditional_field-sub_field-field-validator){: #guardedstruct-conditional_field-conditional_field-sub_field-field-validator } | `{atom, atom}` |  |  |
 | [`auto`](#guardedstruct-conditional_field-conditional_field-sub_field-field-auto){: #guardedstruct-conditional_field-conditional_field-sub_field-field-auto } | `{atom, atom} \| {atom, atom, any}` |  |  |
@@ -1156,6 +1186,7 @@ field name, type
 |------|------|---------|------|
 | [`enforce`](#guardedstruct-conditional_field-field-enforce){: #guardedstruct-conditional_field-field-enforce } | `boolean` |  |  |
 | [`default`](#guardedstruct-conditional_field-field-default){: #guardedstruct-conditional_field-field-default } | `any` |  |  |
+| [`derives`](#guardedstruct-conditional_field-field-derives){: #guardedstruct-conditional_field-field-derives } | `String.t` |  |  |
 | [`derive`](#guardedstruct-conditional_field-field-derive){: #guardedstruct-conditional_field-field-derive } | `String.t` |  |  |
 | [`validator`](#guardedstruct-conditional_field-field-validator){: #guardedstruct-conditional_field-field-validator } | `{atom, atom}` |  |  |
 | [`auto`](#guardedstruct-conditional_field-field-auto){: #guardedstruct-conditional_field-field-auto } | `{atom, atom} \| {atom, atom, any}` |  |  |

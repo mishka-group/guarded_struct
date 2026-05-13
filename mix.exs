@@ -22,13 +22,18 @@ defmodule GuardedStruct.MixProject do
     ]
   end
 
+  # Spark mix tasks require `--extensions` as a CLI flag (no config-file
+  # path for it). We pin the list ONCE here so both spark.formatter and
+  # spark.cheat_sheets pick it up automatically — and so a short alias
+  # like `mix lint` / `mix cheat` works.
+  @spark_extensions "GuardedStruct.Dsl,GuardedStruct.AshResource"
+
   defp aliases do
     [
-      "spark.formatter":
-        "spark.formatter --extensions GuardedStruct.Dsl,GuardedStruct.AshResource",
-      "spark.cheat_sheets":
-        "spark.cheat_sheets --extensions GuardedStruct.Dsl,GuardedStruct.AshResource",
-      lint: ["spark.formatter", "format"]
+      "spark.formatter": "spark.formatter --extensions #{@spark_extensions}",
+      "spark.cheat_sheets": "spark.cheat_sheets --extensions #{@spark_extensions}",
+      lint: ["spark.formatter", "format"],
+      cheat: ["spark.cheat_sheets"]
     ]
   end
 

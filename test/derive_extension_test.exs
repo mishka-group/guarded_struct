@@ -69,5 +69,4 @@ defmodule GuardedStructTest.DeriveExtensionTest do
   test "all_extension_validators aggregates across registered modules" do
     assert :slug in MapSet.to_list(GuardedStruct.Derive.Extension.all_extension_validators())
   end
-
 end
