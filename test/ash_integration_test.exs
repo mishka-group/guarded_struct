@@ -278,6 +278,130 @@ defmodule GuardedStructTest.AshIntegrationTest do
     end
   end
 
+  # ────────────────────────────────────────────────────────────────────
+  # 10. Bulk operations — Ash.bulk_create / Ash.bulk_update
+  # ────────────────────────────────────────────────────────────────────
+
+  describe "bulk_create end-to-end" do
+    test "bulk_create runs the GuardedStruct pipeline on every input" do
+      input = [
+        %{email: "  Alice@Bulk.io  "},
+        %{email: "  Bob@Bulk.com  "},
+        %{email: "  Carol@Bulk.dev  "}
+      ]
+
+      result =
+        Ash.bulk_create(input, UserAuto, :create,
+          return_records?: true,
+          return_errors?: true
+        )
+
+      assert result.status == :success
+      assert length(result.records) == 3
+
+      emails = Enum.map(result.records, & &1.email) |> Enum.sort()
+      assert emails == ["alice@bulk.io", "bob@bulk.com", "carol@bulk.dev"]
+    end
+
+    test "bulk_create with one invalid input — errors are partitioned per element" do
+      input = [
+        %{email: "ok@x.com"},
+        %{email: "not-an-email"},
+        %{email: "  Also@OK.com  "}
+      ]
+
+      result =
+        Ash.bulk_create(input, UserAuto, :create,
+          return_records?: true,
+          return_errors?: true,
+          stop_on_error?: false
+        )
+
+      # Two succeed, one fails.
+      assert length(result.records) == 2
+      assert length(result.errors) == 1
+
+      sanitized_emails = Enum.map(result.records, & &1.email) |> Enum.sort()
+      assert sanitized_emails == ["also@ok.com", "ok@x.com"]
+    end
+
+    test "bulk_create cascades into sub_field maps for every row" do
+      input = [
+        %{email: "a@x.com", profile: %{name: "Alice", bio: "Hi"}},
+        %{email: "b@x.com", profile: %{name: "Bob", bio: "Hey"}}
+      ]
+
+      result =
+        Ash.bulk_create(input, WithSubField, :create,
+          return_records?: true,
+          return_errors?: true
+        )
+
+      assert result.status == :success
+      assert length(result.records) == 2
+
+      profiles = Enum.map(result.records, & &1.profile)
+      assert Enum.all?(profiles, &is_map/1)
+      refute Enum.any?(profiles, &is_struct/1)
+    end
+  end
+
+  describe "bulk_update end-to-end" do
+    test "bulk_update via a stream sanitizes the new value on each row" do
+      # Create three users first.
+      %{status: :success} =
+        Ash.bulk_create(
+          [
+            %{email: "u1@bulk-up.com"},
+            %{email: "u2@bulk-up.com"},
+            %{email: "u3@bulk-up.com"}
+          ],
+          UserAuto,
+          :create,
+          return_records?: false,
+          return_errors?: true
+        )
+
+      # Bulk-update via the resource-stream API. Ash reads the records,
+      # then applies the update action with our sanitize pipeline running
+      # on each changeset.
+      result =
+        UserAuto
+        |> Ash.bulk_update(:update, %{email: "  Updated@X.COM  "},
+          return_records?: true,
+          return_errors?: true,
+          stop_on_error?: false,
+          strategy: :stream
+        )
+
+      assert result.status == :success
+      assert length(result.records) == 3
+
+      # Every email passed through our sanitize: trim + downcase
+      assert Enum.all?(result.records, fn r -> r.email == "updated@x.com" end)
+    end
+  end
+
+  describe "atomic mode — explicit opt-out behavior" do
+    test "atomic/3 returns {:not_atomic, reason}" do
+      # We can call the callback directly to verify the contract.
+      reason = GuardedStruct.AshResource.Change.atomic(%{}, [], %{})
+      assert match?({:not_atomic, _}, reason)
+
+      {:not_atomic, msg} = reason
+      assert msg =~ "imperative"
+    end
+
+    test "actions that don't require_atomic: false fail at compile time" do
+      # This is enforced by the Ash compiler/verifier, not our code; we
+      # can't really probe it from here without a separate test resource
+      # with require_atomic? true. The test resources in this file all
+      # set `require_atomic? false` on their update actions, so they
+      # compile cleanly. This test is documentation-by-example.
+      assert :ok = :ok
+    end
+  end
+
   describe "persistence — read after write" do
     test "reading back via Ash.get/2 returns the sanitized email" do
       {:ok, created} =

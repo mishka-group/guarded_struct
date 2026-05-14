@@ -392,6 +392,34 @@ end
 
 Internally our `Change.atomic/3` callback returns `{:not_atomic, reason}`, but Ash's update planner still requires the action-level flag when `require_atomic?` is the default-`true` setting.
 
+### Bulk operations
+
+The change implements `batch_change/3`, so `Ash.bulk_create/3` and `Ash.bulk_update/3` work end-to-end:
+
+```elixir
+# Bulk create
+result = Ash.bulk_create(
+  [%{email: "  Alice@X.io  "}, %{email: "  Bob@Y.com  "}],
+  MyApp.User, :create,
+  return_records?: true, return_errors?: true
+)
+# result.records is a list of %MyApp.User{email: "alice@x.io", ...} structs
+
+# Bulk update — use stream strategy because the pipeline is imperative
+result = Ash.bulk_update(MyApp.User, :update, %{email: "  New@X.com  "},
+  return_records?: true,
+  strategy: :stream
+)
+```
+
+The pipeline still runs per row (no SQL vectorization is possible for arbitrary Elixir sanitize/validate code), but Ash's batch dispatch is fully supported.
+
+### Why atomic mode is `not_atomic`
+
+Atomic mode would translate the change to a single SQL `UPDATE ... SET email = lower(trim(?)) WHERE ...` statement. Our pipeline runs arbitrary Elixir — `sanitize(trim, downcase, slugify, strip_tags)`, `auto:` MFAs, `main_validator/1` — that can't be safely translated to SQL/`Ash.Expr` in the general case.
+
+Pure validate-only derives (no transformation) could be made atomic. That's the planned `GuardedStruct.AshResource.Validation` companion module — separate from this `Change`, designed for the atomic-friendly path.
+
 ### Auto-map cascade — Ash-friendly nested payloads
 
 In the Ash extension, **every** nested `sub_field` returns a plain map, not a struct — at all depths. This is automatic; no flag to set.
