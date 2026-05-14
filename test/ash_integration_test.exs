@@ -8,7 +8,8 @@ defmodule GuardedStructTest.AshIntegrationTest do
     UserAuto,
     WithSubField,
     WithListSubField,
-    WithAshChange
+    WithAshChange,
+    AtomicEligibleUser
   }
 
   describe "sanitize end-to-end through Ash.create/1" do
@@ -393,6 +394,391 @@ defmodule GuardedStructTest.AshIntegrationTest do
 
       assert :ok = Ash.destroy(user)
       assert {:error, _} = Ash.get(UserAuto, user.id)
+    end
+  end
+
+  describe "atomic: true — real Ash resource end-to-end" do
+    test "resource compiles cleanly (VerifyAtomic accepts all-safe ops)" do
+      assert Code.ensure_loaded?(AtomicEligibleUser)
+      assert GuardedStruct.AshResource.Info.guardedstruct_atomic!(AtomicEligibleUser) == true
+    end
+
+    test "sanitize runs end-to-end through create" do
+      {:ok, user} =
+        AtomicEligibleUser
+        |> Ash.Changeset.for_create(:create, valid_atomic_input(%{email: "  Alice@X.IO  "}))
+        |> Ash.create()
+
+      assert user.email == "alice@x.io"
+    end
+
+    test "all atomic-safe validate ops accept good input" do
+      {:ok, user} =
+        AtomicEligibleUser
+        |> Ash.Changeset.for_create(:create,
+          email: "valid@x.com",
+          username: "alice",
+          age: 30,
+          role: "admin",
+          tenant_id: "11111111-2222-3333-4444-555555555555",
+          country_code: "DE",
+          status: "active"
+        )
+        |> Ash.create()
+
+      assert user.email == "valid@x.com"
+      assert user.username == "alice"
+      assert user.age == 30
+      assert user.role == "admin"
+      assert user.country_code == "DE"
+      assert user.status == "active"
+    end
+
+    test "validate(email_r) rejects malformed email" do
+      assert {:error, _} =
+               AtomicEligibleUser
+               |> Ash.Changeset.for_create(:create, valid_atomic_input(%{email: "not-an-email"}))
+               |> Ash.create()
+    end
+
+    test "validate(min_len) on integer rejects below-range value" do
+      assert {:error, _} =
+               AtomicEligibleUser
+               |> Ash.Changeset.for_create(:create, valid_atomic_input(%{age: -5}))
+               |> Ash.create()
+    end
+
+    test "validate(max_len) on integer rejects above-range value" do
+      assert {:error, _} =
+               AtomicEligibleUser
+               |> Ash.Changeset.for_create(:create, valid_atomic_input(%{age: 200}))
+               |> Ash.create()
+    end
+
+    test "validate(enum) rejects out-of-set role" do
+      assert {:error, _} =
+               AtomicEligibleUser
+               |> Ash.Changeset.for_create(:create, valid_atomic_input(%{role: "superuser"}))
+               |> Ash.create()
+    end
+
+    test "validate(uuid) rejects malformed tenant_id" do
+      assert {:error, _} =
+               AtomicEligibleUser
+               |> Ash.Changeset.for_create(
+                 :create,
+                 valid_atomic_input(%{tenant_id: "not-a-uuid"})
+               )
+               |> Ash.create()
+    end
+
+    test "validate(max_len) rejects wrong-length country code" do
+      assert {:error, _} =
+               AtomicEligibleUser
+               |> Ash.Changeset.for_create(:create, valid_atomic_input(%{country_code: "deu"}))
+               |> Ash.create()
+    end
+
+    test "sanitize(upcase) normalizes country code casing" do
+      {:ok, user} =
+        AtomicEligibleUser
+        |> Ash.Changeset.for_create(:create, valid_atomic_input(%{country_code: "de"}))
+        |> Ash.create()
+
+      assert user.country_code == "DE"
+    end
+
+    test "validate(min_len) on string rejects too-short username" do
+      assert {:error, _} =
+               AtomicEligibleUser
+               |> Ash.Changeset.for_create(:create, valid_atomic_input(%{username: "ab"}))
+               |> Ash.create()
+    end
+
+    test "validate(max_len) on string rejects too-long username" do
+      assert {:error, _} =
+               AtomicEligibleUser
+               |> Ash.Changeset.for_create(
+                 :create,
+                 valid_atomic_input(%{username: String.duplicate("a", 30)})
+               )
+               |> Ash.create()
+    end
+
+    test "field with default accepts being omitted" do
+      {:ok, user} =
+        AtomicEligibleUser
+        |> Ash.Changeset.for_create(:create, valid_atomic_input(%{status: nil}))
+        |> Ash.create()
+
+      refute is_nil(user.id)
+    end
+
+    test "multiple errors are aggregated, not short-circuited" do
+      assert {:error, %Ash.Error.Invalid{errors: errs}} =
+               AtomicEligibleUser
+               |> Ash.Changeset.for_create(:create,
+                 email: "bad-email",
+                 username: "x",
+                 age: 500,
+                 role: "nope",
+                 tenant_id: "not-uuid",
+                 country_code: "lower",
+                 status: "active"
+               )
+               |> Ash.create()
+
+      assert length(errs) >= 2
+    end
+
+    test "direct __guarded_change__/1 still works" do
+      input = %{
+        email: "  Bob@Y.com  ",
+        username: "bob",
+        age: 25,
+        role: "user",
+        tenant_id: "11111111-2222-3333-4444-555555555555",
+        country_code: "FR",
+        status: "active"
+      }
+
+      assert {:ok, attrs} = AtomicEligibleUser.__guarded_change__(input)
+      assert attrs.email == "bob@y.com"
+      assert attrs.username == "bob"
+    end
+
+    test "Info.describe/1 reports atomic: true in section options" do
+      d = GuardedStruct.AshResource.Info.guardedstruct_atomic!(AtomicEligibleUser)
+      assert d == true
+    end
+
+    test "auto-wire still injected on top of atomic: true" do
+      assert Enum.any?(Ash.Resource.Info.changes(AtomicEligibleUser), fn c ->
+               c.change == {GuardedStruct.AshResource.Change, []}
+             end)
+    end
+
+    test "update action sanitizes the new value with all-safe ops" do
+      {:ok, user} =
+        AtomicEligibleUser
+        |> Ash.Changeset.for_create(:create, valid_atomic_input())
+        |> Ash.create()
+
+      {:ok, updated} =
+        user
+        |> Ash.Changeset.for_update(:update, %{email: "  New@Email.COM  "})
+        |> Ash.update()
+
+      assert updated.email == "new@email.com"
+    end
+  end
+
+  defp valid_atomic_input(overrides \\ %{}) do
+    Map.merge(
+      %{
+        email: "default@x.com",
+        username: "defaultuser",
+        age: 25,
+        role: "user",
+        tenant_id: "11111111-2222-3333-4444-555555555555",
+        country_code: "US",
+        status: "active"
+      },
+      Map.new(overrides)
+    )
+  end
+
+  describe "atomic: true — compile-time rejection on real Ash resources" do
+    import ExUnit.CaptureIO
+
+    defp compile_atomic_fixture(body) do
+      suffix = :erlang.unique_integer([:positive])
+
+      src = """
+      defmodule TestAtomicFixture#{suffix} do
+        use Ash.Resource,
+          domain: GuardedStructTest.Support.TestDomain,
+          data_layer: Ash.DataLayer.Ets,
+          extensions: [GuardedStruct.AshResource]
+
+        ets do
+          private? true
+        end
+
+        guardedstruct do
+          atomic true
+          #{body}
+        end
+
+        actions do
+          defaults [:read, :destroy]
+          create :create, accept: [:value]
+        end
+
+        attributes do
+          uuid_primary_key :id
+          attribute :value, :string, public?: true
+        end
+      end
+      """
+
+      capture_io(:stderr, fn ->
+        try do
+          Code.compile_string(src)
+        rescue
+          _ -> :ok
+        catch
+          _, _ -> :ok
+        end
+      end)
+    end
+
+    test "validate(email) DNS validator is rejected at compile time" do
+      output = compile_atomic_fixture(~s{field :value, :string, derives: "validate(email)"})
+
+      assert output =~ "Spark.Error.DslError"
+      assert output =~ "atomic: true"
+      assert output =~ ":value"
+      assert output =~ "DNS"
+      assert output =~ "validate(email_r)"
+    end
+
+    test "validate(url) is rejected" do
+      output = compile_atomic_fixture(~s{field :value, :string, derives: "validate(url)"})
+
+      assert output =~ "Spark.Error.DslError"
+      assert output =~ ":value"
+      assert output =~ "DNS"
+      assert output =~ "validate(url_r)"
+    end
+
+    test "per-field validator: MFA is rejected" do
+      output =
+        compile_atomic_fixture("""
+        field :value, :string,
+          validator: {ConditionalFieldValidatorTestValidators, :is_string_data}
+        """)
+
+      assert output =~ "Spark.Error.DslError"
+      assert output =~ ":value"
+      assert output =~ "validator:"
+      assert output =~ "arbitrary Elixir"
+    end
+
+    test "auto: MFA is rejected" do
+      output =
+        compile_atomic_fixture("""
+        field :value, :string,
+          auto: {GuardedStructTest.Support.TestDomain, :no_such_fn}
+        """)
+
+      assert output =~ "Spark.Error.DslError"
+      assert output =~ ":value"
+      assert output =~ "auto:"
+      assert output =~ "arbitrary Elixir"
+    end
+
+    test "cross-field on: dependency is rejected" do
+      output =
+        compile_atomic_fixture("""
+        field :value, :string,
+          derives: "validate(string)",
+          on: "root::other_field"
+        """)
+
+      assert output =~ "Spark.Error.DslError"
+      assert output =~ ":value"
+      assert output =~ "on:"
+    end
+
+    test "custom Derive.Extension op is rejected (catch-all path)" do
+      output =
+        compile_atomic_fixture(~s{field :value, :string, derives: "validate(totally_unknown_op)"})
+
+      assert output =~ "Spark.Error.DslError"
+      assert output =~ "atomic-safe registry"
+    end
+
+    test "multiple blockers in one resource are aggregated in one error" do
+      output =
+        compile_atomic_fixture("""
+        field :a, :string, derives: "validate(email)"
+        field :b, :string, derives: "validate(url)"
+        field :c, :string, derives: "validate(totally_unknown)"
+        """)
+
+      assert output =~ "Spark.Error.DslError"
+      assert output =~ ":a"
+      assert output =~ ":b"
+      assert output =~ ":c"
+    end
+
+    test "unsafe op inside a sub_field is caught" do
+      output =
+        compile_atomic_fixture("""
+        sub_field :nested, :map do
+          field :value, :string, derives: "validate(email)"
+        end
+        """)
+
+      assert output =~ "Spark.Error.DslError"
+      assert output =~ ":nested"
+      assert output =~ ":value"
+    end
+
+    test "error message points users to AtomicClassifier" do
+      output = compile_atomic_fixture(~s{field :value, :string, derives: "validate(email)"})
+
+      assert output =~ "AtomicClassifier"
+    end
+
+    test "error message names the resource module" do
+      output = compile_atomic_fixture(~s{field :value, :string, derives: "validate(email)"})
+
+      assert output =~ "TestAtomicFixture"
+    end
+
+    test "atomic: false (default) compiles the SAME bad ops cleanly" do
+      suffix = :erlang.unique_integer([:positive])
+
+      src = """
+      defmodule TestAtomicOffFixture#{suffix} do
+        use Ash.Resource,
+          domain: GuardedStructTest.Support.TestDomain,
+          data_layer: Ash.DataLayer.Ets,
+          extensions: [GuardedStruct.AshResource]
+
+        ets do
+          private? true
+        end
+
+        guardedstruct do
+          field :email, :string, derives: "validate(email)"
+        end
+
+        actions do
+          defaults [:read, :destroy]
+          create :create, accept: [:email]
+        end
+
+        changes do
+          change GuardedStruct.AshResource.Change
+        end
+
+        attributes do
+          uuid_primary_key :id
+          attribute :email, :string, public?: true
+        end
+      end
+      """
+
+      output =
+        capture_io(:stderr, fn ->
+          Code.compile_string(src)
+        end)
+
+      refute output =~ "atomic: true"
+      refute output =~ "Spark.Error.DslError"
     end
   end
 end

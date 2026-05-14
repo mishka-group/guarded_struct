@@ -292,3 +292,67 @@ defmodule GuardedStructTest.AshResources.WithAshChange do
     attribute :slug, :string, public?: true
   end
 end
+
+defmodule GuardedStructTest.AshResources.AtomicEligibleUser do
+  @moduledoc """
+  Real-world Ash resource that opts into atomic mode (`atomic: true`)
+  and exercises every atomic-safe op category — type checks, length,
+  comparison, regex patterns, enum, sanitize transforms. All ops in
+  this resource are in `GuardedStruct.AtomicClassifier`'s safe registry,
+  so the compile-time `VerifyAtomic` verifier accepts it.
+  """
+  use Ash.Resource,
+    domain: GuardedStructTest.Support.TestDomain,
+    data_layer: Ash.DataLayer.Ets,
+    extensions: [GuardedStruct.AshResource]
+
+  ets do
+    private? true
+  end
+
+  guardedstruct do
+    atomic true
+    auto_wire true
+
+    field :email, :string,
+      derives: "sanitize(trim, downcase) validate(string, not_empty, email_r, max_len=320)"
+
+    field :username, :string,
+      derives: "sanitize(trim, downcase) validate(string, not_empty, min_len=3, max_len=20)"
+
+    field :age, :integer, derives: "validate(integer, min_len=0, max_len=150)"
+
+    field :role, :string, derives: "sanitize(trim) validate(enum=String[admin::user::guest])"
+
+    field :tenant_id, :string, derives: "validate(uuid)"
+
+    field :country_code, :string,
+      derives: "sanitize(trim, upcase) validate(string, min_len=2, max_len=2)"
+
+    field :status, :string,
+      default: "active",
+      derives: "validate(enum=String[active::archived::pending])"
+  end
+
+  actions do
+    defaults [:read, :destroy]
+
+    create :create, accept: [:email, :username, :age, :role, :tenant_id, :country_code, :status]
+
+    update :update do
+      accept [:email, :username, :age, :role, :status]
+      require_atomic? false
+    end
+  end
+
+  attributes do
+    uuid_primary_key :id
+    attribute :email, :string, allow_nil?: false, public?: true
+    attribute :username, :string, allow_nil?: false, public?: true
+    attribute :age, :integer, public?: true
+    attribute :role, :string, public?: true
+    attribute :tenant_id, :string, public?: true
+    attribute :country_code, :string, public?: true
+    attribute :status, :string, public?: true
+  end
+end

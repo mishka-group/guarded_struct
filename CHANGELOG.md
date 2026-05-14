@@ -126,6 +126,30 @@ The companion `GuardedStruct.AshResource.Change` module is a ready-made `Ash.Res
 * **Manual (default)** — write `changes do change GuardedStruct.AshResource.Change end` once. Explicit, inspectable via `Ash.Resource.Info.changes/1`.
 * **Auto-wire** — set `auto_wire true` at the top of `guardedstruct`. A Spark transformer injects the change for you via `Ash.Resource.Builder.add_change/3`. No `changes do ... end` block needed. Default is `false`.
 
+The bridge module also implements `batch_change/3`, so `Ash.bulk_create/3` and `Ash.bulk_update/3` (with `strategy: :stream`) work end-to-end. `atomic/3` returns `{:not_atomic, …}` — sanitize / `auto:` / `main_validator/1` run arbitrary Elixir and can't be atomic SQL. Use the new `atomic: true` opt for compile-time-verified atomic resources (see below).
+
+### `atomic: true` opt + compile-time `VerifyAtomic` verifier
+
+```elixir
+guardedstruct do
+  atomic true
+  field :email,    :string, derives: "sanitize(trim, downcase) validate(email_r, max_len=320)"
+  field :role,     :string, derives: "validate(enum=String[admin::user::guest])"
+  field :tenant_id, :string, derives: "validate(uuid)"
+end
+```
+
+Opt-in flag with `default: false`. When `true`, the compile-time `GuardedStruct.Verifiers.VerifyAtomic` walks every field and rejects (`Spark.Error.DslError` at the offending field's source line) any op that can't translate to atomic SQL:
+
+* `validate(email)` / `validate(url)` — need DNS / network I/O
+* `validator: {Mod, :fn}` per-field MFA — arbitrary Elixir
+* `auto: {Mod, :fn}` — arbitrary Elixir
+* `main_validator/1` callback — cross-field Elixir
+* `on:`, `from:`, `domain:` cross-field options
+* Custom ops from `GuardedStruct.Derive.Extension`
+
+Sanitize ops (`trim`, `downcase`, `strip_tags`, …) are always allowed — they run in Elixir before the atomic SQL fires. The full atomic-safe registry lives in `GuardedStruct.AtomicClassifier` (one pattern-match clause per op; contributors extend by adding a single `def classify_op({:validate, :my_op}), do: :safe`).
+
 ## Soft deprecations
 
 - **`derive:` option renamed to `derives:`**. Both work in `0.1.0`; the legacy `derive:` emits a compile-time deprecation warning via `Spark.Warning.warn_deprecated/4` and will be removed in a future release. The plural form aligns with the `@derives` decorator. When both are present on the same field, `derives:` wins silently.

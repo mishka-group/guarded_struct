@@ -1608,15 +1608,91 @@ defmodule MyApp.Resources.User do
   use Ash.Resource, extensions: [GuardedStruct.AshResource]
 
   guardedstruct do
-    field(:name, String.t(), enforce: true, derive: "validate(string, max_len=80)")
-    field(:email, String.t(), enforce: true, derive: "validate(email_r)")
+    field(:name, :string, enforce: true, derives: "validate(string, max_len=80)")
+    field(:email, :string, enforce: true, derives: "validate(email_r)")
+  end
+
+  changes do
+    change GuardedStruct.AshResource.Change
   end
 
   # ... your normal Ash actions, attributes, policies, etc.
 end
 
-MyApp.Resources.User.__guarded_validate__(%{name: "Alice", email: "alice@x.com"})
+MyApp.Resources.User.__guarded_change__(%{name: "Alice", email: "alice@x.com"})
 # => {:ok, %{name: "Alice", email: "alice@x.com"}}
 ```
 
-The validation pipeline lives under the `__guarded_*__` namespace so it doesn't clash with Ash's own callbacks.
+The pipeline lives under the `__guarded_*__` namespace so it doesn't clash with Ash's own callbacks. The `Change` module bridges `__guarded_change__/1` into the changeset pipeline — runs sanitize + validate on every `:create` and `:update`.
+
+### Auto-wire (Option B)
+
+Set `auto_wire true` and skip the `changes do ... end` block — a Spark transformer injects the change for you via `Ash.Resource.Builder.add_change/3`:
+
+```elixir
+defmodule MyApp.Resources.User do
+  use Ash.Resource, extensions: [GuardedStruct.AshResource]
+
+  guardedstruct do
+    auto_wire true
+    field :email, :string, derives: "sanitize(trim, downcase) validate(email_r)"
+  end
+
+  # No `changes do ... end` block needed.
+end
+```
+
+### Bulk operations
+
+The bridge implements `batch_change/3`, so `Ash.bulk_create/3` and `Ash.bulk_update/3` (use `strategy: :stream`) work end-to-end. Sanitize runs per row through the imperative pipeline.
+
+### Atomic mode (compile-time-verified)
+
+For resources where every derive op is SQL-translatable, set `atomic true` to opt into compile-time atomic-safety verification:
+
+```elixir
+defmodule MyApp.Resources.User do
+  use Ash.Resource, extensions: [GuardedStruct.AshResource]
+
+  guardedstruct do
+    atomic true
+    auto_wire true
+
+    field :email,     :string,  derives: "sanitize(trim, downcase) validate(email_r, max_len=320)"
+    field :username,  :string,  derives: "validate(string, min_len=3, max_len=20)"
+    field :age,       :integer, derives: "validate(integer, min_len=0, max_len=150)"
+    field :role,      :string,  derives: "validate(enum=String[admin::user::guest])"
+    field :tenant_id, :string,  derives: "validate(uuid)"
+  end
+
+  actions do
+    defaults [:read, :destroy]
+    create :create, accept: [:email, :username, :age, :role, :tenant_id]
+
+    update :update do
+      accept [:email, :username, :age, :role]
+      require_atomic? false
+    end
+  end
+
+  attributes do
+    uuid_primary_key :id
+    attribute :email,     :string, allow_nil?: false, public?: true
+    attribute :username,  :string, allow_nil?: false, public?: true
+    attribute :age,       :integer, public?: true
+    attribute :role,      :string,  public?: true
+    attribute :tenant_id, :string,  public?: true
+  end
+end
+```
+
+The `VerifyAtomic` compile-time verifier rejects (with `Spark.Error.DslError` pointing at the offending field) any derive op that can't translate to atomic SQL:
+
+* `validate(email)` / `validate(url)` — need DNS / network I/O (use `email_r` / `url_r` instead)
+* per-field `validator: {Mod, :fn}` MFAs — arbitrary Elixir
+* `auto: {Mod, :fn}` MFAs — arbitrary Elixir
+* `main_validator/1` callback — cross-field Elixir
+* cross-field `on:` / `from:` / `domain:` options
+* Custom ops from `GuardedStruct.Derive.Extension`
+
+Sanitize ops (`trim`, `downcase`, `strip_tags`, `slugify`, …) are **always allowed** — they run in Elixir before the atomic SQL fires. The full atomic-safe registry lives in `GuardedStruct.AtomicClassifier`. Default is `atomic: false`.

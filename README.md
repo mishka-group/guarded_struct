@@ -326,6 +326,30 @@ MyApp.Resources.User.__guarded_change__(%{name: "Alice", email: "alice@x.com"})
 
 Prefer zero wiring? Set `auto_wire true` inside the `guardedstruct` block and the change is injected for you. See OPTIONS §15 for the trade-offs.
 
+### Atomic mode (opt-in)
+
+Set `atomic true` on the `guardedstruct` block to opt into compile-time-verified atomic-SQL-safety:
+
+```elixir
+guardedstruct do
+  atomic true
+  field :email,    :string,  derives: "sanitize(trim, downcase) validate(email_r, max_len=320)"
+  field :age,      :integer, derives: "validate(integer, min_len=0, max_len=120)"
+  field :role,     :string,  derives: "validate(enum=String[admin::user])"
+end
+```
+
+The `VerifyAtomic` compile-time verifier rejects (with a Spark.Error.DslError pointing at the offending field) any derive op that can't translate to atomic SQL:
+
+- `validate(email)` / `validate(url)` (need DNS / network I/O)
+- per-field `validator: {Mod, :fn}` (arbitrary Elixir)
+- `auto: {Mod, :fn}` (arbitrary Elixir)
+- `main_validator/1` callback (cross-field Elixir)
+- cross-field `on:` / `from:` / `domain:` options
+- custom ops from `GuardedStruct.Derive.Extension`
+
+Sanitize ops (`trim`, `downcase`, `slugify`, `strip_tags`, …) are **always allowed** — they run in Elixir before the atomic SQL fires. See `GuardedStruct.AtomicClassifier` for the full safe-op registry. Default is `atomic: false`.
+
 ## Errors as Splode exceptions (opt-in)
 
 `builder/1` returns the legacy `{:error, [%{field, action, message}]}` tuple shape by default. Wrap with [Splode](https://hex.pm/packages/splode) for `traverse_errors/2`, `to_class/1`, JSON serialisation:

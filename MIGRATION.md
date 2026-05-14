@@ -138,6 +138,8 @@ Generates `__guarded_change__/1`, `__guarded_information__/0`, `__guarded_fields
 
 Prefer zero wiring? Set `auto_wire true` at the top of the `guardedstruct` block and the change is injected for you. See OPTIONS §15.
 
+For Ash resources where every derive op is SQL-translatable (no `validate(email)` DNS, no `validator:` MFA, no `main_validator/1`), set `atomic true` to get a compile-time guarantee. The `VerifyAtomic` verifier rejects unsafe ops at the offending field's source line — see the "Atomic mode" section of the README or OPTIONS §15.
+
 ### 8. Splode error wrapping (opt-in)
 
 ```elixir
