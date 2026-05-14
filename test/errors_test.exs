@@ -3,15 +3,7 @@ defmodule GuardedStructTest.ErrorsTest do
 
   alias GuardedStruct.Errors
   alias GuardedStruct.Errors.{Invalid, Validation, Unknown}
-
-  defmodule SampleStruct do
-    use GuardedStruct
-
-    guardedstruct do
-      field(:email, String.t(), enforce: true, derives: "validate(string, email_r)")
-      field(:age, integer(), derives: "validate(integer, max_len=120, min_len=0)")
-    end
-  end
+  alias GuardedStructTest.Fixtures.Errors.SampleStruct
 
   test "wraps {:error, errors} into a Splode class" do
     {:error, errors} = SampleStruct.builder(%{email: "not-an-email", age: 200})

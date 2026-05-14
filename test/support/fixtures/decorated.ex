@@ -16,7 +16,7 @@ defmodule GuardedStructFixtures.Decorated do
 
     guardedstruct do
       @derives "sanitize(strip_tags, trim) validate(string, not_empty, max_len=200)"
-      field(:title, String.t(), enforce: true)
+      field :title, String.t(), enforce: true
 
       @derive_rules "sanitize(markdown_html, trim) validate(string, not_empty)"
       field(:body, String.t(), enforce: true)

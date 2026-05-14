@@ -32,15 +32,9 @@ defmodule GuardedStructTest.DerivesDeprecationTest do
     end
   end
 
+  alias GuardedStructTest.Fixtures.DerivesDeprecation.CanonicalName
+
   test "derives: works as the canonical name" do
-    defmodule CanonicalName do
-      use GuardedStruct
-
-      guardedstruct do
-        field(:name, String.t(), derives: "validate(string, max_len=10)")
-      end
-    end
-
     assert {:ok, %{name: "ok"}} = CanonicalName.builder(%{name: "ok"})
 
     {:error, errs} = CanonicalName.builder(%{name: "this is way too long"})

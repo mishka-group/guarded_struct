@@ -1,41 +1,7 @@
 defmodule GuardedStructTest.ExampleHelperTest do
   use ExUnit.Case, async: true
 
-  defmodule WithDefaults do
-    use GuardedStruct
-
-    guardedstruct do
-      field(:name, String.t(), default: "default name")
-      field(:age, integer(), default: 42)
-      field(:active, boolean(), default: true)
-    end
-  end
-
-  defmodule TypeFallbacks do
-    use GuardedStruct
-
-    guardedstruct do
-      field(:name, String.t())
-      field(:count, integer())
-      field(:rate, float())
-      field(:active, boolean())
-      field(:tags, list())
-      field(:metadata, map())
-    end
-  end
-
-  defmodule Nested do
-    use GuardedStruct
-
-    guardedstruct do
-      field(:title, String.t(), default: "the title")
-
-      sub_field(:meta, struct()) do
-        field(:author, String.t(), default: "anon")
-        field(:year, integer(), default: 2026)
-      end
-    end
-  end
+  alias GuardedStructTest.Fixtures.ExampleHelper.{WithDefaults, TypeFallbacks, Nested}
 
   test "example/0 uses declared defaults" do
     sample = WithDefaults.example()

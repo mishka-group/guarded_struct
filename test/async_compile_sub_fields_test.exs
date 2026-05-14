@@ -2,39 +2,19 @@ defmodule GuardedStructTest.AsyncCompileSubFieldsTest do
   @moduledoc """
   Tests `GenerateSubFieldModules` use of `Spark.Dsl.Transformer.async_compile/2`
   for sub_field submodule compilation.
-
-  Sub_field submodules are independent at compile time (parents reference
-  children only at runtime via `Module.concat(...)`), so they can compile
-  in parallel. Spark awaits all registered async tasks before the next
-  transformer runs (`GenerateBuilder`), so by the time the user's `use
-  GuardedStruct` block returns, every submodule is fully compiled and
-  callable.
-
-  These tests prove:
-    * All expected submodules exist after compile
-    * Each submodule has its full surface (builder/1, keys/0, __fields__/0)
-    * Deeply nested chains compile correctly (parent → child → grandchild)
-    * Conditional sub_fields with auto-numbered names compile
-    * Behavior is identical to the previous synchronous Module.create/3 path
-      (every existing fixture/end-to-end test still passes)
   """
 
   use ExUnit.Case, async: true
 
+  alias GuardedStructTest.Fixtures.AsyncCompile.{
+    SimpleParent,
+    WideParent,
+    DeepParent,
+    WithConditional,
+    OrderedDeep
+  }
+
   describe "simple sub_field — flat submodule generation" do
-    defmodule SimpleParent do
-      use GuardedStruct
-
-      guardedstruct do
-        field(:id, String.t(), enforce: true)
-
-        sub_field(:profile, struct()) do
-          field(:nickname, String.t())
-          field(:bio, String.t())
-        end
-      end
-    end
-
     test "the Profile submodule exists and is fully compiled" do
       assert Code.ensure_loaded?(SimpleParent.Profile)
       assert function_exported?(SimpleParent.Profile, :builder, 1)
@@ -59,28 +39,6 @@ defmodule GuardedStructTest.AsyncCompileSubFieldsTest do
   end
 
   describe "many sibling sub_fields — fan-out parallelism" do
-    defmodule WideParent do
-      use GuardedStruct
-
-      guardedstruct do
-        sub_field(:a, struct()) do
-          field(:x, String.t())
-        end
-
-        sub_field(:b, struct()) do
-          field(:x, String.t())
-        end
-
-        sub_field(:c, struct()) do
-          field(:x, String.t())
-        end
-
-        sub_field(:d, struct()) do
-          field(:x, String.t())
-        end
-      end
-    end
-
     test "every sibling submodule compiles independently" do
       for letter <- [:A, :B, :C, :D] do
         mod = Module.concat(WideParent, letter)
@@ -106,28 +64,6 @@ defmodule GuardedStructTest.AsyncCompileSubFieldsTest do
   end
 
   describe "deep nesting — parent → child → grandchild → great-grandchild" do
-    defmodule DeepParent do
-      use GuardedStruct
-
-      guardedstruct do
-        sub_field(:level1, struct()) do
-          field(:tag, String.t())
-
-          sub_field(:level2, struct()) do
-            field(:tag, String.t())
-
-            sub_field(:level3, struct()) do
-              field(:tag, String.t())
-
-              sub_field(:level4, struct()) do
-                field(:value, String.t(), enforce: true)
-              end
-            end
-          end
-        end
-      end
-    end
-
     test "every depth-level submodule exists and is callable" do
       mods = [
         DeepParent.Level1,
@@ -166,7 +102,6 @@ defmodule GuardedStructTest.AsyncCompileSubFieldsTest do
         level1: %{
           level2: %{
             level3: %{
-              # :value omitted at level4 — enforce: true → required error
               level4: %{}
             }
           }
@@ -178,39 +113,7 @@ defmodule GuardedStructTest.AsyncCompileSubFieldsTest do
   end
 
   describe "conditional sub_fields — auto-numbered submodule names" do
-    defmodule WithConditional do
-      use GuardedStruct
-
-      defmodule V do
-        def is_string(field, value) when is_binary(value), do: {:ok, field, value}
-        def is_string(field, _), do: {:error, field, "not a string"}
-
-        def is_map(field, value) when is_map(value) and not is_struct(value),
-          do: {:ok, field, value}
-
-        def is_map(field, _), do: {:error, field, "not a map"}
-      end
-
-      guardedstruct do
-        conditional_field(:payload, any()) do
-          field(:payload, String.t(),
-            hint: "string",
-            validator: {V, :is_string}
-          )
-
-          sub_field(:payload, struct(),
-            hint: "map_form",
-            validator: {V, :is_map}
-          ) do
-            field(:kind, String.t(), enforce: true)
-          end
-        end
-      end
-    end
-
     test "the auto-numbered Payload1 submodule exists" do
-      # Sub_field children of a conditional_field get renamed `<name><idx>`,
-      # so this becomes `WithConditional.Payload1` not `WithConditional.Payload`.
       assert Code.ensure_loaded?(WithConditional.Payload1)
       refute Code.ensure_loaded?(WithConditional.Payload)
     end
@@ -220,41 +123,21 @@ defmodule GuardedStructTest.AsyncCompileSubFieldsTest do
     end
 
     test "end-to-end conditional resolves to either branch" do
-      # string branch
       assert {:ok, %WithConditional{payload: "hello"}} =
                WithConditional.builder(%{payload: "hello"})
 
-      # map branch → resolved to Payload1 submodule
       assert {:ok, %WithConditional{payload: %WithConditional.Payload1{kind: "k"}}} =
                WithConditional.builder(%{payload: %{kind: "k"}})
     end
   end
 
   describe "async compile preserves ordering / dependency semantics" do
-    defmodule OrderedDeep do
-      use GuardedStruct
-
-      guardedstruct do
-        # Parent's `example/0` runtime-dispatches to child's `example/0`
-        # via `Module.concat(__MODULE__, ...).example()`. If async_compile
-        # ever finished parent BEFORE child, the parent's example/0 call
-        # would fail at runtime — proves ordering is preserved.
-        sub_field(:nested, struct()) do
-          field(:label, String.t(), default: "child-default")
-        end
-      end
-    end
-
     test "parent's example/0 successfully calls child's example/0 (runtime resolution)" do
       ex = OrderedDeep.example()
       assert ex.nested.label == "child-default"
     end
 
     test "all expected submodules exist at the moment user code first runs" do
-      # If async_compile didn't await before transformer pipeline finished,
-      # this would race. Spark's contract is that ALL async tasks complete
-      # before the next transformer runs — so by the time `use GuardedStruct`
-      # returns, every submodule is fully callable. This test locks that in.
       assert Code.ensure_loaded?(OrderedDeep.Nested)
       assert function_exported?(OrderedDeep.Nested, :builder, 1)
       assert {:ok, _} = OrderedDeep.Nested.builder(%{})
@@ -262,9 +145,6 @@ defmodule GuardedStructTest.AsyncCompileSubFieldsTest do
   end
 
   describe "regression: the full existing fixture set still passes end-to-end" do
-    # This block is a smoke test — if async_compile broke anything, one of
-    # these would fail. The detailed coverage lives in the per-fixture
-    # test files under test/fixtures/.
     alias GuardedStructFixtures.{Conditionals, Decorated, Dynamic, Forms, Records, Showcase}
 
     test "Forms.Signup builds" do

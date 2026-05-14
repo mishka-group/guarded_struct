@@ -5,26 +5,7 @@ defmodule GuardedStructTest.VirtualFieldTest do
   # struct. The classic use case is `password_confirm`: cross-field check
   # via `main_validator`, never persisted on the user struct.
 
-  defmodule Signup do
-    use GuardedStruct
-
-    guardedstruct do
-      field(:email, String.t(), enforce: true, derives: "validate(string, email_r)")
-      field(:password, String.t(), enforce: true, derives: "validate(string, min_len=8)")
-      virtual_field(:password_confirm, String.t(), derives: "validate(string)")
-    end
-
-    # Convention: `main_validator/1` is auto-discovered by the runtime when
-    # defined on the user module (no need for an explicit MFA tuple in the
-    # section opts).
-    def main_validator(attrs) do
-      if attrs[:password] == attrs[:password_confirm] do
-        {:ok, attrs}
-      else
-        {:error, [%{field: :password_confirm, action: :match, message: "passwords don't match"}]}
-      end
-    end
-  end
+  alias GuardedStructTest.Fixtures.VirtualField.{Signup, WithDynamic}
 
   test "virtual fields are validated and visible to main_validator" do
     assert {:ok, %Signup{} = s} =
@@ -54,15 +35,6 @@ defmodule GuardedStructTest.VirtualFieldTest do
     refute :password_confirm in Signup.keys()
     assert :email in Signup.keys()
     assert :password in Signup.keys()
-  end
-
-  defmodule WithDynamic do
-    use GuardedStruct
-
-    guardedstruct do
-      field(:name, String.t(), enforce: true, derives: "validate(string)")
-      dynamic_field(:metadata)
-    end
   end
 
   test "dynamic_field defaults to %{} and accepts any map" do

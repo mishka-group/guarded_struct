@@ -23,13 +23,16 @@ spark_locals_without_parens = [
   opaque: 1,
   priority: 1,
   sanitize_derive: 1,
+  sanitizer: 2,
   struct: 1,
   structs: 1,
   sub_field: 2,
   sub_field: 3,
+  sub_field: 4,
   type: 1,
   validate_derive: 1,
   validator: 1,
+  validator: 2,
   virtual_field: 2,
   virtual_field: 3
 ]

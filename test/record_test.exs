@@ -5,14 +5,7 @@ defmodule GuardedStructTest.RecordTest do
   Record.defrecord(:user, name: nil, age: nil)
   Record.defrecord(:address, street: nil, city: nil)
 
-  defmodule WithRecord do
-    use GuardedStruct
-
-    guardedstruct do
-      field(:any_record, :tuple, derives: "validate(record)")
-      field(:user_record, :tuple, derives: "validate(record=user)")
-    end
-  end
+  alias GuardedStructTest.Fixtures.Record.WithRecord
 
   test ":record accepts any tagged tuple" do
     {:ok, %WithRecord{any_record: {:foo, 1, 2}}} =

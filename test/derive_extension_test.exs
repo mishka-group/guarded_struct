@@ -1,20 +1,7 @@
 defmodule GuardedStructTest.DeriveExtensionTest do
   use ExUnit.Case, async: false
 
-  defmodule SlugDerives do
-    use GuardedStruct.Derive.Extension
-
-    validator(:slug, fn input ->
-      is_binary(input) and Regex.match?(~r/^[a-z0-9-]+$/, input)
-    end)
-
-    sanitizer(:slugify, fn input when is_binary(input) ->
-      input
-      |> String.downcase()
-      |> String.replace(~r/[^a-z0-9-]+/u, "-")
-      |> String.trim("-")
-    end)
-  end
+  alias GuardedStructTest.Fixtures.DeriveExtension.{SlugDerives, WithSlug, WithSlugify}
 
   setup do
     Application.put_env(:guarded_struct, :derive_extensions, [SlugDerives])
@@ -29,14 +16,6 @@ defmodule GuardedStructTest.DeriveExtensionTest do
   end
 
   test "extension validator runs against input" do
-    defmodule WithSlug do
-      use GuardedStruct
-
-      guardedstruct do
-        field(:slug, String.t(), derives: "validate(slug)")
-      end
-    end
-
     assert {:ok, %{slug: "valid-slug"}} = WithSlug.builder(%{slug: "valid-slug"})
 
     assert {:error, [%{field: :slug, action: :slug}]} =
@@ -44,20 +23,11 @@ defmodule GuardedStructTest.DeriveExtensionTest do
   end
 
   test "extension sanitizer runs against input" do
-    defmodule WithSlugify do
-      use GuardedStruct
-
-      guardedstruct do
-        field(:slug, String.t(), derives: "sanitize(slugify) validate(slug)")
-      end
-    end
-
     assert {:ok, %{slug: "hello-world"}} = WithSlugify.builder(%{slug: "Hello World!"})
   end
 
   test "extension dispatch finds the registered op" do
-    assert "abc" =
-             GuardedStruct.Derive.Extension.dispatch_validate(:slug, "abc", :test)
+    assert "abc" = GuardedStruct.Derive.Extension.dispatch_validate(:slug, "abc", :test)
 
     assert {:error, :test, :slug, _} =
              GuardedStruct.Derive.Extension.dispatch_validate(:slug, "AB!", :test)

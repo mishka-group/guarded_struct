@@ -1,14 +1,7 @@
 defmodule GuardedStructTest.TelemetryTest do
   use ExUnit.Case, async: false
 
-  defmodule Sample do
-    use GuardedStruct
-
-    guardedstruct do
-      field(:name, String.t(), enforce: true, derives: "validate(string, max_len=80)")
-      field(:age, integer(), derives: "validate(integer, min_len=0)")
-    end
-  end
+  alias GuardedStructTest.Fixtures.Telemetry.{Sample, WithBoom, WithNested}
 
   def __telemetry_forward__(event, measurements, metadata, %{pid: pid}) do
     send(pid, {:telemetry, event, measurements, metadata})
@@ -62,14 +55,6 @@ defmodule GuardedStructTest.TelemetryTest do
   end
 
   test "emits :exception when builder raises" do
-    defmodule WithBoom do
-      use GuardedStruct
-
-      guardedstruct error: true do
-        field(:name, String.t(), enforce: true)
-      end
-    end
-
     assert_raise WithBoom.Error, fn ->
       WithBoom.builder(%{}, true)
     end
@@ -80,18 +65,6 @@ defmodule GuardedStructTest.TelemetryTest do
   end
 
   test "nested sub_field builds do NOT emit (only top-level public entry)" do
-    defmodule WithNested do
-      use GuardedStruct
-
-      guardedstruct do
-        field(:name, String.t())
-
-        sub_field(:auth, struct()) do
-          field(:role, String.t())
-        end
-      end
-    end
-
     WithNested.builder(%{name: "x", auth: %{role: "admin"}})
 
     # Drain all received telemetry messages and count :start events.

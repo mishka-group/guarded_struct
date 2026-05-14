@@ -2,72 +2,7 @@ defmodule GuardedStructTest.InfoTest do
   use ExUnit.Case, async: true
 
   alias GuardedStruct.Info
-
-  # A single rich fixture that exercises every entity type + section option
-  # we want `Info` to be able to report on.
-  defmodule EverythingUser do
-    use GuardedStruct
-
-    defmodule Hashers do
-      @moduledoc false
-      def hash(field, v) when is_binary(v), do: {:ok, field, v}
-      def hash(field, _), do: {:error, field, "not a string"}
-    end
-
-    defmodule Ids do
-      @moduledoc false
-      def gen, do: "id-stub"
-    end
-
-    guardedstruct enforce: true, authorized_fields: true, json: true do
-      # field auto-generated at build time
-      field(:id, String.t(), auto: {Ids, :gen})
-
-      # required field with per-field validator
-      field(:password, String.t(), validator: {Hashers, :hash})
-
-      # field with explicit enforce: false + derives
-      field(:nickname, String.t(),
-        enforce: false,
-        derives: "validate(string, max_len=20)"
-      )
-
-      # field with a real default → opts out of block-level enforce
-      field(:status, String.t(), default: "active")
-
-      # virtual_field — validated but not on the struct
-      virtual_field(:password_confirm, String.t())
-
-      # dynamic_field — free-form map
-      dynamic_field(:metadata)
-
-      # sub_field — generates a real submodule
-      sub_field :address, struct() do
-        field(:city, String.t(), enforce: true)
-        field(:zip, String.t())
-      end
-
-      # conditional_field — string OR a map sub-shape
-      conditional_field(:billing, any()) do
-        field(:billing, String.t(), hint: "preset_name", derives: "validate(string)")
-
-        sub_field :billing, struct() do
-          field(:method, String.t(), enforce: true)
-          field(:account, String.t())
-        end
-      end
-    end
-  end
-
-  # Separate small fixture for the pattern-keyed map shape (own module
-  # because it can't coexist with atom-keyed fields).
-  defmodule HeadersMap do
-    use GuardedStruct
-
-    guardedstruct do
-      field(~r/^X-[A-Z][A-Za-z\-]*$/, String.t(), derives: "validate(string)")
-    end
-  end
+  alias GuardedStructTest.Fixtures.Info.{EverythingUser, HeadersMap}
 
   # ────────────────────────────────────────────────────────────────────
   # Existing API (regressions)

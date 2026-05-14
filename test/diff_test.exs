@@ -2,21 +2,7 @@ defmodule GuardedStructTest.DiffTest do
   use ExUnit.Case, async: true
 
   alias GuardedStruct.Diff
-
-  defmodule User do
-    use GuardedStruct
-
-    guardedstruct do
-      field(:name, String.t(), enforce: true)
-      field(:age, integer())
-      field(:role, String.t())
-
-      sub_field(:address, struct()) do
-        field(:city, String.t())
-        field(:zip, String.t())
-      end
-    end
-  end
+  alias GuardedStructTest.Fixtures.Diff.{User, Other, Other2}
 
   describe "diff/2" do
     test "two equal structs return %{}" do
@@ -41,29 +27,19 @@ defmodule GuardedStructTest.DiffTest do
     end
 
     test "nested struct change recurses" do
-      {:ok, a} =
-        User.builder(%{name: "Alice", address: %{city: "NYC", zip: "10001"}})
-
-      {:ok, b} =
-        User.builder(%{name: "Alice", address: %{city: "Chicago", zip: "10001"}})
+      {:ok, a} = User.builder(%{name: "Alice", address: %{city: "NYC", zip: "10001"}})
+      {:ok, b} = User.builder(%{name: "Alice", address: %{city: "Chicago", zip: "10001"}})
 
       assert %{address: %{city: {:changed, "NYC", "Chicago"}}} = Diff.diff(a, b)
     end
 
     test "nested struct unchanged → not in diff" do
-      {:ok, a} =
-        User.builder(%{name: "Alice", address: %{city: "NYC", zip: "10001"}})
-
-      {:ok, b} =
-        User.builder(%{name: "Bob", address: %{city: "NYC", zip: "10001"}})
+      {:ok, a} = User.builder(%{name: "Alice", address: %{city: "NYC", zip: "10001"}})
+      {:ok, b} = User.builder(%{name: "Bob", address: %{city: "NYC", zip: "10001"}})
 
       result = Diff.diff(a, b)
       refute Map.has_key?(result, :address)
       assert Map.has_key?(result, :name)
-    end
-
-    defmodule Other do
-      defstruct [:x]
     end
 
     test "two structs of different types return :not_comparable" do
@@ -87,8 +63,7 @@ defmodule GuardedStructTest.DiffTest do
     end
 
     test "applies a nested change" do
-      {:ok, a} =
-        User.builder(%{name: "Alice", address: %{city: "NYC", zip: "10001"}})
+      {:ok, a} = User.builder(%{name: "Alice", address: %{city: "NYC", zip: "10001"}})
 
       patched = Diff.apply(a, %{address: %{city: {:changed, "NYC", "Chicago"}}})
 
@@ -127,10 +102,6 @@ defmodule GuardedStructTest.DiffTest do
       {:ok, b} = User.builder(%{name: "Bob", age: 30})
 
       refute Diff.equal?(a, b)
-    end
-
-    defmodule Other2 do
-      defstruct [:x]
     end
 
     test "false for non-comparable" do

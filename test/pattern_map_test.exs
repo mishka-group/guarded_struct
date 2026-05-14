@@ -1,30 +1,13 @@
 defmodule GuardedStructTest.PatternMapTest do
   use ExUnit.Case, async: true
 
-  defmodule Shard do
-    use GuardedStruct
-
-    guardedstruct do
-      field(:node, String.t(), enforce: true, derives: "sanitize(trim) validate(ipv4)")
-    end
-  end
-
-  defmodule ShardsMap do
-    use GuardedStruct
-
-    guardedstruct do
-      field(~r/^shard_\d+$/, struct(), struct: Shard, derives: "validate(map, not_empty)")
-    end
-  end
-
-  defmodule Plan do
-    use GuardedStruct
-
-    guardedstruct do
-      field(:status, String.t(), enforce: true)
-      field(:shards_map, struct(), struct: ShardsMap, enforce: true)
-    end
-  end
+  alias GuardedStructTest.Fixtures.PatternMap.{
+    Shard,
+    ShardsMap,
+    Plan,
+    MultiPattern,
+    HeadersMap
+  }
 
   describe "standalone pattern-map struct" do
     test "builds a top-level flat map of validated structs" do
@@ -182,15 +165,6 @@ defmodule GuardedStructTest.PatternMapTest do
   end
 
   describe "multiple regex patterns coexist" do
-    defmodule MultiPattern do
-      use GuardedStruct
-
-      guardedstruct do
-        field(~r/^shard_\d+$/, struct(), struct: Shard)
-        field(~r/^backup_\d+$/, struct(), struct: Shard)
-      end
-    end
-
     test "different keys match different patterns" do
       assert {:ok,
               %{
@@ -233,14 +207,6 @@ defmodule GuardedStructTest.PatternMapTest do
   end
 
   describe "primitive-value pattern map" do
-    defmodule HeadersMap do
-      use GuardedStruct
-
-      guardedstruct do
-        field(~r/^X-[A-Z][A-Za-z0-9\-]*$/, String.t())
-      end
-    end
-
     test "accepts entries with valid header-like keys" do
       {:ok, result} =
         HeadersMap.builder(%{
