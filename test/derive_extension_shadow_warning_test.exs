@@ -1,16 +1,14 @@
 defmodule GuardedStructTest.DeriveExtensionShadowWarningTest do
   @moduledoc """
-  Tests the compile-time shadow warning emitted by
-  `GuardedStruct.Derive.Extension.validator/2` and `sanitizer/2`.
+  Tests the compile-time shadow warning emitted by the
+  `GuardedStruct.Derive.Extension.Transformers.Codegen` transformer.
 
-  When a user declares a custom op whose name collides with a built-in
-  (registered in `GuardedStruct.Derive.Registry`), the built-in's
-  pattern-matched function clause in `ValidationDerive` / `SanitizerDerive`
-  always matches first — so the custom version would be dead code. We
-  warn at compile time via `Spark.Warning.warn/3`.
-
-  Each test compiles a fresh module via `Code.eval_string` and captures
-  stderr to inspect the warning shape.
+  When a user declares a custom op (inside `derives do ... end`) whose
+  name collides with a built-in (registered in
+  `GuardedStruct.Derive.Registry`), the built-in's pattern-matched
+  function clause in `ValidationDerive` / `SanitizerDerive` matches
+  first — so the custom version would be dead code. We warn at compile
+  time via `IO.warn/2`.
   """
 
   # async: false — `capture_io(:stderr, ...)` is process-global.
@@ -22,13 +20,15 @@ defmodule GuardedStructTest.DeriveExtensionShadowWarningTest do
     capture_io(:stderr, fn -> Code.eval_string(code) end)
   end
 
-  describe "validator/2 shadow warning" do
+  describe "validator shadow warning" do
     test "warns when a validator shadows a built-in (e.g. :string)" do
       output =
         compile_capture("""
         defmodule ShadowsString do
           use GuardedStruct.Derive.Extension
-          validator :string, fn _ -> true end
+          derives do
+            validator :string, fn _ -> true end
+          end
         end
         """)
 
@@ -45,7 +45,9 @@ defmodule GuardedStructTest.DeriveExtensionShadowWarningTest do
           compile_capture("""
           defmodule Shadows#{Macro.camelize(to_string(name))} do
             use GuardedStruct.Derive.Extension
-            validator #{inspect(name)}, fn _ -> true end
+            derives do
+              validator #{inspect(name)}, fn _ -> true end
+            end
           end
           """)
 
@@ -61,7 +63,9 @@ defmodule GuardedStructTest.DeriveExtensionShadowWarningTest do
         compile_capture("""
         defmodule MyAppShadowsString do
           use GuardedStruct.Derive.Extension
-          validator :string, fn _ -> true end
+          derives do
+            validator :string, fn _ -> true end
+          end
         end
         """)
 
@@ -73,7 +77,9 @@ defmodule GuardedStructTest.DeriveExtensionShadowWarningTest do
         compile_capture("""
         defmodule NoShadowingValidator do
           use GuardedStruct.Derive.Extension
-          validator :my_custom_op, fn _ -> true end
+          derives do
+            validator :my_custom_op, fn _ -> true end
+          end
         end
         """)
 
@@ -81,13 +87,15 @@ defmodule GuardedStructTest.DeriveExtensionShadowWarningTest do
     end
   end
 
-  describe "sanitizer/2 shadow warning" do
+  describe "sanitizer shadow warning" do
     test "warns when a sanitizer shadows a built-in (e.g. :trim)" do
       output =
         compile_capture("""
         defmodule ShadowsTrim do
           use GuardedStruct.Derive.Extension
-          sanitizer :trim, fn input -> input end
+          derives do
+            sanitizer :trim, fn input -> input end
+          end
         end
         """)
 
@@ -102,7 +110,9 @@ defmodule GuardedStructTest.DeriveExtensionShadowWarningTest do
           compile_capture("""
           defmodule ShadowsSanitize#{Macro.camelize(to_string(name))} do
             use GuardedStruct.Derive.Extension
-            sanitizer #{inspect(name)}, fn input -> input end
+            derives do
+              sanitizer #{inspect(name)}, fn input -> input end
+            end
           end
           """)
 
@@ -116,7 +126,9 @@ defmodule GuardedStructTest.DeriveExtensionShadowWarningTest do
         compile_capture("""
         defmodule NoShadowingSanitizer do
           use GuardedStruct.Derive.Extension
-          sanitizer :my_slugify, fn input -> input end
+          derives do
+            sanitizer :my_slugify, fn input -> input end
+          end
         end
         """)
 
@@ -130,10 +142,12 @@ defmodule GuardedStructTest.DeriveExtensionShadowWarningTest do
         compile_capture("""
         defmodule MixedShadowingExt do
           use GuardedStruct.Derive.Extension
-          validator :string, fn _ -> true end          # shadow
-          validator :my_custom, fn _ -> true end       # clean
-          sanitizer :trim, fn input -> input end       # shadow
-          sanitizer :my_clean_op, fn input -> input end # clean
+          derives do
+            validator :string, fn _ -> true end          # shadow
+            validator :my_custom, fn _ -> true end       # clean
+            sanitizer :trim, fn input -> input end       # shadow
+            sanitizer :my_clean_op, fn input -> input end # clean
+          end
         end
         """)
 
@@ -156,14 +170,14 @@ defmodule GuardedStructTest.DeriveExtensionShadowWarningTest do
 
   describe "shadow validator is actually dead code at runtime" do
     test "built-in :string wins; the custom one is never called" do
-      # If the custom one were called, this would always pass (returns true).
-      # But the built-in :string requires is_binary/1 — so non-strings fail.
       output =
         capture_io(:stderr, fn ->
           Code.eval_string("""
           defmodule DeadCodeExt do
             use GuardedStruct.Derive.Extension
-            validator :string, fn _input -> true end
+            derives do
+              validator :string, fn _input -> true end
+            end
           end
 
           defmodule UsesDeadCodeExt do

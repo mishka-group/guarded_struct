@@ -1,20 +1,22 @@
 defmodule GuardedStruct.Derive.Extension do
   @moduledoc """
-  Define custom derive validators / sanitizers as a small module-level DSL.
+  Define custom derive validators / sanitizers via a Spark DSL.
 
   ## Usage
 
       defmodule MyApp.Derives do
         use GuardedStruct.Derive.Extension
 
-        validator :slug, fn input ->
-          is_binary(input) and Regex.match?(~r/^[a-z0-9-]+$/, input)
-        end
+        derives do
+          validator :slug, fn input ->
+            is_binary(input) and Regex.match?(~r/^[a-z0-9-]+$/, input)
+          end
 
-        sanitizer :slugify, fn input when is_binary(input) ->
-          input
-          |> String.downcase()
-          |> String.replace(~r/[^a-z0-9-]+/u, "-")
+          sanitizer :slugify, fn input when is_binary(input) ->
+            input
+            |> String.downcase()
+            |> String.replace(~r/[^a-z0-9-]+/u, "-")
+          end
         end
       end
 
@@ -28,7 +30,7 @@ defmodule GuardedStruct.Derive.Extension do
         use GuardedStruct
 
         guardedstruct do
-          field(:slug, String.t(), derives: "sanitize(slugify) validate(slug)")
+          field :slug, String.t(), derives: "sanitize(slugify) validate(slug)"
         end
       end
 
@@ -40,35 +42,31 @@ defmodule GuardedStruct.Derive.Extension do
     * `false` — input fails (default error message generated)
     * `{:error, field, action, message}` — explicit error tuple
     * any other value — used as the validated value (for coercing validators)
+
+  ## Why a Spark DSL?
+
+  This module is built on `Spark.Dsl.Extension` (rather than plain macros)
+  for consistency with the rest of the GuardedStruct stack. Concrete wins:
+
+    * `mix spark.formatter` keeps `validator :slug, fn ... end` paren-free
+      across formatting runs (Spark.Formatter handles `fn`-bearing calls,
+      vanilla Elixir formatter doesn't).
+    * The `derives do ... end` block is introspectable via
+      `Spark.Dsl.Extension.get_entities/2`.
+    * Future verifiers / transformers (e.g. enforcing op-name uniqueness,
+      cross-extension collision checks) plug in at well-defined points.
+
+  The trade-off is one `derives do ... end` wrapper per extension module —
+  cosmetic, costs ~3 lines vs the previous flat form.
   """
 
-  defmacro __using__(_opts) do
-    quote do
-      import GuardedStruct.Derive.Extension, only: [validator: 2, sanitizer: 2]
+  use Spark.Dsl,
+    default_extensions: [extensions: [GuardedStruct.Derive.Extension.Dsl]]
 
-      Module.register_attribute(__MODULE__, :__validator_ops__, accumulate: true)
-      Module.register_attribute(__MODULE__, :__sanitizer_ops__, accumulate: true)
-
-      @before_compile GuardedStruct.Derive.Extension
-    end
-  end
-
-  @doc "Declare a validator op."
-  defmacro validator(name, fun_ast) when is_atom(name) do
-    __MODULE__.__warn_shadow__(:validate, name, __CALLER__)
-
-    quote do
-      @__validator_ops__ unquote(name)
-      def __validate__(unquote(name), input, field) do
-        GuardedStruct.Derive.Extension.__dispatch_validator__(
-          unquote(fun_ast).(input),
-          input,
-          field,
-          unquote(name)
-        )
-      end
-    end
-  end
+  # ────────────────────────────────────────────────────────────────────
+  # Runtime helpers — not Spark-related. Used by Runtime.* modules and
+  # by user-facing extension lookup.
+  # ────────────────────────────────────────────────────────────────────
 
   @doc false
   def __dispatch_validator__(true, input, _field, _name), do: input
@@ -80,58 +78,6 @@ defmodule GuardedStruct.Derive.Extension do
   def __dispatch_validator__({:error, _, _, _} = e, _input, _field, _name), do: e
 
   def __dispatch_validator__(other, _input, _field, _name), do: other
-
-  @doc "Declare a sanitizer op."
-  defmacro sanitizer(name, fun_ast) when is_atom(name) do
-    __MODULE__.__warn_shadow__(:sanitize, name, __CALLER__)
-
-    quote do
-      @__sanitizer_ops__ unquote(name)
-      def __sanitize__(unquote(name), input) do
-        unquote(fun_ast).(input)
-      end
-    end
-  end
-
-  @doc false
-  # Compile-time check — if the custom op name collides with a built-in
-  # registered in `Derive.Registry`, emit a Spark warning. The built-in's
-  # pattern-matched function clause in `ValidationDerive` / `SanitizerDerive`
-  # always wins, so the custom validator/sanitizer would be dead code.
-  def __warn_shadow__(kind, name, caller) do
-    shadows? =
-      case kind do
-        :validate -> GuardedStruct.Derive.Registry.known_validate?(name)
-        :sanitize -> GuardedStruct.Derive.Registry.known_sanitize?(name)
-      end
-
-    if shadows? do
-      Spark.Warning.warn(
-        "#{kind_label(kind)} #{inspect(name)} in #{inspect(caller.module)} " <>
-          "shadows a built-in `#{kind}(#{name})` op. Built-in clauses match first, " <>
-          "so this custom #{kind_label(kind)} will NEVER be called. " <>
-          "Rename it to avoid the shadow.",
-        nil,
-        Macro.Env.stacktrace(caller)
-      )
-    end
-
-    :ok
-  end
-
-  defp kind_label(:validate), do: "validator"
-  defp kind_label(:sanitize), do: "sanitizer"
-
-  defmacro __before_compile__(_env) do
-    quote do
-      def __validators__, do: Enum.reverse(@__validator_ops__)
-      def __sanitizers__, do: Enum.reverse(@__sanitizer_ops__)
-      def __derive_extension__?, do: true
-
-      def __validate__(_op, _input, _field), do: :__not_found__
-      def __sanitize__(_op, input), do: input
-    end
-  end
 
   @doc """
   Returns the list of registered extension modules from app config.
@@ -188,10 +134,7 @@ defmodule GuardedStruct.Derive.Extension do
   end
 
   @doc """
-  Resolve the effective extension list for a specific user module. If the
-  module declared a per-module opt via `use GuardedStruct, derive_extensions: [...]`,
-  that takes precedence (with `:config` honoured); otherwise falls back to
-  global config.
+  Resolve the effective extension list for a specific user module.
   """
   @spec extensions_for(module() | nil) :: [module()]
   def extensions_for(nil), do: registered_extensions()
@@ -248,8 +191,7 @@ defmodule GuardedStruct.Derive.Extension do
   @doc """
   The user module currently being built. Set by `Runtime.with_telemetry/2`
   around every top-level `builder/1` call; nested sub_field builds inherit
-  via the process dictionary. Returns `nil` for standalone callers like
-  `GuardedStruct.Validate.run/2` that don't go through `builder/1`.
+  via the process dictionary.
   """
   def current_module, do: Process.get(:guarded_struct_current_module)
 
@@ -282,8 +224,7 @@ defmodule GuardedStruct.Derive.Extension do
 
   @doc """
   All validator op atoms known across every extension visible from the
-  given module (per-module + globally if opted in via `:config`).
-  Used by the strict-mode compile-time check.
+  given module.
   """
   def all_extension_validators(module \\ nil) do
     extensions_for(module)

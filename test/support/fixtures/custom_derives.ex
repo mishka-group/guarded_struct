@@ -15,18 +15,20 @@ defmodule GuardedStructFixtures.CustomDerives do
   defmodule MyDerives do
     use GuardedStruct.Derive.Extension
 
-    validator(:slug, fn input ->
-      is_binary(input) and Regex.match?(~r/^[a-z0-9][a-z0-9-]*$/, input)
-    end)
+    derives do
+      validator :slug, fn input ->
+        is_binary(input) and Regex.match?(~r/^[a-z0-9][a-z0-9-]*$/, input)
+      end
 
-    validator(:positive_int, fn input -> is_integer(input) and input > 0 end)
+      validator :positive_int, fn input -> is_integer(input) and input > 0 end
 
-    sanitizer(:slugify, fn input when is_binary(input) ->
-      input
-      |> String.downcase()
-      |> String.replace(~r/[^a-z0-9]+/u, "-")
-      |> String.trim("-")
-    end)
+      sanitizer :slugify, fn input when is_binary(input) ->
+        input
+        |> String.downcase()
+        |> String.replace(~r/[^a-z0-9]+/u, "-")
+        |> String.trim("-")
+      end
+    end
   end
 
   defmodule Article do

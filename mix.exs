@@ -26,7 +26,7 @@ defmodule GuardedStruct.MixProject do
   # path for it). We pin the list ONCE here so both spark.formatter and
   # spark.cheat_sheets pick it up automatically — and so a short alias
   # like `mix lint` / `mix cheat` works.
-  @spark_extensions "GuardedStruct.Dsl,GuardedStruct.AshResource"
+  @spark_extensions "GuardedStruct.Dsl,GuardedStruct.AshResource,GuardedStruct.Derive.Extension.Dsl"
 
   defp aliases do
     [
@@ -76,7 +76,8 @@ defmodule GuardedStruct.MixProject do
         "CHANGELOG.md",
         "MIGRATION.md",
         "documentation/dsls/DSL-GuardedStruct.md",
-        "documentation/dsls/DSL-GuardedStruct.AshResource.md"
+        "documentation/dsls/DSL-GuardedStruct.AshResource.md",
+        "documentation/dsls/DSL-GuardedStruct.Derive.Extension.md"
       ],
       groups_for_extras: [
         "DSL Reference": ~r"^documentation/dsls/.*"

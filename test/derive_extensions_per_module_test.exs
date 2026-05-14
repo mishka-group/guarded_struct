@@ -26,31 +26,37 @@ defmodule GuardedStructTest.DeriveExtensionsPerModuleTest do
   defmodule GlobalDerives do
     use GuardedStruct.Derive.Extension
 
-    # Accepts only "global:..." prefixed slugs
-    validator(:slug, fn input ->
-      is_binary(input) and String.starts_with?(input, "global:")
-    end)
+    derives do
+      # Accepts only "global:..." prefixed slugs
+      validator :slug, fn input ->
+        is_binary(input) and String.starts_with?(input, "global:")
+      end
 
-    # Only here
-    validator(:uuid7, fn input -> is_binary(input) end)
+      # Only here
+      validator :uuid7, fn input -> is_binary(input) end
+    end
   end
 
   defmodule LocalDerives do
     use GuardedStruct.Derive.Extension
 
-    # Accepts only "local:..." prefixed slugs (collides with GlobalDerives.:slug)
-    validator(:slug, fn input ->
-      is_binary(input) and String.starts_with?(input, "local:")
-    end)
+    derives do
+      # Accepts only "local:..." prefixed slugs (collides with GlobalDerives.:slug)
+      validator :slug, fn input ->
+        is_binary(input) and String.starts_with?(input, "local:")
+      end
 
-    # Only here
-    validator(:ksuid, fn input -> is_binary(input) end)
+      # Only here
+      validator :ksuid, fn input -> is_binary(input) end
+    end
   end
 
   defmodule ExtraDerives do
     use GuardedStruct.Derive.Extension
 
-    validator(:phone, fn input -> is_binary(input) end)
+    derives do
+      validator :phone, fn input -> is_binary(input) end
+    end
   end
 
   setup do
