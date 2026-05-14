@@ -649,9 +649,9 @@ defmodule GuardedStructTest.DeriveTest do
     use GuardedStruct
 
     guardedstruct do
-      field(:id, integer(), derive: "validate(not_exist)")
-      field(:title, String.t(), derive: "validate(string)")
-      field(:name, String.t(), derive: "sanitize(capitalize_v2)")
+      field(:id, integer(), derives: "validate(not_exist)")
+      field(:title, String.t(), derives: "validate(string)")
+      field(:name, String.t(), derives: "sanitize(capitalize_v2)")
     end
   end
 
@@ -660,10 +660,10 @@ defmodule GuardedStructTest.DeriveTest do
 
     guardedstruct do
       field(:id, integer())
-      field(:title, String.t(), derive: "validate(not_empty, testv1)")
-      field(:name, String.t(), derive: "validate(string, not_empty) sanitize(trim, capitalize)")
-      field(:last_name, String.t(), derive: "sanitize(capitalize_v1")
-      field(:nikname, String.t(), derive: "sanitize(not_exist")
+      field(:title, String.t(), derives: "validate(not_empty, testv1)")
+      field(:name, String.t(), derives: "validate(string, not_empty) sanitize(trim, capitalize)")
+      field(:last_name, String.t(), derives: "sanitize(capitalize_v1")
+      field(:nikname, String.t(), derives: "sanitize(not_exist")
     end
   end
 
@@ -709,14 +709,14 @@ defmodule GuardedStructTest.DeriveTest do
 
     guardedstruct do
       field(:id, integer())
-      field(:title, String.t(), derive: "validate(not_empty, testv2)")
+      field(:title, String.t(), derives: "validate(not_empty, testv2)")
 
       field(:name, String.t(),
-        derive: "validate(string, not_empty) sanitize(trim, capitalize_v2)"
+        derives: "validate(string, not_empty) sanitize(trim, capitalize_v2)"
       )
 
-      field(:last_name, String.t(), derive: "sanitize(capitalize_v1")
-      field(:nikname, String.t(), derive: "sanitize(not_exist")
+      field(:last_name, String.t(), derives: "sanitize(capitalize_v1")
+      field(:nikname, String.t(), derives: "sanitize(not_exist")
     end
   end
 
@@ -742,8 +742,8 @@ defmodule GuardedStructTest.DeriveTest do
     use GuardedStruct
 
     guardedstruct do
-      field(:test, String.t(), derive: "validate(either=[integer, max_len=4])")
-      field(:test1, String.t(), derive: "validate(either=[string, enum=Integer[1::2::3]])")
+      field(:test, String.t(), derives: "validate(either=[integer, max_len=4])")
+      field(:test1, String.t(), derives: "validate(either=[string, enum=Integer[1::2::3]])")
     end
   end
 
@@ -773,7 +773,7 @@ defmodule GuardedStructTest.DeriveTest do
     use GuardedStruct
 
     guardedstruct authorized_fields: true do
-      field(:status, String.t(), derive: "validate(custom=[#{__MODULE__}, is_stuff?])")
+      field(:status, String.t(), derives: "validate(custom=[#{__MODULE__}, is_stuff?])")
     end
 
     def is_stuff?(data) when data == "ok", do: true

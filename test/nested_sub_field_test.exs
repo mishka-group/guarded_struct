@@ -6,27 +6,8 @@
 defmodule GuardedStructTest.NestedSubFieldTest do
   use ExUnit.Case, async: true
 
-  defmodule NestedSubFieldListStructs do
-    use GuardedStruct
-
-    guardedstruct do
-      sub_field(:list, list(struct()),
-        structs: true,
-        derive: "validate(list, not_empty)",
-        enforce: true
-      ) do
-        field(:id, String.t(), enforce: true)
-
-        sub_field(:sublist, list(struct()),
-          structs: true,
-          derive: "validate(list, not_empty)",
-          enforce: true
-        ) do
-          field(:id, String.t())
-        end
-      end
-    end
-  end
+  alias GuardedStructTest.Fixtures.NestedSubField.NestedSubFieldListStructs
+  _ = NestedSubFieldListStructs
 
   test "nested sub field list structs" do
     true
@@ -34,29 +15,5 @@ defmodule GuardedStructTest.NestedSubFieldTest do
     #          NestedSubFieldListStructs.builder(%{
     #            list: [%{id: "1", sublist: [%{id: "1"}]}]
     #          })
-
-    # assert {:ok, struct} =
-    #          NestedSubFieldListStructs.builder(
-    #            list: [
-    #              %{id: "1", sublist: [%{id: "1"}]},
-    #              %{id: "2", sublist: [%{id: "2"}]}
-    #            ]
-    #          )
-
-    # assert {:error, _error} =
-    #          NestedSubFieldListStructs.builder(
-    #            list: [
-    #              %{id: "1", sublist: [%{id: "1"}]},
-    #              %{id: "2", sublist: [%{id: "2"}]}
-    #            ]
-    #          )
-
-    # assert {:error, _error} =
-    #          NestedSubFieldListStructs.builder(
-    #            list: [
-    #              %{id: "1", sublist: [%{id: "1"}]},
-    #              %{id: "2", sublist: [%{id: "2"}]}
-    #            ]
-    #          )
   end
 end

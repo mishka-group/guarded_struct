@@ -1,4 +1,50 @@
-# Used by "mix format"
+spark_locals_without_parens = [
+  atomic: 1,
+  authorized_fields: 1,
+  auto: 1,
+  auto_wire: 1,
+  conditional_field: 2,
+  conditional_field: 3,
+  default: 1,
+  derive: 1,
+  derives: 1,
+  domain: 1,
+  dynamic_field: 1,
+  dynamic_field: 2,
+  enforce: 1,
+  error: 1,
+  field: 2,
+  field: 3,
+  from: 1,
+  hint: 1,
+  json: 1,
+  main_validator: 1,
+  module: 1,
+  on: 1,
+  opaque: 1,
+  priority: 1,
+  sanitize_derive: 1,
+  sanitizer: 2,
+  sanitizer: 3,
+  struct: 1,
+  structs: 1,
+  sub_field: 2,
+  sub_field: 3,
+  type: 1,
+  validate_derive: 1,
+  validator: 1,
+  validator: 2,
+  validator: 3,
+  virtual_field: 2,
+  virtual_field: 3
+]
+
 [
-  inputs: ["{mix,.formatter}.exs", "{config,lib,test}/**/*.{ex,exs}"]
+  import_deps: [:spark, :ash],
+  inputs: ["{mix,.formatter}.exs", "{config,lib,test}/**/*.{ex,exs}"],
+  plugins: [Spark.Formatter],
+  locals_without_parens: spark_locals_without_parens,
+  export: [
+    locals_without_parens: spark_locals_without_parens
+  ]
 ]

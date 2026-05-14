@@ -1,75 +1,36 @@
 defmodule GuardedStructTest.ValidatorDeriveTest do
   use ExUnit.Case, async: true
 
+  # TestAuthStruct lives in test/support/ as a shared fixture — used by
+  # this file AND test/global_test.exs.
+  alias GuardedStructTest.Support.TestAuthStruct
+
   ############# (▰˘◡˘▰) ValidatorDeriveTest GuardedStructTest Data (▰˘◡˘▰) ##############
-  defmodule TestAuthStruct do
-    use GuardedStruct
-
-    guardedstruct do
-      field(:action, String.t(), derive: "validate(not_empty)")
-
-      sub_field(:path, struct(), main_validator: {TestAuthStruct, :main_validator}) do
-        field(:role, String.t(), validator: {TestAuthStruct, :validator})
-        field(:custom_path, String.t(), derive: "validate(not_empty)")
-
-        sub_field(:rel, struct()) do
-          field(:social, String.t(), derive: "validate(not_empty)")
-        end
-      end
-
-      field(:changed, String.t(),
-        derive: "validate(not_empty)",
-        validator: {__MODULE__, :test_validator}
-      )
-    end
-
-    def test_validator(:changed, value) do
-      if is_binary(value),
-        do: {:ok, :changed, value <> "::Changed"},
-        else: {:error, :changed, "No, never"}
-    end
-
-    def validator(:role, value) do
-      if is_binary(value), do: {:ok, :role, value}, else: {:error, :role, "No, never"}
-    end
-
-    def validator(field, value) do
-      {:ok, field, value}
-    end
-
-    def main_validator(value) do
-      if Map.get(value, :changed) == 555_555 or Map.get(value, :action) == 25 do
-        {:error, %{message: "there is an Error", field: :global, action: :main_validator}}
-      else
-        {:ok, value}
-      end
-    end
-  end
 
   defmodule TestUserAuthStruct do
     use GuardedStruct
 
     guardedstruct do
-      field(:name, String.t(), derive: "validate(not_empty)")
+      field(:name, String.t(), derives: "validate(not_empty)")
       field(:auth_path, struct(), structs: TestAuthStruct)
 
       sub_field(:profile, list(struct()), structs: true) do
-        field(:github, String.t(), enforce: true, derive: "validate(url)")
-        field(:nickname, String.t(), derive: "validate(not_empty)")
+        field(:github, String.t(), enforce: true, derives: "validate(url)")
+        field(:nickname, String.t(), derives: "validate(not_empty)")
       end
 
-      field(:auth_path1, struct(), struct: TestAuthStruct, derive: "validate(map, not_empty)")
-      field(:auth_path2, struct(), structs: TestAuthStruct, derive: "validate(list, not_empty)")
+      field(:auth_path1, struct(), struct: TestAuthStruct, derives: "validate(map, not_empty)")
+      field(:auth_path2, struct(), structs: TestAuthStruct, derives: "validate(list, not_empty)")
 
       field(:auth_path3, struct(),
         structs: TestAuthStruct,
-        derive: "validate(list, not_empty)",
+        derives: "validate(list, not_empty)",
         validator: {__MODULE__, :test_validator}
       )
 
-      sub_field(:profile1, list(struct()), structs: true, derive: "validate(list, not_empty)") do
-        field(:github, String.t(), enforce: true, derive: "validate(url)")
-        field(:nickname, String.t(), derive: "validate(not_empty)")
+      sub_field(:profile1, list(struct()), structs: true, derives: "validate(list, not_empty)") do
+        field(:github, String.t(), enforce: true, derives: "validate(url)")
+        field(:nickname, String.t(), derives: "validate(not_empty)")
       end
     end
 
@@ -197,13 +158,13 @@ defmodule GuardedStructTest.ValidatorDeriveTest do
       assert TestStructAnotherMainValidatorBuilder.builder(%{name: "mishka", title: "org"})
   end
 
-  test "use builder to Sanitize - derive: sanitize(trim, lowercase)" do
+  test "use builder to Sanitize - derive: sanitize(trim, downcase)" do
     defmodule TestStructWithSanitizeDerive do
       use GuardedStruct
 
       guardedstruct do
-        field(:name, String.t(), enforce: true, derive: "sanitize(trim, upcase)")
-        field(:title, String.t(), derive: "sanitize(capitalize)")
+        field(:name, String.t(), enforce: true, derives: "sanitize(trim, upcase)")
+        field(:title, String.t(), derives: "sanitize(capitalize)")
       end
     end
 
@@ -217,8 +178,8 @@ defmodule GuardedStructTest.ValidatorDeriveTest do
       use GuardedStruct
 
       guardedstruct do
-        field(:name, String.t(), enforce: true, derive: "validate(not_empty)")
-        field(:title, String.t(), derive: "validate(not_empty, time)")
+        field(:name, String.t(), enforce: true, derives: "validate(not_empty)")
+        field(:title, String.t(), derives: "validate(not_empty, time)")
       end
     end
 
@@ -233,8 +194,8 @@ defmodule GuardedStructTest.ValidatorDeriveTest do
       use GuardedStruct
 
       guardedstruct do
-        field(:name, String.t(), enforce: true, derive: "validate(not_empty)")
-        field(:title, String.t(), derive: "validate(not_empty)")
+        field(:name, String.t(), enforce: true, derives: "validate(not_empty)")
+        field(:title, String.t(), derives: "validate(not_empty)")
       end
     end
 
@@ -249,10 +210,10 @@ defmodule GuardedStructTest.ValidatorDeriveTest do
       guardedstruct do
         field(:name, String.t(),
           enforce: true,
-          derive: "sanitize(trim, upcase) validate(not_empty)"
+          derives: "sanitize(trim, upcase) validate(not_empty)"
         )
 
-        field(:title, String.t(), derive: "validate(not_empty)")
+        field(:title, String.t(), derives: "validate(not_empty)")
       end
     end
 
@@ -272,10 +233,10 @@ defmodule GuardedStructTest.ValidatorDeriveTest do
       guardedstruct do
         field(:name, String.t(),
           enforce: true,
-          derive: "sanitize(trim, upcase) validate(not_empty)"
+          derives: "sanitize(trim, upcase) validate(not_empty)"
         )
 
-        field(:title, String.t(), derive: "sanitize(trim, capitalize) validate(not_empty)")
+        field(:title, String.t(), derives: "sanitize(trim, capitalize) validate(not_empty)")
       end
 
       def validator(:name, value) do
@@ -310,10 +271,10 @@ defmodule GuardedStructTest.ValidatorDeriveTest do
       guardedstruct do
         field(:name, String.t(),
           enforce: true,
-          derive: "sanitize(trim, upcase) validate(not_empty)"
+          derives: "sanitize(trim, upcase) validate(not_empty)"
         )
 
-        field(:title, String.t(), derive: "sanitize(trim, capitalize) validate(not_empty)")
+        field(:title, String.t(), derives: "sanitize(trim, capitalize) validate(not_empty)")
       end
 
       def main_validator(value) do
@@ -338,11 +299,11 @@ defmodule GuardedStructTest.ValidatorDeriveTest do
       guardedstruct do
         field(:name, String.t(),
           enforce: true,
-          derive: "sanitize(trim, upcase) validate(not_empty)"
+          derives: "sanitize(trim, upcase) validate(not_empty)"
         )
 
-        field(:title, String.t(), derive: "sanitize(trim, capitalize) validate(not_empty)")
-        field(:nickname, String.t(), derive: "validate(not_empty, time)")
+        field(:title, String.t(), derives: "sanitize(trim, capitalize) validate(not_empty)")
+        field(:nickname, String.t(), derives: "validate(not_empty, time)")
       end
 
       def validator(:name, value) do
@@ -456,7 +417,7 @@ defmodule GuardedStructTest.ValidatorDeriveTest do
       TestAuthStruct.builder(%{changed: 1})
 
     {:ok,
-     %GuardedStructTest.ValidatorDeriveTest.TestAuthStruct{
+     %GuardedStructTest.Support.TestAuthStruct{
        changed: "https://github.com/mishka-group::Changed",
        path: nil,
        action: nil

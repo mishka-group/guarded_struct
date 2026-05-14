@@ -104,29 +104,29 @@ defmodule GuardedStructTest.CoreKeysTest do
     guardedstruct authorized_fields: true do
       field(:username, String.t(),
         domain: "!auth.action=String[admin, user]::?auth.social=Atom[banned]",
-        derive: "validate(string)"
+        derives: "validate(string)"
       )
 
       field(:type_social, String.t(),
         domain: "?auth.type=Map[%{name: \"mishka\"}, %{name: \"mishka2\"}]",
-        derive: "validate(string)"
+        derives: "validate(string)"
       )
 
       field(:social_equal, atom(),
         domain: "?auth.equal=Equal[Atom>>name]",
-        derive: "validate(atom)"
+        derives: "validate(atom)"
       )
 
       field(:social_either, atom(),
         domain: "?auth.either=Either[string, enum>>Integer[1>>2>>3]]",
-        derive: "validate(atom)"
+        derives: "validate(atom)"
       )
 
       sub_field(:auth, struct(), authorized_fields: true) do
-        field(:action, String.t(), derive: "validate(not_empty)")
-        field(:social, atom(), derive: "validate(atom)")
-        field(:type, map(), derive: "validate(map)")
-        field(:equal, atom(), derive: "validate(atom)")
+        field(:action, String.t(), derives: "validate(not_empty)")
+        field(:social, atom(), derives: "validate(atom)")
+        field(:type, map(), derives: "validate(map)")
+        field(:equal, atom(), derives: "validate(atom)")
         field(:either, atom())
       end
     end
@@ -139,21 +139,21 @@ defmodule GuardedStructTest.CoreKeysTest do
     guardedstruct authorized_fields: true do
       field(:username, String.t(),
         domain: "!auth.action=Custom[#{@module_path}, is_stuff?]",
-        derive: "validate(string)"
+        derives: "validate(string)"
       )
 
       sub_field(:auth, struct(), authorized_fields: true) do
-        field(:action, String.t(), derive: "validate(not_empty)")
+        field(:action, String.t(), derives: "validate(not_empty)")
       end
 
       conditional_field(:id, String.t(), auto: {GuardedStructTest.Support.UUID, :generate}) do
         field(:id, String.t(),
-          derive: "sanitize(tag=strip_tags) validate(url, max_len=160)",
+          derives: "sanitize(tag=strip_tags) validate(url, max_len=160)",
           hint: "url_id"
         )
 
         field(:id, any(),
-          derive: "sanitize(tag=strip_tags) validate(not_empty_string, uuid)",
+          derives: "sanitize(tag=strip_tags) validate(not_empty_string, uuid)",
           hint: "uuid_id"
         )
       end
