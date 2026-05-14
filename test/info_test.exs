@@ -178,7 +178,12 @@ defmodule GuardedStructTest.InfoTest do
       assert Info.sub_module(EverythingUser, :address) ==
                EverythingUser.Address
 
-      # The returned module is real — it has the generated API
+      # `function_exported?/3` returns false for modules that exist but
+      # aren't loaded into the VM yet. Sub_field submodules are produced
+      # by Spark's `async_compile`, so first-touch ordering varies per
+      # test run. `Code.ensure_loaded?/1` forces a load and is the
+      # idiomatic guard for "is this module callable right now?"
+      assert Code.ensure_loaded?(EverythingUser.Address)
       assert function_exported?(EverythingUser.Address, :builder, 1)
       assert function_exported?(EverythingUser.Address, :__fields__, 0)
     end

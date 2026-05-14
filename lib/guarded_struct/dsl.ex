@@ -209,6 +209,18 @@ defmodule GuardedStruct.Dsl do
             "`:update` action automatically runs the GuardedStruct pipeline. " <>
             "Equivalent to writing `changes do change GuardedStruct.AshResource.Change end` " <>
             "by hand. No-op outside the Ash extension."
+      ],
+      atomic: [
+        type: :boolean,
+        default: false,
+        doc:
+          "Opt into atomic-SQL mode. When `true`, the `VerifyAtomic` " <>
+            "verifier rejects at compile time any field whose derive ops, " <>
+            "per-field `validator:`, `auto:`, or top-level `main_validator/1` " <>
+            "callback can't translate to atomic SQL (e.g. `validate(email)` " <>
+            "which does DNS lookup, custom MFAs, custom Derive.Extension ops). " <>
+            "Errors point at the offending field with the exact reason. " <>
+            "Default `false` keeps the imperative path."
       ]
     ],
     entities: [@field, @virtual_field, @dynamic_field, @sub_field, @conditional_field]
@@ -226,6 +238,7 @@ defmodule GuardedStruct.Dsl do
     verifiers: [
       GuardedStruct.Verifiers.VerifyValidatorMFA,
       GuardedStruct.Verifiers.VerifyAutoMFA,
-      GuardedStruct.Verifiers.VerifyNoStructCycles
+      GuardedStruct.Verifiers.VerifyNoStructCycles,
+      GuardedStruct.Verifiers.VerifyAtomic
     ]
 end

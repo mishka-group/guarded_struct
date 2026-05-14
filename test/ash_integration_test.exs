@@ -1,6 +1,13 @@
 defmodule GuardedStructTest.AshIntegrationTest do
   use ExUnit.Case, async: false
 
+  # ExUnit captures every `Logger` message emitted during a test and
+  # only prints them if the test fails. Suppresses Ash's per-row
+  # `[debug] Creating ...` lines from the ETS data layer without
+  # silencing Logger globally — real warnings still surface, and any
+  # failing test still gets its full log dump.
+  @moduletag capture_log: true
+
   # End-to-end tests against REAL Ash 3.x with the ETS data layer. No DB
   # required — Ash.DataLayer.Ets runs in-process and is reset between tests.
   #

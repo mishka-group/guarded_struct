@@ -157,6 +157,7 @@ defmodule GuardedStruct.AshResource do
     ],
     verifiers: [
       GuardedStruct.Verifiers.VerifyValidatorMFA,
-      GuardedStruct.Verifiers.VerifyAutoMFA
+      GuardedStruct.Verifiers.VerifyAutoMFA,
+      GuardedStruct.Verifiers.VerifyAtomic
     ]
 end
