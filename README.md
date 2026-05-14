@@ -101,6 +101,11 @@ That's the full surface. No `defstruct`, no `@enforce_keys`, no validator boiler
 ```elixir
 field :slug, :string,
   derives: "sanitize(trim, downcase) validate(string, not_empty, max_len=80) sanitize(slugify)"
+  
+# OR
+
+@derives "sanitize(trim, downcase) validate(string, not_empty, max_len=80) sanitize(slugify)"
+field :slug, :string  
 ```
 
 - 🧼 **Sanitize ops** — `trim`, `upcase`, `downcase`, `capitalize`, `strip_tags`, `basic_html`, `html5`, `tag`, plus user-defined custom ops.
