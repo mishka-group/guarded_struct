@@ -1,28 +1,67 @@
-# GuardedStruct
+<div align="center">
 
-<a href="https://www.buymeacoffee.com/mishkagroup" target="_blank">
-  <img src="https://img.buymeacoffee.com/button-api/?text=Buy us coffee&emoji=☕&slug=mishkagroup&button_colour=FFDD00&font_colour=000000&font_family=Cookie&outline_colour=000000&coffee_colour=ffffff" alt="Buy Me A Coffee" height="50" width="210">
-</a>
+# 🛡️ GuardedStruct
 
-Build Elixir structs with validation, sanitization, nested sub-structs, conditional fields, pattern-keyed maps, and an Ash extension. Built on [Spark](https://hex.pm/packages/spark).
+**Build Elixir structs with validation, sanitization, nested sub-structs, conditional fields, pattern-keyed maps, and a first-class Ash extension — declared once, parsed at compile time, validated on every build.** ✨
 
-## What does it look like
+[![Hex.pm](https://img.shields.io/hexpm/v/guarded_struct.svg?style=flat-square)](https://hex.pm/packages/guarded_struct)
+[![Hex Downloads](https://img.shields.io/hexpm/dt/guarded_struct.svg?style=flat-square)](https://hex.pm/packages/guarded_struct)
+[![License](https://img.shields.io/hexpm/l/guarded_struct.svg?style=flat-square)](https://github.com/mishka-group/guarded_struct/blob/master/LICENSE)
+[![GitHub Sponsors](https://img.shields.io/badge/Sponsor-mishka--group-ea4aaa?style=flat-square&logo=github)](https://github.com/sponsors/mishka-group)
+[![Buy Me a Coffee](https://img.shields.io/badge/Buy_Me_a_Coffee-mishkagroup-ffdd00?style=flat-square&logo=buy-me-a-coffee&logoColor=black)](https://www.buymeacoffee.com/mishkagroup)
+
+</div>
+
+---
+
+> [!NOTE]
+> **Status — `0.1.0-beta`.** v0.1.0 rewrites the macro core on [Spark](https://hex.pm/packages/spark). Every existing 0.0.x API keeps working unchanged. Track every change in [`CHANGELOG.md`](./CHANGELOG.md).
+
+---
+
+## 📖 Table of contents
+
+- [Why GuardedStruct?](#-why-guardedstruct)
+- [Highlights](#-highlights)
+- [Installation](#-installation)
+- [Quick start](#-quick-start)
+  - [A struct](#-a-struct)
+  - [Nested + conditional](#-nested--conditional)
+  - [Custom validators / sanitizers](#-custom-validators--sanitizers)
+  - [Ash integration](#-ash-integration)
+- [Atomic mode (Ash)](#-atomic-mode-ash)
+- [Introspection](#-introspection)
+- [Architecture](#-architecture)
+- [Compatibility](#-compatibility)
+- [Documentation](#-documentation)
+- [Status & roadmap](#-status--roadmap)
+- [Contributing](#-contributing)
+- [Funding & sponsorship](#-funding--sponsorship)
+- [License](#-license)
+
+---
+
+## 💭 Why GuardedStruct?
+
+Defining a "good" struct in Elixir means doing the same boilerplate every time: `defstruct`, `@enforce_keys`, a `@type t()`, a constructor, per-field validation, sanitization, default values, nested structs, error messages, i18n. Each surface ends up subtly different across projects.
+
+**GuardedStruct collapses that into a DSL.** One `guardedstruct do ... end` block declares fields, validation rules, sanitization, nested sub-structs, conditional dispatch, custom callbacks. The library generates `defstruct`, `@type t()`, a `builder/1,2` constructor, introspection functions, and a configurable error pipeline — all parsed once at compile time so the runtime hot path is small.
 
 ```elixir
 defmodule User do
   use GuardedStruct
 
   guardedstruct do
-    field :name, String.t(), enforce: true,
+    field :name,  :string, enforce: true,
       derives: "sanitize(trim, capitalize) validate(string, max_len=80)"
 
-    field :email, String.t(), enforce: true,
+    field :email, :string, enforce: true,
       derives: "sanitize(trim, downcase) validate(email_r)"
 
-    field :age, integer(),
+    field :age, :integer,
       derives: "validate(integer, min_len=0, max_len=120)"
 
-    field :role, String.t(), default: "user",
+    field :role, :string, default: "user",
       derives: "validate(enum=String[admin::user::guest])"
   end
 end
@@ -32,22 +71,155 @@ User.builder(%{
   email: "ALICE@EXAMPLE.COM",
   age: 30
 })
-# => {:ok, %User{
-#      name: "Alice",
-#      email: "alice@example.com",
-#      age: 30,
-#      role: "user"
-#    }}
+# => {:ok, %User{name: "Alice", email: "alice@example.com", age: 30, role: "user"}}
 
 User.builder(%{name: "x", email: "bad", age: -5})
 # => {:error, [
-#      %{field: :name, action: :min_len, ...},
-#      %{field: :email, action: :email_r, ...},
-#      %{field: :age, action: :min_len, ...}
+#      %{field: :email, action: :email_r, message: "..."},
+#      %{field: :age,   action: :min_len, message: "..."}
 #    ]}
 ```
 
-## Installation
+That's the full surface. No `defstruct`, no `@enforce_keys`, no validator boilerplate, no constructor. 🚀
+
+---
+
+## ✨ Highlights
+
+### 🏗️ Core DSL
+
+- 🧱 **`field`** — typed, optionally enforced, with default, sanitize+validate derive, auto-fill MFA, per-field validator, cross-field `on:`/`from:`/`domain:`.
+- 🌲 **`sub_field`** — recursive nested struct, any depth, generates real submodules with their own `builder/1`.
+- 🎭 **`conditional_field`** — sum-type-like dispatch: same field name resolves to different shapes based on the input (string OR struct OR list). Nestable to arbitrary depth.
+- 👻 **`virtual_field`** — validated through the full pipeline but excluded from `defstruct` (classic `password_confirm` use case).
+- 🌀 **`dynamic_field`** — free-form map with passthrough; atom-attack-safe (string keys stay strings, no `String.to_atom` of attacker input).
+- 🔣 **Pattern-keyed maps** — `field` whose name is a regex declares a map shape with no fixed keys; uniform per-value validation.
+- 🧬 **Erlang Records** — `validate(record=tag)` accepts tagged tuples.
+
+### 🧪 Derive mini-language
+
+```elixir
+field :slug, :string,
+  derives: "sanitize(trim, downcase) validate(string, not_empty, max_len=80) sanitize(slugify)"
+```
+
+- 🧼 **Sanitize ops** — `trim`, `upcase`, `downcase`, `capitalize`, `strip_tags`, `basic_html`, `html5`, `tag`, plus user-defined custom ops.
+- ✅ **Validate ops** — `string`, `integer`, `float`, `boolean`, `atom`, `list`, `map`, `tuple`, `record`, `not_empty`, `not_empty_string`, `max_len`, `min_len`, `max`, `min`, `equal`, `uuid`, `email`, `email_r`, `url`, `url_r`, `ipv4`, `ipv6`, `regex`, `enum`, `datetime`, `date`, `time`, `geo`, `location`, plus user-defined.
+- 🎯 **All ops parsed at compile time** — runtime reads pre-built op-maps from `__fields__/0`; zero `Code.eval_string` on the hot path.
+- 🧰 **`@derives` decorator** — alternative to inline `derives:` for keeping fields short.
+
+### 🪝 Custom validators / sanitizers (`Derive.Extension`)
+
+```elixir
+defmodule MyApp.Derives do
+  use GuardedStruct.Derive.Extension
+
+  derives do
+    validator :slug, fn input ->
+      is_binary(input) and Regex.match?(~r/^[a-z0-9-]+$/, input)
+    end
+
+    sanitizer :slugify, fn input ->
+      input |> String.downcase() |> String.replace(~r/[^a-z0-9]+/u, "-")
+    end
+  end
+end
+```
+
+Register globally (`config :guarded_struct, derive_extensions: [MyApp.Derives]`) or per-module (`use GuardedStruct, derive_extensions: [MyApp.Derives]`). Per-module lists support a `:config` sentinel for in-position merge with the global registry. Compile-time shadow warnings if a custom op-name collides with a built-in.
+
+### 🔌 Ash integration
+
+```elixir
+defmodule MyApp.User do
+  use Ash.Resource, extensions: [GuardedStruct.AshResource]
+
+  guardedstruct do
+    auto_wire true
+    field :email, :string, derives: "sanitize(trim, downcase) validate(email_r)"
+  end
+
+  attributes do
+    uuid_primary_key :id
+    attribute :email, :string, allow_nil?: false, public?: true
+  end
+
+  actions do
+    defaults [:read, :destroy]
+    create :create, accept: [:email]
+  end
+end
+```
+
+- 🌉 **`GuardedStruct.AshResource.Change`** — bridges `__guarded_change__/1` into the Ash changeset pipeline.
+- ⚡ **`auto_wire true`** — Spark transformer injects the change for you; no `changes do ... end` block needed.
+- 📦 **`batch_change/3`** — `Ash.bulk_create/3` and `Ash.bulk_update/3` (with `strategy: :stream`) work end-to-end.
+- 🌊 **Auto-map cascade** — every `sub_field` returns a plain map at every depth (matches Ash's `:map` attribute type).
+- 🔒 **`atomic: true`** — compile-time verifier rejects (with `Spark.Error.DslError` at the offending field) any op that can't translate to atomic SQL.
+
+### 🔮 Standalone validation API
+
+```elixir
+GuardedStruct.Validate.run("validate(email_r)", "alice@x.io")
+# => {:ok, "alice@x.io"}
+
+GuardedStruct.Validate.field(User, :email, "bad")
+# => {:error, [%{field: :email, action: :email_r, ...}]}
+
+GuardedStruct.Validate.partial(User, %{name: "Alice"})
+# => {:ok, %{name: "Alice"}}  # missing fields skipped, no enforce check
+```
+
+### 📡 Telemetry
+
+Every top-level `builder/1` emits `[:guarded_struct, :builder, :start | :stop | :exception]`. Attach a handler for logging, metrics, tracing — no manual instrumentation needed.
+
+### 🪞 Introspection (`GuardedStruct.Info`)
+
+```elixir
+GuardedStruct.Info.describe(User)
+# => %{module: User, keys: [...], enforce_keys: [...],
+#       fields: [%{name: :email, kind: :field, ...}, ...],
+#       options: %{enforce: true, json: false, atomic: false, ...}}
+
+GuardedStruct.Info.field_kind(User, :email)         #=> :field
+GuardedStruct.Info.enforce?(User, :email)           #=> true
+GuardedStruct.Info.sub_module(User, :address)       #=> User.Address
+GuardedStruct.Info.conditional_children(User, :billing)
+```
+
+### 🛡️ Errors as Splode exceptions (opt-in)
+
+```elixir
+case User.builder(input) do
+  {:ok, _} = ok -> ok
+  {:error, errs} -> {:error, GuardedStruct.Errors.from_tuple(errs)}
+end
+```
+
+Gives `Splode.traverse_errors/2`, `to_class/1`, JSON-serializable errors.
+
+### 📤 JSON encoding (opt-in)
+
+```elixir
+guardedstruct json: true do
+  field :id, :string
+end
+```
+
+Auto-derives `Jason.Encoder` when `:jason` is in deps, falling back to the built-in `JSON.Encoder` on Elixir 1.18+. No-op if neither is present.
+
+### 🌍 Cross-cutting
+
+- 🌐 **i18n** — every error message resolves through `GuardedStruct.Messages`; override callbacks to translate.
+- 🛡️ **Atom-attack safe** — `dynamic_field` and pattern-keyed maps never `String.to_atom` user input.
+- 🧪 **Property-based tested** — 740+ tests including 6 property tests, real Ash integration suite with ETS data layer.
+
+---
+
+## 🚀 Installation
+
+Add to your `mix.exs`:
 
 ```elixir
 def deps do
@@ -57,374 +229,365 @@ def deps do
 end
 ```
 
-Upgrading from `0.0.x`? See [`MIGRATION.md`](./MIGRATION.md). Existing code keeps working — `0.1.0` is fully backward-compatible.
+Fetch and compile:
 
-## Why GuardedStruct
-
-- **Compile-time DSL** with editor autocomplete, courtesy of Spark
-- **Tiny runtime hot path** — derive op-strings, core-key paths, and domain patterns are all parsed once at compile time
-- **Sanitize + validate together** in one expressive `derives:` op-string mini-language
-- **Nested structs** with `sub_field`, plus `conditional_field` for sum-type-like dispatch (any depth)
-- **Pattern-keyed maps** (regex `field` names) for free-form keys with uniform validation
-- **i18n** for every error message via `GuardedStruct.Messages`
-- **Ash extension** to use the same DSL inside an `Ash.Resource`
-- **Atom-attack safe** by default (regex field keys stay as strings)
-
-## Core features
-
-### `field/2,3` — declare a field
-
-```elixir
-field :name, String.t()                                       # nullable
-field :name, String.t(), enforce: true                        # required
-field :name, String.t(), default: "untitled"                  # default value
-field :name, String.t(), derives: "validate(string, max_len=80)"
-field :name, String.t(), validator: {MyApp.Validators, :name_validator}
-field :user, User.t(), struct: User                           # nested struct
-field :tags, list(Tag.t()), structs: Tag                      # list of structs
+```sh
+mix deps.get
+mix compile
 ```
 
-Available options: `enforce`, `default`, `derive`, `validator`, `auto`, `from`, `on`, `domain`, `struct`, `structs`, `hint`, `priority`.
+Upgrading from `0.0.x`? Existing code keeps working unchanged — see [`CHANGELOG.md`](./CHANGELOG.md) for every change in v0.1.0.
 
-### `sub_field/2,3,4` — nested struct
+### Optional deps
+
+Pull in only what you need:
 
 ```elixir
-defmodule User do
+{:jason, "~> 1.4"}            # for `json: true` (Elixir < 1.18, otherwise built-in JSON works)
+{:splode, "~> 0.3"}           # for Errors wrapper
+{:ash, "~> 3.0"}              # for the Ash extension
+{:html_sanitize_ex, "~> 1.5"} # for `sanitize(strip_tags, basic_html, html5)`
+{:email_checker, "~> 0.2"}    # for `validate(email)` (DNS lookup; non-atomic)
+{:ex_url, "~> 2.0"}           # for `validate(url)` (DNS / port check; non-atomic)
+```
+
+---
+
+## 🎯 Quick start
+
+### 📐 A struct
+
+```elixir
+defmodule Order do
+  use GuardedStruct
+
+  guardedstruct enforce: true do
+    field :id, :string, auto: {Ecto.UUID, :generate}
+    field :total, :integer, derives: "validate(integer, min_len=0)"
+    field :currency, :string, default: "USD",
+      derives: "validate(enum=String[USD::EUR::GBP::JPY])"
+    field :placed_at, :string, derives: "validate(datetime)"
+  end
+end
+
+Order.builder(%{total: 9_900, placed_at: "2026-05-14T10:00:00Z"})
+# => {:ok, %Order{id: "a-uuid", total: 9900, currency: "USD", placed_at: "..."}}
+```
+
+### 🌳 Nested + conditional
+
+```elixir
+defmodule Account do
   use GuardedStruct
 
   guardedstruct do
-    field :name, String.t(), enforce: true
+    field :name, :string, enforce: true
 
-    sub_field :auth, struct(), enforce: true do
-      field :email, String.t(), enforce: true, derives: "validate(email_r)"
-      field :role, String.t(), derives: "validate(enum=String[admin::user::guest])"
+    sub_field :owner, struct(), enforce: true do
+      field :email, :string, enforce: true, derives: "validate(email_r)"
+      field :role, :string, default: "owner"
+    end
+
+    # Same field name resolves to either a string preset OR a detailed map
+    conditional_field :plan, any() do
+      field :plan, :string, hint: "preset",
+        derives: "validate(enum=String[free::pro::enterprise])"
+
+      sub_field :plan, struct() do
+        field :tier, :string, enforce: true
+        field :seats, :integer, derives: "validate(integer, min_len=1)"
+      end
     end
   end
 end
 
-User.builder(%{
-  name: "Alice",
-  auth: %{email: "alice@example.com", role: "admin"}
-})
-# => {:ok, %User{
-#      name: "Alice",
-#      auth: %User.Auth{email: "alice@example.com", role: "admin"}
-#    }}
+Account.builder(%{name: "Acme", owner: %{email: "z@a.io"}, plan: "pro"})
+# => {:ok, %Account{plan: "pro", ...}}
+
+Account.builder(%{name: "Acme", owner: %{email: "z@a.io"},
+                  plan: %{tier: "custom", seats: 50}})
+# => {:ok, %Account{plan: %Account.Plan1{tier: "custom", seats: 50}, ...}}
 ```
 
-The compiler creates `%User.Auth{}` automatically.
-
-### `conditional_field/2,3,4` — discriminated union
-
-```elixir
-guardedstruct do
-  conditional_field :address, any() do
-    field :address, String.t(), validator: {MyApp.Validators, :is_string_data}
-
-    sub_field :address, struct(), validator: {MyApp.Validators, :is_map_data} do
-      field :street, String.t(), enforce: true
-      field :city, String.t(), enforce: true
-    end
-  end
-end
-```
-
-Each child is tried in order; the first whose validator returns `:ok` wins. Nests to arbitrary depth.
-
-### `virtual_field/2,3` — input-only
-
-Validated through the full pipeline but excluded from the generated `defstruct`. Useful for cross-field validation:
-
-```elixir
-guardedstruct do
-  field :password, String.t(), enforce: true, derives: "validate(string, min_len=8)"
-  virtual_field :password_confirm, String.t()
-end
-
-def main_validator(attrs) do
-  if attrs[:password] == attrs[:password_confirm],
-    do: {:ok, attrs},
-    else: {:error, [%{field: :password_confirm, action: :match, message: "..."}]}
-end
-```
-
-### Pattern-keyed maps — `field` with a regex name
-
-For free-form keys with uniform validation. Returns a plain map (no struct, since Elixir struct keys are fixed):
-
-```elixir
-defmodule Headers do
-  use GuardedStruct
-  guardedstruct do
-    field ~r/^X-[A-Z][A-Za-z\-]*$/, String.t(),
-      derives: "validate(string, max_len=500)"
-  end
-end
-
-Headers.builder(%{
-  "X-API-Key" => "secret",
-  "X-Tenant-Id" => "abc-123"
-})
-# => {:ok, %{"X-API-Key" => "secret", "X-Tenant-Id" => "abc-123"}}
-```
-
-Pair with `struct:` for typed values:
-
-```elixir
-defmodule ShardsMap do
-  use GuardedStruct
-  guardedstruct do
-    field ~r/^shard_\d+$/, struct(), struct: Shard,
-      derives: "validate(map, not_empty)"
-  end
-end
-```
-
-Mixing atom-keyed and regex-keyed fields in the same `guardedstruct` raises `Spark.Error.DslError` at compile time. Keys stay as strings — no atom conversion, atom-table-exhaustion safe by default.
-
-## Derive op-strings
-
-A `derives:` string declares one or two op groups: `sanitize(...)` (transforms the input) and `validate(...)` (gates it). Comma-separated op atoms are run in order.
-
-```elixir
-"sanitize(trim, downcase) validate(string, max_len=80, email_r)"
-```
-
-### Built-in sanitize ops (11)
-
-`trim`, `upcase`, `downcase`, `capitalize`, `basic_html`, `html5`, `markdown_html`, `strip_tags`, `tag=<sub_op>`, `string_float`, `string_integer`.
-
-### Built-in validate ops (50+)
-
-| Category | Ops |
-|---|---|
-| Type guards | `string`, `integer`, `list`, `atom`, `bitstring`, `boolean`, `exception`, `float`, `function`, `map`, `nil_value`, `not_nil_value`, `number`, `pid`, `port`, `reference`, `struct`, `tuple` |
-| Emptiness | `not_empty`, `not_flatten_empty`, `not_flatten_empty_item`, `queue` |
-| Length | `max_len=N`, `min_len=N` |
-| Network | `url`, `tell`, `geo_url`, `email`, `email_r`, `location`, `ipv4` |
-| Format | `string_boolean`, `datetime`, `range`, `date`, `regex='...'`, `not_empty_string`, `uuid`, `username`, `full_name` |
-| Enums | `enum=String[a::b::c]`, `enum=Atom[...]`, `enum=Integer[...]`, `enum=Float[...]`, `enum=Map[...]`, `enum=Tuple[...]` |
-| Equality | `equal=String::foo`, `equal=Integer::42`, etc. |
-| Custom | `custom=[Mod, fun]` |
-| Either | `either=[op1, op2, ...]` (passes if any sub-op passes) |
-| Conversion | `string_float`, `string_integer`, `some_string_float`, `some_string_integer` |
-| Erlang Records | `record`, `record=tag_atom` |
-
-### Custom validators / sanitizers
-
-Two ways: app-env plug-in (legacy) or Spark-native DSL (recommended).
-
-**Spark-native (recommended):**
+### 🪝 Custom validators / sanitizers
 
 ```elixir
 defmodule MyApp.Derives do
   use GuardedStruct.Derive.Extension
 
-  validator :slug, fn input ->
-    is_binary(input) and Regex.match?(~r/^[a-z0-9-]+$/, input)
-  end
+  derives do
+    validator :slug, fn input ->
+      is_binary(input) and Regex.match?(~r/^[a-z0-9-]+$/, input)
+    end
 
-  sanitizer :slugify, fn input when is_binary(input) ->
-    input |> String.downcase() |> String.replace(~r/[^a-z0-9-]+/u, "-")
-  end
-end
+    sanitizer :slugify, fn input when is_binary(input) ->
+      input
+      |> String.downcase()
+      |> String.replace(~r/[^a-z0-9]+/u, "-")
+      |> String.trim("-")
+    end
 
-# config/config.exs
-config :guarded_struct, derive_extensions: [MyApp.Derives]
-
-# Then use the new ops anywhere:
-field :slug, String.t(), derives: "sanitize(slugify) validate(slug)"
-```
-
-**App-env plug-in (legacy, still works):**
-
-```elixir
-Application.put_env(:guarded_struct, :validate_derive, [MyApp.MyValidator])
-
-defmodule MyApp.MyValidator do
-  def validate(:my_op, input, field) do
-    # ... return input or {:error, field, :my_op, "msg"}
+    validator :positive_int, fn n -> is_integer(n) and n > 0 end
   end
 end
-```
 
-## Core keys
+# Register globally:
+# config :guarded_struct, derive_extensions: [MyApp.Derives]
 
-The four core keys (`auto`, `from`, `on`, `domain`) cross-link fields:
+defmodule Post do
+  use GuardedStruct
 
-```elixir
-guardedstruct do
-  field :id, String.t(), auto: {Ecto.UUID, :generate}
-  field :user_id, String.t(), auto: {Ecto.UUID, :generate}
-  field :name, String.t(), enforce: true
-  field :email, String.t(), enforce: true,
-    domain: "?role=Equal[String::admin]"   # if role is admin, email must equal "admin"...
-  field :role, String.t(), default: "user"
-  field :owner_id, String.t(),
-    on: "root::user_id",                   # owner_id requires user_id present
-    from: "root::user_id"                  # if owner_id missing, copy from user_id
+  guardedstruct do
+    field :slug, :string, derives: "sanitize(slugify) validate(slug)"
+    field :views, :integer, derives: "validate(positive_int)"
+  end
 end
 ```
 
-| Key | Behaviour |
-|---|---|
-| `auto: {Mod, :fn}` | If field is missing in `:add` mode, generate the value via the MFA |
-| `auto: {Mod, :fn, default}` | Same, with a static fallback if the MFA returns nil |
-| `from: "root::path"` or `"sibling::path"` | Copy a value from another path if this field is missing |
-| `on: "root::path"` | If this field is provided, the dependency path must also be present |
-| `domain: "!path=Type[...]"` or `"?path=Type[...]"` | Cross-field shape constraints; `!` is required, `?` is optional |
-
-`domain` patterns support `Type[...]` (enum), `Equal[Type::value]`, `Either[op1, op2]`, `Custom[Mod, fn]`, `Tuple[...]`, `Map[...]`. All are pre-evaluated at compile time.
-
-## Standalone validation — `GuardedStruct.Validate`
-
-Use a schema without going through `builder/1`:
+### 🔌 Ash integration
 
 ```elixir
-# Tier 1 — ad-hoc op-string against a value
-GuardedStruct.Validate.run("validate(string, max_len=80, email_r)", "alice@example.com")
-# => {:ok, "alice@example.com"}
-
-# Tier 2 — single field of a module
-GuardedStruct.Validate.field(User, :email, "alice@x.com")
-GuardedStruct.Validate.field(User, :owner_id, "u-123",
-  context: %{user_id: "u-123"}    # cross-field deps from context
-)
-GuardedStruct.Validate.field(User, :owner_id, "u-123", mode: :isolated)
-# skips on:/domain: deps entirely
-
-# Tier 3 — partial subset (e.g. PATCH endpoints, form-as-you-type)
-GuardedStruct.Validate.partial(User, %{name: "Alice", email: "alice@x.com"})
-# missing fields skipped; no enforce_keys check
-```
-
-## Ash integration
-
-```elixir
-defmodule MyApp.Resources.User do
+defmodule MyApp.User do
   use Ash.Resource, extensions: [GuardedStruct.AshResource]
 
   guardedstruct do
-    field :name, :string, enforce: true,
-      derives: "sanitize(trim) validate(string, max_len=80)"
-    field :email, :string, enforce: true, derives: "validate(email_r)"
+    auto_wire true
+
+    field :email, :string,
+      derives: "sanitize(trim, downcase) validate(email_r, max_len=320)"
+
+    field :nickname, :string,
+      derives: "sanitize(trim) validate(string, max_len=20)"
   end
 
-  # Wire the pipeline into create/update changesets:
-  changes do
-    change GuardedStruct.AshResource.Change
+  attributes do
+    uuid_primary_key :id
+    attribute :email,    :string, allow_nil?: false, public?: true
+    attribute :nickname, :string, public?: true
   end
 
-  # ... your Ash actions, attributes, etc.
+  actions do
+    defaults [:read, :destroy]
+    create :create, accept: [:email, :nickname]
+
+    update :update do
+      accept [:email, :nickname]
+      require_atomic? false
+    end
+  end
 end
 
-# The pipeline lives under the __guarded_*__ namespace so it doesn't clash
-# with Ash's own callbacks. Direct call (skipping Ash's changeset machinery):
-MyApp.Resources.User.__guarded_change__(%{name: "Alice", email: "alice@x.com"})
-# => {:ok, %{name: "Alice", email: "alice@x.com"}}
+MyApp.User
+|> Ash.Changeset.for_create(:create, %{email: "  Alice@X.IO  "})
+|> Ash.create()
+# => {:ok, %MyApp.User{email: "alice@x.io", ...}}
 ```
 
-Prefer zero wiring? Set `auto_wire true` inside the `guardedstruct` block and the change is injected for you. See OPTIONS §15 for the trade-offs.
+---
 
-### Atomic mode (opt-in)
+## 🔒 Atomic mode (Ash)
 
-Set `atomic true` on the `guardedstruct` block to opt into compile-time-verified atomic-SQL-safety:
+For Ash resources where every derive op is SQL-translatable, set `atomic true` to opt into compile-time verification:
 
 ```elixir
 guardedstruct do
   atomic true
+  auto_wire true
+
   field :email,    :string,  derives: "sanitize(trim, downcase) validate(email_r, max_len=320)"
-  field :age,      :integer, derives: "validate(integer, min_len=0, max_len=120)"
-  field :role,     :string,  derives: "validate(enum=String[admin::user])"
+  field :age,      :integer, derives: "validate(integer, min_len=0, max_len=150)"
+  field :role,     :string,  derives: "validate(enum=String[admin::user::guest])"
+  field :tenant_id, :string, derives: "validate(uuid)"
 end
 ```
 
-The `VerifyAtomic` compile-time verifier rejects (with a Spark.Error.DslError pointing at the offending field) any derive op that can't translate to atomic SQL:
+The compile-time `VerifyAtomic` verifier rejects (with `Spark.Error.DslError` pointing at the offending field's source line) any op that can't translate to atomic SQL:
 
-- `validate(email)` / `validate(url)` (need DNS / network I/O)
-- per-field `validator: {Mod, :fn}` (arbitrary Elixir)
-- `auto: {Mod, :fn}` (arbitrary Elixir)
-- `main_validator/1` callback (cross-field Elixir)
-- cross-field `on:` / `from:` / `domain:` options
-- custom ops from `GuardedStruct.Derive.Extension`
+| ❌ Blocked op | Reason | Fix |
+|---|---|---|
+| `validate(email)` | DNS lookup via `:email_checker` | Use `validate(email_r)` |
+| `validate(url)` | DNS/port via `:ex_url` | Use `validate(url_r)` |
+| `validator: {Mod, :fn}` | Arbitrary Elixir | Move rule into `derives:` |
+| `auto: {Mod, :fn}` | Arbitrary Elixir | Use SQL default or migration |
+| `main_validator/1` | Cross-field Elixir | Express as per-field derive |
+| Custom `Derive.Extension` op | Arbitrary Elixir | Express as built-in |
+| `on:` / `from:` / `domain:` | Cross-field at runtime | Express as per-field rule |
 
-Sanitize ops (`trim`, `downcase`, `slugify`, `strip_tags`, …) are **always allowed** — they run in Elixir before the atomic SQL fires. See `GuardedStruct.AtomicClassifier` for the full safe-op registry. Default is `atomic: false`.
+Sanitize ops (`trim`, `downcase`, `strip_tags`, `slugify`, …) are **always allowed** — they run in Elixir before the atomic SQL fires. The error message **distinguishes typos from custom Extension ops** so you don't chase the wrong fix. Full safe-op registry: `GuardedStruct.AtomicClassifier`.
 
-## Errors as Splode exceptions (opt-in)
+---
 
-`builder/1` returns the legacy `{:error, [%{field, action, message}]}` tuple shape by default. Wrap with [Splode](https://hex.pm/packages/splode) for `traverse_errors/2`, `to_class/1`, JSON serialisation:
+## 🪞 Introspection
 
 ```elixir
-case MyStruct.builder(input) do
-  {:ok, _} = ok -> ok
-  {:error, errs} -> {:error, GuardedStruct.Errors.from_tuple(errs)}
-end
+# Full dump in one call
+GuardedStruct.Info.describe(MyApp.User)
+# %{
+#   module: MyApp.User,
+#   path: [], key: :root, shape: :struct,
+#   keys: [:email, :nickname], enforce_keys: [:email],
+#   conditional_keys: [],
+#   options: %{enforce: true, json: false, atomic: false, ...},
+#   fields: [
+#     %{name: :email, kind: :field, enforce?: true,
+#       type: "String.t()", derive: "...", auto: nil, ...},
+#     ...
+#   ]
+# }
+
+# Field-level helpers
+GuardedStruct.Info.field_kind(MyApp.User, :email)         #=> :field
+GuardedStruct.Info.enforce?(MyApp.User, :email)           #=> true
+GuardedStruct.Info.virtual?(MyApp.User, :password_confirm) #=> true
+GuardedStruct.Info.field_derives(MyApp.User, :email)
+#=> "sanitize(trim, downcase) validate(email_r)"
+
+# Collections by kind
+GuardedStruct.Info.sub_fields(MyApp.User)         #=> [:address]
+GuardedStruct.Info.virtual_fields(MyApp.User)     #=> [:password_confirm]
+GuardedStruct.Info.conditional_fields(MyApp.User) #=> [:plan]
+
+# Navigation
+GuardedStruct.Info.sub_module(MyApp.User, :address)
+#=> MyApp.User.Address
+GuardedStruct.Info.conditional_children(MyApp.User, :plan)
+#=> [%{kind: :field, ...}, %{kind: :sub_field, ...}]
 ```
 
-## Internationalisation
+---
 
-Override messages by implementing the `GuardedStruct.Messages` behaviour:
-
-```elixir
-defmodule MyApp.GuardedStructMessages do
-  use GuardedStruct.Messages
-
-  def required_fields(), do: "Lütfen gerekli alanları girin."
-  def email(field), do: "#{field} geçerli bir e-posta adresi olmalıdır."
-  # ... override any of the 60+ callbacks
-end
-
-# config/config.exs
-config :guarded_struct, message_backend: MyApp.GuardedStructMessages
-```
-
-Defaults to English. Every error site in both the orchestration and derive layers uses `translated_message/1,2` under the hood.
-
-## Documentation
-
-- [Migration guide](./MIGRATION.md) — `0.0.x` → `0.1.0`
-- [Changelog](./CHANGELOG.md)
-- [Security policy](./SECURITY.md) — supported versions + how to report a vulnerability
-- **Atom-attack safety** — see the `GuardedStruct` module's `@moduledoc` ("Atom-attack safety" section) on [hexdocs](https://hexdocs.pm/guarded_struct/GuardedStruct.html#module-atom-attack-safety)
-- [LiveBook walkthrough](https://github.com/mishka-group/guarded_struct/blob/master/guidance/guarded-struct.livemd) — interactive examples
-- DSL reference (in hexdocs) — `documentation/dsls/`
-- [Blog post](https://mishka.tools/blog/guardedstruct-advanced-elixir-struct-data-validation-and-sanitization) — original motivation and design
-
-The full docs are at [hexdocs.pm/guarded_struct](https://hexdocs.pm/guarded_struct).
-
-## Donate
-
-You can support this project through the "[Sponsor](https://github.com/sponsors/mishka-group)" button on GitHub or via cryptocurrency donations.
-
-| **BTC**                                                                                                                            | **ETH**                                                                                                                            | **DOGE**                                                                                                                           | **TRX**                                                                                                                            |
-| ---------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
-| <img src="https://mishka.tools/images/donate/BTC.png" width="200"> | <img src="https://mishka.tools/images/donate/ETH.png" width="200"> | <img src="https://mishka.tools/images/donate/DOGE.png" width="200"> | <img src="https://mishka.tools/images/donate/TRX.png" width="200"> |
-
-<details>
-  <summary>Donate addresses</summary>
-
-**BTC**:‌
+## 🏗️ Architecture
 
 ```
-bc1q24pmrpn8v9dddgpg3vw9nld6hl9n5dkw5zkf2c
+                +-------------------------+
+                | guardedstruct do ... end|
+                | (user-facing DSL block) |
+                +------------+------------+
+                             |
+            +----------------+----------------+
+            |     Spark.Dsl.Extension          |
+            |  parses entities + section opts  |
+            +----------------+----------------+
+                             |
+       +---------+-----------+-----------+----------+----------+
+       |         |           |           |          |          |
+       v         v           v           v          v          v
+  Transformers Verifiers  Codegen  AsyncSubmod  Decorators  AshChange
+  (Derive,    (Atomic,   (defstruct (Module.   (@derives)  (bridge to
+   Domain,     ValidMFA,  builder,   create                 Ash pipeline,
+   Auto, ...)  Cycle, ...) keys,...)  +async)               batch_change)
+                             |
+                             v
+                       +------------+
+                       | __fields__ |  <-- introspection lives here
+                       | __info___  |
+                       +-----+------+
+                             |
+                             v
+                  +----------+-----------+
+                  | Runtime pipeline     |
+                  | sanitize → validate  |
+                  | → derive → main_val  |
+                  +----------------------+
 ```
 
-**ETH**:
+- 🧠 **DSL layer** — Spark sections + entities define `field`, `sub_field`, `conditional_field`, `virtual_field`, `dynamic_field`. Every op-string parsed at compile time.
+- 🔧 **Transformers** — codegen for `defstruct`/`builder`/`keys`/`__information__`/`__fields__`, async sub_field submodule generation, derive parsing, core-key parsing, Ash-variant codegen, auto-wire injection.
+- 🔍 **Verifiers** — validator MFAs exist, auto MFAs exist, no struct cycles, atomic-safety (when opted in).
+- 🏃 **Runtime** — receives a map, walks pre-parsed op-lists per field, hands back `{:ok, %Struct{}}` or `{:error, [%{field, action, message}]}`.
 
-```
-0xD99feB9db83245dE8B9D23052aa8e62feedE764D
+---
+
+## 🔌 Compatibility
+
+| Dependency | Required version | Required? |
+|---|---|---|
+| Elixir | `~> 1.17` | ✅ |
+| Spark | `~> 2.7` | ✅ |
+| Splode | `~> 0.3` | ✅ (errors module) |
+| Telemetry | `~> 1.0` | ✅ |
+| html_sanitize_ex | `~> 1.5` | ⚪ optional (`sanitize(strip_tags/basic_html/html5)`) |
+| Jason | `~> 1.4` | ⚪ optional (`json: true` on Elixir < 1.18) |
+| email_checker | `~> 0.2` | ⚪ optional (`validate(email)` with DNS) |
+| ex_url | `~> 2.0` | ⚪ optional (`validate(url)` with DNS) |
+| Ash | `~> 3.0` | ⚪ optional (for the `Ash.Resource` extension) |
+
+---
+
+## 📚 Documentation
+
+- 📖 **API docs** — [hexdocs.pm/guarded_struct](https://hexdocs.pm/guarded_struct)
+- 📘 **LiveBook walkthrough** — [`guidance/guarded-struct.livemd`](./guidance/guarded-struct.livemd) — runnable end-to-end examples
+- 📋 **Options reference** — [`OPTIONS-0.1.0.md`](./OPTIONS-0.1.0.md) — every new option in v0.1.0 with examples
+- 📜 **Changelog** — [`CHANGELOG.md`](./CHANGELOG.md)
+- 🔐 **Security policy** — [`SECURITY.md`](./SECURITY.md) — supported versions + how to report a vulnerability
+- 🧱 **DSL reference** — auto-generated cheat sheets in `documentation/dsls/` (published to hexdocs)
+- 📰 **Blog post** — [original motivation and design](https://mishka.tools/blog/guardedstruct-advanced-elixir-struct-data-validation-and-sanitization)
+
+---
+
+## 🛣️ Status & roadmap
+
+| Area | Status |
+|---|---|
+| `0.1.0-beta` rewrite on Spark | 🟡 Beta — feature-complete, API stable |
+| Backward compatibility with `0.0.x` | 🟢 Drop-in — every 0.0.x API preserved |
+| Nested `conditional_field` (closes #7, #8, #25) | 🟢 Shipped |
+| Pattern-keyed maps (closes #11) | 🟢 Shipped |
+| `virtual_field` / `dynamic_field` (closes #5) | 🟢 Shipped |
+| Standalone `Validate` API (closes #2) | 🟢 Shipped |
+| Erlang Records (closes #6) | 🟢 Shipped |
+| Custom validators via Spark DSL | 🟢 Shipped |
+| Ash extension + auto-wire + atomic verifier | 🟢 Shipped |
+| Test coverage | 🟢 743+ tests, real Ash integration suite |
+| `1.0.0` release | 🔵 Pending community feedback on `0.1.0-beta` |
+
+Breaking changes will be flagged in the [CHANGELOG](./CHANGELOG.md).
+
+---
+
+## 🤝 Contributing
+
+Issues, PRs, and design discussions are welcome. 💬
+
+```sh
+git clone https://github.com/mishka-group/guarded_struct.git
+cd guarded_struct
+mix deps.get
+mix test
 ```
 
-**DOGE**:
+Before opening a PR:
 
-```
-DGGT5PfoQsbz3H77sdJ1msfqzfV63Q3nyH
-```
+- ✅ `mix test` — full suite green (`mix test --max-failures 1` for fail-fast)
+- ✅ `mix lint` — `spark.formatter` + `format` both pass
+- ✅ `mix cheat` — regenerate DSL cheat sheets if you touched entities
 
-**TRX**:
+For larger feature work, please open an issue first so we can align on the design.
 
-```
-TBamHas3wAxSEvtBcWKuT3zphckZo88puz
-```
+---
 
-</details>
+## 💖 Funding & sponsorship
+
+GuardedStruct is open-source software developed by [Mishka Group](https://github.com/mishka-group). If your team or company benefits from this work, please consider supporting continued development:
+
+<div align="center">
+
+[![GitHub Sponsors](https://img.shields.io/badge/GitHub_Sponsors-mishka--group-ea4aaa?style=for-the-badge&logo=github&logoColor=white)](https://github.com/sponsors/mishka-group)
+&nbsp;&nbsp;&nbsp;
+[![Buy Me a Coffee](https://img.shields.io/badge/Buy_Me_a_Coffee-mishkagroup-ffdd00?style=for-the-badge&logo=buy-me-a-coffee&logoColor=black)](https://www.buymeacoffee.com/mishkagroup)
+
+**☕ Donate / sponsor:**
+[github.com/sponsors/mishka-group](https://github.com/sponsors/mishka-group) · [buymeacoffee.com/mishkagroup](https://www.buymeacoffee.com/mishkagroup)
+
+</div>
+
+Sponsorship directly funds maintenance, new features, and documentation. Thank you. 💚
+
+---
+
+## 📜 License
+
+Apache License 2.0 — see [`LICENSE`](LICENSE).
+
+Copyright © [Mishka Group](https://mishka.tools) and contributors.

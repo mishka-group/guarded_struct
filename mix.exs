@@ -1,7 +1,7 @@
 defmodule GuardedStruct.MixProject do
   use Mix.Project
 
-  @version "0.1.0-beta.1"
+  @version "0.1.0-beta.2"
   @source_url "https://github.com/mishka-group/guarded_struct"
 
   def project do
@@ -52,14 +52,13 @@ defmodule GuardedStruct.MixProject do
 
   defp package() do
     [
-      files: ~w(lib .formatter.exs mix.exs LICENSE README* CHANGELOG* MIGRATION* SECURITY*),
+      files: ~w(lib .formatter.exs mix.exs LICENSE README* CHANGELOG* SECURITY*),
       licenses: ["Apache-2.0"],
       maintainers: ["Shahryar Tavakkoli"],
       links: %{
         "Mishka" => "https://mishka.tools",
         "GitHub" => @source_url,
         "Changelog" => "#{@source_url}/blob/master/CHANGELOG.md",
-        "Migration guide" => "#{@source_url}/blob/master/MIGRATION.md",
         "Security policy" => "#{@source_url}/blob/master/SECURITY.md",
         "LiveBook document" => "#{@source_url}/blob/master/guidance/guarded-struct.livemd"
       }
@@ -74,7 +73,6 @@ defmodule GuardedStruct.MixProject do
       extras: [
         "README.md",
         "CHANGELOG.md",
-        "MIGRATION.md",
         "documentation/dsls/DSL-GuardedStruct.md",
         "documentation/dsls/DSL-GuardedStruct.AshResource.md",
         "documentation/dsls/DSL-GuardedStruct.Derive.Extension.md"
