@@ -144,15 +144,8 @@ defmodule GuardedStruct.AshResource do
     sections: GuardedStruct.Dsl.sections(),
     transformers: [
       GuardedStruct.Transformers.ParseDerive,
-      # NB: we deliberately swap the codegen transformer — the Ash variant
-      # generates `__guarded_change__/1` instead of `defstruct + builder/2`
-      # to avoid clashing with Ash's own machinery.
       GuardedStruct.Transformers.GenerateAshValidator,
       GuardedStruct.Transformers.GenerateSubFieldModules,
-      # Optional: when `auto_wire: true` is set on the section, this
-      # transformer injects a top-level `change GuardedStruct.AshResource.Change`
-      # into the resource's `changes` section via `Ash.Resource.Builder.add_change/3`.
-      # Default `auto_wire: false` → no-op.
       GuardedStruct.Transformers.AutoWireAshChange
     ],
     verifiers: [

@@ -8,8 +8,6 @@ defmodule GuardedStruct.Verifiers.VerifyAtomic do
   via `GuardedStruct.AtomicClassifier`, and aggregates blockers. If any
   found, raises `Spark.Error.DslError` with one bullet per blocker.
 
-  ## Structure
-
   One pattern-match clause per entity type — contributors extending the
   DSL just add a new `check_entity/2` clause (or add a classifier rule
   in `GuardedStruct.AtomicClassifier`).
@@ -49,10 +47,6 @@ defmodule GuardedStruct.Verifiers.VerifyAtomic do
       _ -> {:error, build_error(module, blockers)}
     end
   end
-
-  # ────────────────────────────────────────────────────────────────────
-  # Entity walk — one pattern-match clause per entity type.
-  # ────────────────────────────────────────────────────────────────────
 
   defp collect_entities(entities, path) do
     Enum.flat_map(entities, &check_entity(&1, path))
@@ -101,16 +95,11 @@ defmodule GuardedStruct.Verifiers.VerifyAtomic do
       check_cross_field(vf, field_path)
   end
 
-  # Unknown entity types — be conservative.
   defp check_entity(other, path) do
     [
       {path, "unknown entity #{inspect(other)} cannot be classified for atomic mode"}
     ]
   end
-
-  # ────────────────────────────────────────────────────────────────────
-  # Per-op checks — one pattern-match clause per concern.
-  # ────────────────────────────────────────────────────────────────────
 
   defp check_ops(nil, _path), do: []
 
@@ -213,10 +202,6 @@ defmodule GuardedStruct.Verifiers.VerifyAtomic do
   end
 
   defp check_main_validator_callback(_), do: []
-
-  # ────────────────────────────────────────────────────────────────────
-  # Error formatting.
-  # ────────────────────────────────────────────────────────────────────
 
   defp build_error(module, blockers) do
     formatted_blockers =

@@ -1,6 +1,3 @@
-# Fixtures for `test/errors_test.exs`. Top-level so `Spark.Formatter`
-# can strip parens (it skips nested defmodules — see commit history).
-
 defmodule GuardedStructTest.Fixtures.Errors.SampleStruct do
   use GuardedStruct
 

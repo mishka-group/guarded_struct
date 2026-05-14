@@ -1,31 +1,7 @@
 defmodule GuardedStructTest.AshIntegrationTest do
   use ExUnit.Case, async: false
 
-  # ExUnit captures every `Logger` message emitted during a test and
-  # only prints them if the test fails. Suppresses Ash's per-row
-  # `[debug] Creating ...` lines from the ETS data layer without
-  # silencing Logger globally — real warnings still surface, and any
-  # failing test still gets its full log dump.
   @moduletag capture_log: true
-
-  # End-to-end tests against REAL Ash 3.x with the ETS data layer. No DB
-  # required — Ash.DataLayer.Ets runs in-process and is reset between tests.
-  #
-  # Test resources are defined as top-level modules in
-  # `test/support/ash_resources.ex` (required so `Spark.Formatter` can
-  # apply Ash's paren-removal + section-ordering rules; the plugin only
-  # walks the first `defmodule` it sees).
-  #
-  # Coverage:
-  #   1. Sanitize ops actually transform values stored in Ash
-  #   2. Validate ops actually block invalid create/update
-  #   3. Both wiring modes (manual + auto) behave identically end-to-end
-  #   4. Cascade — sub_field maps drop into Ash `:map` attributes cleanly
-  #   5. Update actions also fire the guardedstruct pipeline
-  #   6. Composition with Ash's own changes/validations
-  #   7. Direct __guarded_change__/1 API still works alongside Ash
-  #   8. Error shape — what consumers see in changeset.errors
-  #   9. Read-after-write persistence through ETS
 
   alias GuardedStructTest.AshResources.{
     UserManual,
@@ -285,10 +261,6 @@ defmodule GuardedStructTest.AshIntegrationTest do
     end
   end
 
-  # ────────────────────────────────────────────────────────────────────
-  # 10. Bulk operations — Ash.bulk_create / Ash.bulk_update
-  # ────────────────────────────────────────────────────────────────────
-
   describe "bulk_create end-to-end" do
     test "bulk_create runs the GuardedStruct pipeline on every input" do
       input = [
@@ -369,9 +341,6 @@ defmodule GuardedStructTest.AshIntegrationTest do
           return_errors?: true
         )
 
-      # Bulk-update via the resource-stream API. Ash reads the records,
-      # then applies the update action with our sanitize pipeline running
-      # on each changeset.
       result =
         UserAuto
         |> Ash.bulk_update(:update, %{email: "  Updated@X.COM  "},
@@ -391,7 +360,6 @@ defmodule GuardedStructTest.AshIntegrationTest do
 
   describe "atomic mode — explicit opt-out behavior" do
     test "atomic/3 returns {:not_atomic, reason}" do
-      # We can call the callback directly to verify the contract.
       reason = GuardedStruct.AshResource.Change.atomic(%{}, [], %{})
       assert match?({:not_atomic, _}, reason)
 
@@ -400,11 +368,6 @@ defmodule GuardedStructTest.AshIntegrationTest do
     end
 
     test "actions that don't require_atomic: false fail at compile time" do
-      # This is enforced by the Ash compiler/verifier, not our code; we
-      # can't really probe it from here without a separate test resource
-      # with require_atomic? true. The test resources in this file all
-      # set `require_atomic? false` on their update actions, so they
-      # compile cleanly. This test is documentation-by-example.
       assert :ok = :ok
     end
   end

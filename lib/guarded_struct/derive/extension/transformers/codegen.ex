@@ -1,12 +1,6 @@
 defmodule GuardedStruct.Derive.Extension.Transformers.Codegen do
   @moduledoc false
 
-  # Reads the `derives do ... end` entities and emits the
-  # `__validate__/3`, `__sanitize__/2`, `__validators__/0`,
-  # `__sanitizers__/0`, `__derive_extension__?/0` callbacks the rest of
-  # the runtime expects. Mirrors the old `@before_compile` shape but is
-  # driven by Spark entity state.
-
   use Spark.Dsl.Transformer
 
   alias Spark.Dsl.Transformer
@@ -68,26 +62,27 @@ defmodule GuardedStruct.Derive.Extension.Transformers.Codegen do
   end
 
   defp warn_shadows(validators, sanitizers, module) do
-    Enum.each(validators, fn %Validator{name: name} ->
+    Enum.each(validators, fn %Validator{name: name} = v ->
       if GuardedStruct.Derive.Registry.known_validate?(name) do
-        IO.warn(
-          "validator #{inspect(name)} in #{inspect(module)} shadows a built-in " <>
-            "`validate(#{name})` op. Built-in clauses match first, so this custom " <>
-            "validator will NEVER be called. Rename it to avoid the shadow.",
-          []
-        )
+        Spark.Warning.warn(shadow_message(:validator, name, module), anno(v))
       end
     end)
 
-    Enum.each(sanitizers, fn %Sanitizer{name: name} ->
+    Enum.each(sanitizers, fn %Sanitizer{name: name} = s ->
       if GuardedStruct.Derive.Registry.known_sanitize?(name) do
-        IO.warn(
-          "sanitizer #{inspect(name)} in #{inspect(module)} shadows a built-in " <>
-            "`sanitize(#{name})` op. Built-in clauses match first, so this custom " <>
-            "sanitizer will NEVER be called. Rename it to avoid the shadow.",
-          []
-        )
+        Spark.Warning.warn(shadow_message(:sanitizer, name, module), anno(s))
       end
     end)
   end
+
+  defp shadow_message(kind, name, module) do
+    op_kind = if kind == :validator, do: "validate", else: "sanitize"
+
+    "#{kind} #{inspect(name)} in #{inspect(module)} shadows a built-in " <>
+      "`#{op_kind}(#{name})` op. Built-in clauses match first, so this custom " <>
+      "#{kind} will NEVER be called. Rename it to avoid the shadow."
+  end
+
+  defp anno(%{__spark_metadata__: %{anno: anno}}), do: anno
+  defp anno(_), do: nil
 end

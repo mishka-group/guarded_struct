@@ -1,16 +1,6 @@
 defmodule GuardedStructTest.AtomicVerifierTest do
   use ExUnit.Case, async: true
 
-  # Tests the compile-time `VerifyAtomic` verifier and the
-  # `AtomicClassifier` it depends on.
-  #
-  # Strategy: build a minimal dsl_state map by hand and call
-  # `VerifyAtomic.verify/1` directly (same pattern as
-  # `test/verify_no_struct_cycles_test.exs`). This isolates the verifier
-  # from the rest of the Spark compile pipeline and lets us use
-  # `assert_raise` cleanly — full compile flow swallows the exception
-  # in `Module.ParallelChecker`.
-
   alias GuardedStruct.AtomicClassifier
   alias GuardedStruct.Verifiers.VerifyAtomic
   alias GuardedStruct.Dsl.{Field, SubField, ConditionalField, VirtualField}
@@ -25,10 +15,6 @@ defmodule GuardedStructTest.AtomicVerifierTest do
   defp ops(validate, sanitize \\ []) do
     %{validate: validate, sanitize: sanitize}
   end
-
-  # ────────────────────────────────────────────────────────────────────
-  # 1. atomic: false (default) — verifier is a no-op
-  # ────────────────────────────────────────────────────────────────────
 
   describe "atomic: false (default)" do
     test "any combination of unsafe ops is allowed when atomic is off" do
@@ -51,10 +37,6 @@ defmodule GuardedStructTest.AtomicVerifierTest do
       assert :ok = VerifyAtomic.verify(state)
     end
   end
-
-  # ────────────────────────────────────────────────────────────────────
-  # 2. atomic: true — all-safe ops pass
-  # ────────────────────────────────────────────────────────────────────
 
   describe "atomic: true — happy paths" do
     test "pure-validate fields pass" do
@@ -113,10 +95,6 @@ defmodule GuardedStructTest.AtomicVerifierTest do
     end
   end
 
-  # ────────────────────────────────────────────────────────────────────
-  # 3. atomic: true — DNS / network validators rejected
-  # ────────────────────────────────────────────────────────────────────
-
   describe "atomic: true — DNS validators rejected" do
     test "validate(email) blocked with DNS reason" do
       state =
@@ -151,10 +129,6 @@ defmodule GuardedStructTest.AtomicVerifierTest do
       assert msg =~ "validate(url_r)"
     end
   end
-
-  # ────────────────────────────────────────────────────────────────────
-  # 4. atomic: true — Elixir MFAs rejected
-  # ────────────────────────────────────────────────────────────────────
 
   describe "atomic: true — Elixir MFAs rejected" do
     test "per-field validator: {Mod, :fn} blocked" do
@@ -217,10 +191,6 @@ defmodule GuardedStructTest.AtomicVerifierTest do
       assert msg =~ "cross-field"
     end
   end
-
-  # ────────────────────────────────────────────────────────────────────
-  # 5. atomic: true — cross-field options rejected
-  # ────────────────────────────────────────────────────────────────────
 
   describe "atomic: true — cross-field options rejected" do
     test "field with `on:` cross-field dep blocked" do
@@ -287,10 +257,6 @@ defmodule GuardedStructTest.AtomicVerifierTest do
     end
   end
 
-  # ────────────────────────────────────────────────────────────────────
-  # 6. atomic: true — multiple blockers aggregate
-  # ────────────────────────────────────────────────────────────────────
-
   describe "atomic: true — multiple blockers aggregate" do
     test "every offending field appears in one error message" do
       state =
@@ -316,10 +282,6 @@ defmodule GuardedStructTest.AtomicVerifierTest do
       assert msg =~ ":code"
     end
   end
-
-  # ────────────────────────────────────────────────────────────────────
-  # 7. atomic: true — sub_field cascade is verified
-  # ────────────────────────────────────────────────────────────────────
 
   describe "atomic: true — sub_field cascade" do
     test "unsafe op inside a sub_field is caught with full path" do
@@ -363,10 +325,6 @@ defmodule GuardedStructTest.AtomicVerifierTest do
     end
   end
 
-  # ────────────────────────────────────────────────────────────────────
-  # 8. atomic: true — virtual_field and conditional_field cascade
-  # ────────────────────────────────────────────────────────────────────
-
   describe "atomic: true — virtual_field / conditional_field cascade" do
     test "unsafe op in a virtual_field is caught" do
       state =
@@ -397,10 +355,6 @@ defmodule GuardedStructTest.AtomicVerifierTest do
       assert Exception.message(err) =~ ":payload"
     end
   end
-
-  # ────────────────────────────────────────────────────────────────────
-  # 9. AtomicClassifier — direct unit tests
-  # ────────────────────────────────────────────────────────────────────
 
   describe "AtomicClassifier" do
     test "safe sanitize ops" do

@@ -4,10 +4,6 @@ defmodule GuardedStructTest.InfoTest do
   alias GuardedStruct.Info
   alias GuardedStructTest.Fixtures.Info.{EverythingUser, HeadersMap}
 
-  # ────────────────────────────────────────────────────────────────────
-  # Existing API (regressions)
-  # ────────────────────────────────────────────────────────────────────
-
   describe "GuardedStruct.Info — existing helpers" do
     test "guardedstruct/1 returns the entity list" do
       entities = Info.guardedstruct(EverythingUser)
@@ -17,9 +13,6 @@ defmodule GuardedStructTest.InfoTest do
     end
 
     test "fields/1 lists every entity, struct fields first then virtuals" do
-      # __fields__/0 emits struct-bound entities (field, dynamic_field,
-      # sub_field, conditional_field) in declaration order, then virtual
-      # fields appended at the end.
       assert Info.fields(EverythingUser) == [
                :id,
                :password,
@@ -50,10 +43,6 @@ defmodule GuardedStructTest.InfoTest do
     end
   end
 
-  # ────────────────────────────────────────────────────────────────────
-  # Field-level helpers
-  # ────────────────────────────────────────────────────────────────────
-
   describe "GuardedStruct.Info — field-level helpers" do
     test "field_kind/2 reports the kind for every entity type" do
       assert Info.field_kind(EverythingUser, :id) == :field
@@ -74,7 +63,6 @@ defmodule GuardedStructTest.InfoTest do
       assert Info.field_derives(EverythingUser, :nickname) ==
                "validate(string, max_len=20)"
 
-      # field with no derive
       assert Info.field_derives(EverythingUser, :id) == nil
     end
 
@@ -109,10 +97,6 @@ defmodule GuardedStructTest.InfoTest do
     end
   end
 
-  # ────────────────────────────────────────────────────────────────────
-  # Collection helpers
-  # ────────────────────────────────────────────────────────────────────
-
   describe "GuardedStruct.Info — collection helpers" do
     test "sub_fields/1 returns only sub_field names" do
       assert Info.sub_fields(EverythingUser) == [:address]
@@ -140,10 +124,6 @@ defmodule GuardedStructTest.InfoTest do
     end
   end
 
-  # ────────────────────────────────────────────────────────────────────
-  # Section-option shorthands
-  # ────────────────────────────────────────────────────────────────────
-
   describe "GuardedStruct.Info — section-option shorthands" do
     test "enforce?/1 reflects section `enforce:`" do
       assert Info.enforce?(EverythingUser)
@@ -169,20 +149,12 @@ defmodule GuardedStructTest.InfoTest do
     end
   end
 
-  # ────────────────────────────────────────────────────────────────────
-  # Navigation
-  # ────────────────────────────────────────────────────────────────────
-
   describe "GuardedStruct.Info — navigation" do
     test "sub_module/2 returns the generated submodule for a sub_field" do
       assert Info.sub_module(EverythingUser, :address) ==
                EverythingUser.Address
 
-      # `function_exported?/3` returns false for modules that exist but
-      # aren't loaded into the VM yet. Sub_field submodules are produced
-      # by Spark's `async_compile`, so first-touch ordering varies per
-      # test run. `Code.ensure_loaded?/1` forces a load and is the
-      # idiomatic guard for "is this module callable right now?"
+      # Force-load — sub_field submodules come from async_compile.
       assert Code.ensure_loaded?(EverythingUser.Address)
       assert function_exported?(EverythingUser.Address, :builder, 1)
       assert function_exported?(EverythingUser.Address, :__fields__, 0)
@@ -210,10 +182,6 @@ defmodule GuardedStructTest.InfoTest do
       assert Info.conditional_children(EverythingUser, :nope) == nil
     end
   end
-
-  # ────────────────────────────────────────────────────────────────────
-  # Mixed / end-to-end scenarios
-  # ────────────────────────────────────────────────────────────────────
 
   describe "GuardedStruct.Info — mixed usage" do
     test "user can compute 'required, non-virtual, non-dynamic' fields" do
@@ -247,9 +215,8 @@ defmodule GuardedStructTest.InfoTest do
     end
 
     test "the submodule itself is introspectable" do
-      # Submodules are NOT Spark DSL modules — the Spark-generated
-      # `guardedstruct_*!/1` accessors don't work on them. But the
-      # `__fields__/0`-based helpers do.
+      # Sub_field submodules aren't Spark DSL modules — only the
+      # `__fields__/0`-based helpers work on them.
       assert Info.fields(EverythingUser.Address) == [:city, :zip]
       assert Info.enforce?(EverythingUser.Address, :city)
       assert Info.field_kind(EverythingUser.Address, :city) == :field
@@ -261,10 +228,6 @@ defmodule GuardedStructTest.InfoTest do
       assert Info.guardedstruct_json!(EverythingUser) == true
     end
   end
-
-  # ────────────────────────────────────────────────────────────────────
-  # describe/1 — everything-in-one-map
-  # ────────────────────────────────────────────────────────────────────
 
   describe "GuardedStruct.Info.describe/1 — full dump" do
     test "top-level dump has every documented top-level key" do
@@ -342,14 +305,12 @@ defmodule GuardedStructTest.InfoTest do
       fields = Info.describe(EverythingUser).fields
       by_name = Map.new(fields, &{&1.name, &1})
 
-      # plain :field
       id = by_name[:id]
       assert id.kind == :field
       assert id.type == "String.t()"
       assert id.auto == {EverythingUser.Ids, :gen}
       assert id.enforce? == true
 
-      # field with explicit enforce: false
       nickname = by_name[:nickname]
       assert nickname.kind == :field
       assert nickname.enforce == false
@@ -358,30 +319,24 @@ defmodule GuardedStructTest.InfoTest do
       assert is_map(nickname.__derive_ops__)
       assert :validate in Map.keys(nickname.__derive_ops__)
 
-      # field with default
       status = by_name[:status]
       assert status.default == "active"
       assert status.enforce? == false
 
-      # virtual_field
       pc = by_name[:password_confirm]
       assert pc.kind == :virtual_field
-      # virtuals are not on the struct, so never in enforce_keys
       refute pc.enforce?
       refute Map.has_key?(pc, :sub_module)
 
-      # dynamic_field
       meta = by_name[:metadata]
       assert meta.kind == :dynamic_field
 
-      # sub_field — augmented with :sub_module
       address = by_name[:address]
       assert address.kind == :sub_field
       assert address.sub_module == EverythingUser.Address
       assert address.enforce? == true
       assert address.list? == false
 
-      # conditional_field — has :children list
       billing = by_name[:billing]
       assert billing.kind == :conditional_field
       assert is_list(billing.children)
@@ -392,14 +347,12 @@ defmodule GuardedStructTest.InfoTest do
       d = Info.describe(EverythingUser.Address)
       assert d.module == EverythingUser.Address
       refute d.path == []
-      # `:key` for submodules is the camelized last path segment (matches
-      # the generated module name, not the original field atom).
+      # `:key` is the camelized last path segment, not the field atom.
       assert d.key == :Address
       assert d.shape == :struct
       assert :city in d.keys
       assert :city in d.enforce_keys
 
-      # Sub-modules only track authorized_fields + json in their options
       assert Map.keys(d.options) |> Enum.sort() == [
                :authorized_fields,
                :enforce,
@@ -412,7 +365,6 @@ defmodule GuardedStructTest.InfoTest do
                :validate_derive
              ]
 
-      # Spark-only options come back as nil on submodules
       assert d.options.enforce == nil
       assert d.options.opaque == nil
     end
@@ -431,8 +383,6 @@ defmodule GuardedStructTest.InfoTest do
     end
 
     test "no information is lost: type + raw enforce are now exposed" do
-      # Prior to describe/1 these were not surfaced anywhere in the public
-      # introspection API.
       id_meta = Info.field(EverythingUser, :id)
       assert id_meta.type == "String.t()"
 

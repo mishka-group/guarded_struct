@@ -1,19 +1,7 @@
 defmodule GuardedStructTest.AshResourceChangeTest do
   use ExUnit.Case, async: false
 
-  # Capture Logger output per-test — Ash's ETS data-layer logs
-  # `[debug] Creating ...` during create/update, which we don't want
-  # in test output unless a test fails.
   @moduletag capture_log: true
-
-  # Exercises `GuardedStruct.AshResource.Change` (the bridge module) and
-  # `GuardedStruct.Transformers.AutoWireAshChange` (the auto-wire
-  # transformer) against REAL Ash resources backed by the ETS data layer.
-  # No DB needed; ETS is in-process and ephemeral.
-  #
-  # Test resources live in `test/support/ash_resources.ex` as TOP-LEVEL
-  # modules — Spark.Formatter requires top-level resources to apply Ash's
-  # paren-removal and section-ordering rules.
 
   alias GuardedStructTest.AshResources.{Manual, AutoWired, AutoWireOff}
 

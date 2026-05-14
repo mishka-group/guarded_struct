@@ -43,30 +43,15 @@ defmodule GuardedStruct.Derive.Extension do
     * `{:error, field, action, message}` — explicit error tuple
     * any other value — used as the validated value (for coercing validators)
 
-  ## Why a Spark DSL?
+  ## Introspection
 
-  This module is built on `Spark.Dsl.Extension` (rather than plain macros)
-  for consistency with the rest of the GuardedStruct stack. Concrete wins:
-
-    * `mix spark.formatter` keeps `validator :slug, fn ... end` paren-free
-      across formatting runs (Spark.Formatter handles `fn`-bearing calls,
-      vanilla Elixir formatter doesn't).
-    * The `derives do ... end` block is introspectable via
-      `Spark.Dsl.Extension.get_entities/2`.
-    * Future verifiers / transformers (e.g. enforcing op-name uniqueness,
-      cross-extension collision checks) plug in at well-defined points.
-
-  The trade-off is one `derives do ... end` wrapper per extension module —
-  cosmetic, costs ~3 lines vs the previous flat form.
+  The `derives do ... end` block is introspectable via
+  `Spark.Dsl.Extension.get_entities/2`. Verifiers and transformers can
+  plug in at the standard Spark extension points.
   """
 
   use Spark.Dsl,
     default_extensions: [extensions: [GuardedStruct.Derive.Extension.Dsl]]
-
-  # ────────────────────────────────────────────────────────────────────
-  # Runtime helpers — not Spark-related. Used by Runtime.* modules and
-  # by user-facing extension lookup.
-  # ────────────────────────────────────────────────────────────────────
 
   @doc false
   def __dispatch_validator__(true, input, _field, _name), do: input
@@ -94,12 +79,9 @@ defmodule GuardedStruct.Derive.Extension do
     |> Enum.filter(&function_exported?(&1, :__derive_extension__?, 0))
   end
 
-  # `Code.ensure_compiled?/1` waits for in-flight compilation of the parent
-  # module — required when an extension and the module using it live in the
-  # SAME source file (e.g. `defmodule MyExt do ... end` and a sibling
-  # `defmodule UsesIt do use GuardedStruct, derive_extensions: [MyExt] end`).
-  # `Code.ensure_loaded?/1` would return false because the .beam file isn't
-  # on disk yet during the parent's compile pass.
+  # `Code.ensure_compiled?/1` (not `ensure_loaded?`) handles the case
+  # where the extension and a module using it live in the same source
+  # file — the .beam isn't on disk yet during the parent's compile pass.
   defp ensure_extension_loaded?(mod) when is_atom(mod) do
     match?({:module, _}, Code.ensure_compiled(mod))
   end

@@ -1,14 +1,3 @@
-# Top-level Ash test resources. They live here (rather than nested inside
-# test files) because `Spark.Formatter` only processes the FIRST `defmodule`
-# it encounters at the AST root — when a resource is nested inside a
-# `defmodule TestModule do use ExUnit.Case ... defmodule Resource do ...`
-# wrapper, the formatter stops descending at the outer module and never
-# applies Ash's DSL formatting (paren removal, section ordering) to the
-# inner resource.
-#
-# Resources for the Ash change-callback unit tests
-# (`test/ash_resource_change_test.exs`).
-
 defmodule GuardedStructTest.AshResources.Manual do
   @moduledoc false
   use Ash.Resource,
@@ -110,9 +99,6 @@ defmodule GuardedStructTest.AshResources.AutoWireOff do
     attribute :email, :string, allow_nil?: false, public?: true
   end
 end
-
-# Resources for the full end-to-end integration tests
-# (`test/ash_integration_test.exs`).
 
 defmodule GuardedStructTest.AshResources.UserManual do
   @moduledoc "Manually-wired resource (changes do change ... end)"

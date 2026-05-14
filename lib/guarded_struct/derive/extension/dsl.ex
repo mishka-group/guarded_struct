@@ -23,10 +23,10 @@ defmodule GuardedStruct.Derive.Extension.Dsl do
         doc: """
         Single-arg function. Return value semantics:
 
-        * `true` — input passes
-        * `false` — input fails (default error message)
-        * `{:error, field, action, message}` — explicit error
-        * any other value — used as the validated (coerced) output
+          * `true` — input passes
+          * `false` — input fails (default error message)
+          * `{:error, field, action, message}` — explicit error
+          * any other value — used as the validated (coerced) output
         """
       ]
     ]

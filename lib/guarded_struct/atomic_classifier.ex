@@ -3,15 +3,13 @@ defmodule GuardedStruct.AtomicClassifier do
   Classifies a single GuardedStruct derive op as either atomic-SQL safe
   or unsafe (with a human-readable reason).
 
-  ## How to extend
-
   To declare a NEW op safe for atomic mode, add a clause near the top of
   this file:
 
       def classify_op({:validate, :my_new_op}), do: :safe
 
-  To mark an op UNSAFE with a specific reason (e.g. requires network I/O,
-  arbitrary Elixir, etc.), add a clause near its category:
+  To mark an op UNSAFE with a specific reason, add a clause near its
+  category:
 
       def classify_op({:validate, :my_dns_op}) do
         {:unsafe, "validate(my_dns_op) performs a DNS lookup — needs I/O"}
@@ -29,15 +27,6 @@ defmodule GuardedStruct.AtomicClassifier do
     * `{:validate, {:max_len, 20}}` — validate, with literal arg
     * `{:validate, {enum: ["a", "b"]}}` — keyword-list arg variant
   """
-
-  # ────────────────────────────────────────────────────────────────────
-  # Sanitize ops — all built-ins are atomic-safe because they run in the
-  # before_action Elixir hook, BEFORE the atomic SQL fires. They never
-  # touch the data layer's atomic semantics.
-  #
-  # The unsafe sanitize cases are user-defined Derive.Extension ops —
-  # we can't statically guarantee what they do, so they're rejected.
-  # ────────────────────────────────────────────────────────────────────
 
   def classify_op({:sanitize, :trim}), do: :safe
   def classify_op({:sanitize, :downcase}), do: :safe
@@ -59,11 +48,6 @@ defmodule GuardedStruct.AtomicClassifier do
        "can't classify"}
   end
 
-  # ────────────────────────────────────────────────────────────────────
-  # Validate ops — type checks. All translate cleanly to data-layer
-  # type predicates (`is_binary`, `is_integer`, jsonb_typeof, etc.).
-  # ────────────────────────────────────────────────────────────────────
-
   def classify_op({:validate, :string}), do: :safe
   def classify_op({:validate, :integer}), do: :safe
   def classify_op({:validate, :float}), do: :safe
@@ -75,29 +59,15 @@ defmodule GuardedStruct.AtomicClassifier do
   def classify_op({:validate, :record}), do: :safe
   def classify_op({:validate, {:record, _tag}}), do: :safe
 
-  # ────────────────────────────────────────────────────────────────────
-  # Validate ops — emptiness/length checks. Translate to `<> ''` and
-  # `length()` SQL.
-  # ────────────────────────────────────────────────────────────────────
-
   def classify_op({:validate, :not_empty}), do: :safe
   def classify_op({:validate, :not_empty_string}), do: :safe
   def classify_op({:validate, :not_flatten_empty_item}), do: :safe
   def classify_op({:validate, {:max_len, _}}), do: :safe
   def classify_op({:validate, {:min_len, _}}), do: :safe
 
-  # ────────────────────────────────────────────────────────────────────
-  # Validate ops — comparison checks.
-  # ────────────────────────────────────────────────────────────────────
-
   def classify_op({:validate, {:max, _}}), do: :safe
   def classify_op({:validate, {:min, _}}), do: :safe
   def classify_op({:validate, {:equal, _}}), do: :safe
-
-  # ────────────────────────────────────────────────────────────────────
-  # Validate ops — regex / pattern matching. The `_r` suffix means
-  # regex-only (no DNS), which most DBs can do via `~` or `LIKE`.
-  # ────────────────────────────────────────────────────────────────────
 
   def classify_op({:validate, :uuid}), do: :safe
   def classify_op({:validate, :email_r}), do: :safe
@@ -107,24 +77,11 @@ defmodule GuardedStruct.AtomicClassifier do
   def classify_op({:validate, :string_boolean}), do: :safe
   def classify_op({:validate, {:regex, _}}), do: :safe
 
-  # ────────────────────────────────────────────────────────────────────
-  # Validate ops — date/time. ISO-8601 parse can be a DB function.
-  # ────────────────────────────────────────────────────────────────────
-
   def classify_op({:validate, :datetime}), do: :safe
   def classify_op({:validate, :date}), do: :safe
   def classify_op({:validate, :time}), do: :safe
 
-  # ────────────────────────────────────────────────────────────────────
-  # Validate ops — set membership.
-  # ────────────────────────────────────────────────────────────────────
-
   def classify_op({:validate, {:enum, _}}), do: :safe
-
-  # ────────────────────────────────────────────────────────────────────
-  # Validate ops — EXPLICITLY UNSAFE. These need network I/O or external
-  # processes that no SQL engine can do during a transaction.
-  # ────────────────────────────────────────────────────────────────────
 
   def classify_op({:validate, :email}) do
     {:unsafe,
@@ -161,12 +118,6 @@ defmodule GuardedStruct.AtomicClassifier do
      "validate(tell, country_code) may require external library lookup. " <>
        "Not in the default atomic-safe registry"}
   end
-
-  # ────────────────────────────────────────────────────────────────────
-  # Catch-all — anything we didn't enumerate is unsafe by default.
-  # Contributors who add a new built-in op should add a `:safe` clause
-  # above; otherwise it falls through to here.
-  # ────────────────────────────────────────────────────────────────────
 
   def classify_op({:validate, op}) when is_atom(op) do
     {:unsafe,
