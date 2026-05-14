@@ -691,12 +691,25 @@ defmodule GuardedStructTest.AshIntegrationTest do
       assert output =~ "on:"
     end
 
-    test "custom Derive.Extension op is rejected (catch-all path)" do
+    test "typo / unknown op is rejected with a typo-aware diagnostic" do
       output =
-        compile_atomic_fixture(~s{field :value, :string, derives: "validate(totally_unknown_op)"})
+        compile_atomic_fixture(~s{field :value, :string, derives: "validate(emaill_r)"})
 
       assert output =~ "Spark.Error.DslError"
-      assert output =~ "atomic-safe registry"
+      assert output =~ "NOT a known built-in op"
+      assert output =~ "typo"
+    end
+
+    test "known built-in (but not atomic-safe) gets a different message than typos" do
+      # `validate(custom)` is in Derive.Registry but not in our atomic-safe
+      # list — message should say "built-in op but not in the atomic-safe
+      # registry", NOT "typo".
+      output =
+        compile_atomic_fixture(~s{field :value, :string, derives: "validate(custom)"})
+
+      assert output =~ "Spark.Error.DslError"
+      assert output =~ "is a built-in op but not in the atomic-safe registry"
+      refute output =~ "typo"
     end
 
     test "multiple blockers in one resource are aggregated in one error" do

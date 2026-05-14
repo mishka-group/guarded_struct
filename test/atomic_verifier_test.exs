@@ -408,15 +408,37 @@ defmodule GuardedStructTest.AtomicVerifierTest do
       assert msg2 =~ "url_r"
     end
 
-    test "unknown validate ops are rejected with a contributor-friendly catch-all" do
+    test "unknown validate ops are rejected with a typo-aware catch-all" do
       assert {:unsafe, msg} = AtomicClassifier.classify_op({:validate, :totally_unknown})
-      assert msg =~ "atomic-safe registry"
-      assert msg =~ "AtomicClassifier"
+      assert msg =~ "NOT a known built-in op"
+      assert msg =~ "typo"
+      assert msg =~ "Derive.Extension"
+      assert msg =~ "Registry.validate_ops/0"
     end
 
-    test "custom sanitize ops (non-built-ins) are rejected" do
+    test "known built-in validate ops outside the safe registry get a different message" do
+      # `:custom`, `:either`, `:struct`, `:queue`, etc. are in Registry but
+      # not in the atomic-safe list. The catch-all should recognize them as
+      # built-ins and suggest adding a classifier clause.
+      assert {:unsafe, msg} = AtomicClassifier.classify_op({:validate, :custom})
+      assert msg =~ "is a built-in op but not in the atomic-safe registry"
+      assert msg =~ "AtomicClassifier"
+      refute msg =~ "typo"
+    end
+
+    test "unknown sanitize ops get typo-aware message" do
       assert {:unsafe, msg} = AtomicClassifier.classify_op({:sanitize, :slugify})
+      assert msg =~ "NOT a known built-in op"
+      assert msg =~ "typo"
       assert msg =~ "Derive.Extension"
+    end
+
+    test "known built-in sanitize ops outside the safe registry" do
+      # `:markdown_html` and `:string_float` are in Registry but not in our
+      # atomic-safe sanitize list — same diagnostic path as :custom above.
+      assert {:unsafe, msg} = AtomicClassifier.classify_op({:sanitize, :markdown_html})
+      assert msg =~ "is a built-in op but not in the atomic-safe registry"
+      refute msg =~ "typo"
     end
 
     test "unrecognized shape returns a generic unsafe" do

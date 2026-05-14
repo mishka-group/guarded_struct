@@ -41,11 +41,28 @@ defmodule GuardedStruct.AtomicClassifier do
   def classify_op({:sanitize, :tag}), do: :safe
   def classify_op({:sanitize, {:tag, _}}), do: :safe
 
+  def classify_op({:sanitize, op}) when is_atom(op) do
+    cond do
+      GuardedStruct.Derive.Registry.known_sanitize?(op) ->
+        {:unsafe,
+         "sanitize(#{op}) is a built-in op but not in the atomic-safe " <>
+           "registry. If you've verified it's SQL-translatable, add a " <>
+           "`def classify_op({:sanitize, :#{op}}), do: :safe` clause in " <>
+           "GuardedStruct.AtomicClassifier"}
+
+      true ->
+        {:unsafe,
+         "sanitize(#{op}) is NOT a known built-in op. Possible causes: " <>
+           "(1) typo of a built-in — check spelling against `mix help " <>
+           "guarded_struct` or `GuardedStruct.Derive.Registry.sanitize_ops/0`; " <>
+           "(2) custom op from `GuardedStruct.Derive.Extension` — custom " <>
+           "ops run arbitrary Elixir and can't be atomic-safe. Either fix " <>
+           "the typo or set `atomic: false`"}
+    end
+  end
+
   def classify_op({:sanitize, op}) do
-    {:unsafe,
-     "sanitize(#{op}) is not a built-in op — it must come from a custom " <>
-       "Derive.Extension and runs arbitrary Elixir code that the verifier " <>
-       "can't classify"}
+    {:unsafe, "sanitize op #{inspect(op)} has an unrecognized shape"}
   end
 
   def classify_op({:validate, :string}), do: :safe
@@ -120,17 +137,38 @@ defmodule GuardedStruct.AtomicClassifier do
   end
 
   def classify_op({:validate, op}) when is_atom(op) do
-    {:unsafe,
-     "validate(#{op}) is not in the atomic-safe registry. Likely a custom " <>
-       "op from GuardedStruct.Derive.Extension or a new built-in not yet " <>
-       "classified. Add a `def classify_op({:validate, :#{op}}), do: :safe` " <>
-       "clause in GuardedStruct.AtomicClassifier if it's SQL-translatable"}
+    cond do
+      GuardedStruct.Derive.Registry.known_validate?(op) ->
+        {:unsafe,
+         "validate(#{op}) is a built-in op but not in the atomic-safe " <>
+           "registry. If you've verified it's SQL-translatable, add a " <>
+           "`def classify_op({:validate, :#{op}}), do: :safe` clause in " <>
+           "GuardedStruct.AtomicClassifier"}
+
+      true ->
+        {:unsafe,
+         "validate(#{op}) is NOT a known built-in op. Possible causes: " <>
+           "(1) typo of a built-in — check spelling against " <>
+           "`GuardedStruct.Derive.Registry.validate_ops/0`; " <>
+           "(2) custom op from `GuardedStruct.Derive.Extension` — custom " <>
+           "ops run arbitrary Elixir and can't be atomic-safe. Either fix " <>
+           "the typo or set `atomic: false`"}
+    end
   end
 
   def classify_op({:validate, {op, _arg}}) when is_atom(op) do
-    {:unsafe,
-     "validate(#{op}=...) is not in the atomic-safe registry. See note " <>
-       "for adding a classifier clause"}
+    cond do
+      GuardedStruct.Derive.Registry.known_validate?(op) ->
+        {:unsafe,
+         "validate(#{op}=...) is a built-in op but not in the atomic-safe " <>
+           "registry. Add a classifier clause if it's SQL-translatable"}
+
+      true ->
+        {:unsafe,
+         "validate(#{op}=...) is NOT a known built-in op. Possible causes: " <>
+           "typo of a built-in or custom Derive.Extension op. Either fix " <>
+           "the typo or set `atomic: false`"}
+    end
   end
 
   def classify_op(other) do
