@@ -28,6 +28,29 @@ Mix.install([
 | Splode error wrapping | _Splode errors_ |
 | Ash extension | _Ash integration_ |
 
+### Conventions you'll see throughout
+
+* **Error shape is canonical.** Every `{:error, …}` from `builder/1`,
+  `__guarded_change__/1`, `Validate.*`, and the Ash `Change` is **always**
+  `{:error, [error_map, ...]}`. Each error map has the same shape:
+  `%{field: atom, action: atom, message: String, [errors: [...]]}`.
+  Multi-field errors like `:required_fields` and `:authorized_fields` emit
+  **one error per affected field** (no more `%{fields: [...]}` map).
+
+* **Sanitizer arg order is pipe-friendly.** Direct calls take
+  `(value, op)` — e.g. `"  Alice  " |> SanitizerDerive.sanitize(:trim)`.
+  Same convention applies to `Extension.dispatch_sanitize/2`, generated
+  `__sanitize__/2` callbacks on extension modules, and any user-supplied
+  `:sanitize_derive` callback module.
+
+* **LLM agents.** The repo ships agent context at the root
+  ([`usage-rules.md`](https://github.com/mishka-group/guarded_struct/blob/master/usage-rules.md)
+  + topic files in `usage-rules/`) and skills.sh-compatible
+  [`.claude/skills/*/SKILL.md`](https://github.com/mishka-group/guarded_struct/tree/master/.claude/skills).
+  Pull them into a project via
+  `mix usage_rules.sync` (with [`:usage_rules`](https://github.com/ash-project/usage_rules)
+  as a dev dep) or copy the skills directly.
+
 See [`CHANGELOG.md`](https://github.com/mishka-group/guarded_struct/blob/master/CHANGELOG.md) for the full list of changes.
 
 ## About
@@ -479,13 +502,13 @@ defmodule TestValidateModule2 do
 end
 
 defmodule TestSanitizeModuleOne do
-  def sanitize(:capitalize_v1, input) do
+  def sanitize(input, :capitalize_v1) do
     if is_binary(input), do: String.capitalize(input) <> "::_v1", else: input
   end
 end
 
 defmodule TestSanitizeModuleTwo do
-  def sanitize(:capitalize_v2, input) do
+  def sanitize(input, :capitalize_v2) do
     if is_binary(input), do: String.capitalize(input) <> "::_v2", else: input
   end
 end

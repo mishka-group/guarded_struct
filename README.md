@@ -34,6 +34,7 @@
 - [Architecture](#-architecture)
 - [Compatibility](#-compatibility)
 - [Documentation](#-documentation)
+- [LLM agent skills & usage rules](#-llm-agent-skills--usage-rules)
 - [Status & roadmap](#-status--roadmap)
 - [Contributing](#-contributing)
 - [Funding & sponsorship](#-funding--sponsorship)
@@ -511,6 +512,98 @@ flowchart TD
 - 🔐 **Security policy** — [`SECURITY.md`](./SECURITY.md) — supported versions + how to report a vulnerability
 - 🧱 **DSL reference** — auto-generated cheat sheets in `documentation/dsls/` (published to hexdocs)
 - 📰 **Blog post** — [Consolidating Input and Output Validation and Sanitization in Elixir with GuardedStruct library](https://mishka.tools/blog/guardedstruct-advanced-elixir-struct-data-validation-and-sanitization)
+
+---
+
+## 🤖 LLM agent skills & usage rules
+
+<details>
+<summary>Ship agent context for Claude Code, Cursor, Copilot, and any <a href="https://www.skills.sh/">skills.sh</a>-compatible runner. Two formats — click to expand.</summary>
+
+| Layout | For | Source of truth |
+|---|---|---|
+| `usage-rules.md` + `usage-rules/*.md` | [`ash-project/usage_rules`](https://github.com/ash-project/usage_rules) consumers | This repo's root |
+| `.claude/skills/*/SKILL.md` | skills.sh / Claude Code / Cursor / Copilot | This repo's `.claude/skills/` |
+
+### Option A — pull into your project via `usage_rules`
+
+Add the dev dep and a `:usage_rules` block to your `mix.exs`:
+
+```elixir
+# mix.exs
+def project do
+  [
+    ...,
+    usage_rules: [
+      file: "AGENTS.md",                 # or "CLAUDE.md"
+      usage_rules: [:guarded_struct],    # inline our usage-rules
+      skills: [
+        location: ".claude/skills",
+        package_skills: [:guarded_struct]  # pull our SKILL.md files in
+      ]
+    ]
+  ]
+end
+
+defp deps do
+  [{:usage_rules, "~> 1.1", only: [:dev]}]
+end
+```
+
+Install and sync — these are the only commands you need:
+
+```sh
+mix deps.get                              # pull :usage_rules
+mix usage_rules.sync                      # generate AGENTS.md + .claude/skills/
+mix usage_rules.sync --check              # verify in CI nothing has drifted
+mix usage_rules.search_docs "atomic"      # search package docs for a term
+```
+
+`mix usage_rules.sync` reads `:usage_rules` from `mix.exs`, gathers
+`usage-rules.md` (and any `usage-rules/*.md`) from every listed dep, writes
+the consolidated `AGENTS.md`, and drops one `SKILL.md` per package into
+`.claude/skills/`. Re-run after any `mix deps.update`.
+
+Sub-rules are addressable by name in the `usage_rules:` list:
+
+```elixir
+usage_rules: [
+  "guarded_struct:dsl",        # just the DSL doc
+  "guarded_struct:ash",        # just the Ash integration
+  "guarded_struct:derive",     # just the derive op reference
+  "guarded_struct:errors"      # just the error-shape contract
+]
+```
+
+Full list lives in this repo's `usage-rules/` directory.
+
+### Option B — copy the skills directly
+
+If you don't use `usage_rules`, copy any of these directories into your project's
+`.claude/skills/` (or wherever your agent runner looks):
+
+| Skill | When it triggers |
+|---|---|
+| `guarded-struct` | Any use of the library — umbrella skill |
+| `guarded-struct-dsl` | `field` / `sub_field` / `conditional_field` / `virtual_field` / `dynamic_field` declarations |
+| `guarded-struct-derive` | `derives:` strings, `SanitizerDerive.sanitize/2` |
+| `guarded-struct-conditional` | `conditional_field` runtime dispatch + error aggregation |
+| `guarded-struct-ash` | `extensions: [GuardedStruct.AshResource]`, atomic mode, `Change` wiring |
+| `guarded-struct-extensions` | `use GuardedStruct.Derive.Extension`, custom validators / sanitizers |
+| `guarded-struct-api` | `builder/1`, `Validate`, `Diff`, `Info`, telemetry |
+
+Each skill is a single `SKILL.md` with YAML frontmatter (`name`, `description`)
+followed by markdown. The descriptions are written with concrete trigger
+signals (module names, function calls, error atoms) so agents auto-load the
+right skill without manual invocation.
+
+### Option C — read inline
+
+Start with [`usage-rules.md`](./usage-rules.md). It's < 100 lines, links every
+sub-topic, and pins down the universal contracts (error shape, generated
+module surface, compile-time guarantees) every consumer must know.
+
+</details>
 
 ---
 

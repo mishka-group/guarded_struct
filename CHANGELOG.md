@@ -1,8 +1,6 @@
 # Changelog for GuardedStruct 0.1.0
 
 > We are delighted to introduce v0.1.0 — a from-scratch rewrite of the macro core on top of [Spark](https://hex.pm/packages/spark). Every existing 0.0.x public API is preserved. Bump the dep, run `mix deps.get`, and existing tests stay green.
->
-> See [`OPTIONS-0.1.0.md`](./OPTIONS-0.1.0.md) for every new option with examples.
 
 **Tracking PR**: [#13](https://github.com/mishka-group/guarded_struct/pull/13)
 
@@ -43,6 +41,10 @@
 - Rename `derive:` option to `derives:` (plural) — aligns with the `@derives` decorator; legacy `derive:` still works but emits a compile-time deprecation warning via `Spark.Warning.warn_deprecated/4` [#13](https://github.com/mishka-group/guarded_struct/pull/13)
 - Rename `jason: true` section option to `json: true` — option now derives whichever JSON encoder is available (Jason or built-in) [#13](https://github.com/mishka-group/guarded_struct/pull/13)
 - Extract test fixtures (Ash resources + custom-derive modules) to top-level modules in `test/support/` so Spark.Formatter applies paren-removal and section-ordering rules uniformly [#13](https://github.com/mishka-group/guarded_struct/pull/13)
+- Normalize the error wire format — every `{:error, …}` from `builder/1`, `__guarded_change__/1`, `Validate.run/2`, `Validate.field/3,4`, `Validate.partial/2` and the Ash `Change` is **always** `{:error, [error_map, ...]}`. Each error map follows the canonical shape `%{field: atom, action: atom, message: String, [errors: [...]]}`. `:required_fields` and `:authorized_fields` emit one error **per affected field** instead of one map with a `fields:` list. `:bad_parameters` carries `:field => :__root__` [#13](https://github.com/mishka-group/guarded_struct/pull/13)
+- Flip `GuardedStruct.Derive.SanitizerDerive.sanitize/2` to pipe-friendly `(value, op)` arg order — was `(op, value)`. Applies project-wide: `Extension.dispatch_sanitize/2,3`, the generated `__sanitize__/2` callback on extension modules, and any user-supplied `:sanitize_derive` module's `sanitize/2` function follow the same convention. Internal hot path now reduces with `Enum.reduce(ops, value, fn op, acc -> sanitize(acc, op) end)` [#13](https://github.com/mishka-group/guarded_struct/pull/13)
+- Bake compile-time predicates on every guarded module — `__guarded_has_validator__/0`, `__guarded_has_main_validator__/0`, `__guarded_error_module__/0`, `__guarded_field_meta__/1` (and Ash's `__guarded_field_name_set__/0` MapSet) — drops every `function_exported?` / `Code.ensure_loaded?` call from the runtime hot path [#13](https://github.com/mishka-group/guarded_struct/pull/13)
+- Cache `GuardedStruct.Derive.Extension.registered_extensions/0` in `:persistent_term`, keyed by raw app config; auto-invalidates when config changes. New `clear_cache/0` helper for test setup [#13](https://github.com/mishka-group/guarded_struct/pull/13)
 
 ### Bugs:
 
@@ -69,10 +71,11 @@
 ### Docs:
 
 - Add full LiveBook walkthrough at [`guidance/guarded-struct.livemd`](./guidance/guarded-struct.livemd) with runnable end-to-end examples [#13](https://github.com/mishka-group/guarded_struct/pull/13)
-- Add [`OPTIONS-0.1.0.md`](./OPTIONS-0.1.0.md) — every new option in v0.1.0 with worked examples [#13](https://github.com/mishka-group/guarded_struct/pull/13)
 - Add auto-generated DSL cheat sheets at `documentation/dsls/` via `mix spark.cheat_sheets` [#13](https://github.com/mishka-group/guarded_struct/pull/13)
 - Add `mix lint` and `mix cheat` aliases — wrap `spark.formatter` + `format` and `spark.cheat_sheets` [#13](https://github.com/mishka-group/guarded_struct/pull/13)
 - Add "Atom-attack safety" section to the `GuardedStruct` module @moduledoc covering the dynamic_field / pattern-keyed map threat model [#13](https://github.com/mishka-group/guarded_struct/pull/13)
+- Add LLM agent context — root [`usage-rules.md`](./usage-rules.md) + topic-scoped sub-rules in [`usage-rules/`](./usage-rules/) (compatible with [ash-project/usage_rules](https://github.com/ash-project/usage_rules); consumers run `mix usage_rules.sync` and address sub-rules as `guarded_struct:dsl`, `guarded_struct:ash`, etc.) [#13](https://github.com/mishka-group/guarded_struct/pull/13)
+- Add [skills.sh](https://www.skills.sh/)-compatible `SKILL.md` files under [`.claude/skills/`](./.claude/skills/) — one per subsystem (`guarded-struct`, `-dsl`, `-derive`, `-conditional`, `-ash`, `-extensions`, `-api`) with YAML frontmatter triggers so Claude Code / Cursor / Copilot auto-load the right context [#13](https://github.com/mishka-group/guarded_struct/pull/13)
 
 ### Internals dropped:
 
