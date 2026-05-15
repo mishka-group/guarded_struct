@@ -463,43 +463,31 @@ GuardedStruct.Info.conditional_children(MyApp.User, :plan)
 
 ## 🏗️ Architecture
 
-```
-                +-------------------------+
-                | guardedstruct do ... end|
-                | (user-facing DSL block) |
-                +------------+------------+
-                             |
-            +----------------+----------------+
-            |     Spark.Dsl.Extension          |
-            |  parses entities + section opts  |
-            +----------------+----------------+
-                             |
-       +---------+-----------+-----------+----------+----------+
-       |         |           |           |          |          |
-       v         v           v           v          v          v
-  Transformers Verifiers  Codegen  AsyncSubmod  Decorators  AshChange
-  (Derive,    (Atomic,   (defstruct (Module.   (@derives)  (bridge to
-   Domain,     ValidMFA,  builder,   create                 Ash pipeline,
-   Auto, ...)  Cycle, ...) keys,...)  +async)               batch_change)
-                             |
-                             v
-                       +------------+
-                       | __fields__ |  <-- introspection lives here
-                       | __info___  |
-                       +-----+------+
-                             |
-                             v
-                  +----------+-----------+
-                  | Runtime pipeline     |
-                  | sanitize → validate  |
-                  | → derive → main_val  |
-                  +----------------------+
+```mermaid
+flowchart TD
+    User["<b>guardedstruct do ... end</b><br/>user-facing DSL block"]
+    Spark["<b>Spark.Dsl.Extension</b><br/>parses entities + section opts"]
+
+    User --> Spark
+
+    Spark --> Transformers["<b>Transformers</b><br/>ParseDerive · ParseCoreKeys<br/>GenerateBuilder · GenerateSubFieldModules<br/>GenerateAshValidator · AutoWireAshChange"]
+    Spark --> Verifiers["<b>Verifiers</b><br/>VerifyValidatorMFA · VerifyAutoMFA<br/>VerifyNoStructCycles · VerifyAtomic"]
+    Spark --> AsyncCompile["<b>Async submodule compile</b><br/>Spark.Dsl.Transformer.async_compile<br/>for sub_field branches"]
+
+    Transformers --> Fields["<b>__fields__/0</b> · <b>__information__/0</b><br/>introspection metadata<br/>(read by GuardedStruct.Info)"]
+    Verifiers --> Fields
+    AsyncCompile --> Fields
+
+    Fields --> Runtime["<b>Runtime pipeline</b><br/>sanitize → validate → derive → main_validator"]
+
+    Runtime --> Standalone["<b>builder/1,2</b><br/>{:ok, %Struct{}}<br/>or {:error, [%{field, action, message}]}"]
+    Runtime --> AshBridge["<b>__guarded_change__/1</b><br/>+ GuardedStruct.AshResource.Change<br/>(bridges to Ash changeset pipeline)"]
 ```
 
 - 🧠 **DSL layer** — Spark sections + entities define `field`, `sub_field`, `conditional_field`, `virtual_field`, `dynamic_field`. Every op-string parsed at compile time.
 - 🔧 **Transformers** — codegen for `defstruct`/`builder`/`keys`/`__information__`/`__fields__`, async sub_field submodule generation, derive parsing, core-key parsing, Ash-variant codegen, auto-wire injection.
 - 🔍 **Verifiers** — validator MFAs exist, auto MFAs exist, no struct cycles, atomic-safety (when opted in).
-- 🏃 **Runtime** — receives a map, walks pre-parsed op-lists per field, hands back `{:ok, %Struct{}}` or `{:error, [%{field, action, message}]}`.
+- 🏃 **Runtime** — receives a map, walks pre-parsed op-lists per field, hands back `{:ok, %Struct{}}` or `{:error, [%{field, action, message}]}`. The Ash bridge routes the same pipeline through `__guarded_change__/1` into changeset attributes.
 
 ---
 
