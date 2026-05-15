@@ -130,9 +130,9 @@ defmodule GuardedStructTest.BasicTypesTest do
       end
     end
 
-    {:error,
-     %{message: "Please submit required fields.", fields: [:name], action: :required_fields}} =
-      assert TestStructBuilder.builder(%{title: "user"})
+    {:error, errs} = assert TestStructBuilder.builder(%{title: "user"})
+
+    assert Enum.any?(errs, &match?(%{field: :name, action: :required_fields}, &1))
 
     {:ok, data} = assert TestStructBuilder.builder(%{name: "shahryar", title: "user"})
 

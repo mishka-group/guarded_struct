@@ -217,31 +217,23 @@ defmodule GuardedStructFixtures.FormsTest do
   # ============================================================
   describe "Signup failure paths (exact error structure)" do
     test "missing :email → single :required_fields map (not a list)" do
-      # ERROR REASON: orchestration-layer required_fields returns a MAP,
-      # not a list — locked in here to prevent accidental wrapping change.
-      assert Forms.Signup.builder(%{
-               password: "longenough",
-               password_confirmation: "longenough"
-             }) ==
-               {:error,
-                %{
-                  message: "Please submit required fields.",
-                  fields: [:email],
-                  action: :required_fields
-                }}
+      assert {:error, errs} =
+               Forms.Signup.builder(%{
+                 password: "longenough",
+                 password_confirmation: "longenough"
+               })
+
+      assert Enum.any?(errs, &match?(%{field: :email, action: :required_fields}, &1))
     end
 
-    test "missing :password → single :required_fields map" do
-      assert Forms.Signup.builder(%{
-               email: "a@b.io",
-               password_confirmation: "longenough"
-             }) ==
-               {:error,
-                %{
-                  message: "Please submit required fields.",
-                  fields: [:password],
-                  action: :required_fields
-                }}
+    test "missing :password → required_fields error" do
+      assert {:error, errs} =
+               Forms.Signup.builder(%{
+                 email: "a@b.io",
+                 password_confirmation: "longenough"
+               })
+
+      assert Enum.any?(errs, &match?(%{field: :password, action: :required_fields}, &1))
     end
 
     test "missing :password_confirmation → main_validator's :match error" do
@@ -518,23 +510,13 @@ defmodule GuardedStructFixtures.FormsTest do
   # ============================================================
   describe "Login failure paths" do
     test "missing :email → :required_fields error" do
-      assert Forms.Login.builder(%{password: "anything"}) ==
-               {:error,
-                %{
-                  message: "Please submit required fields.",
-                  fields: [:email],
-                  action: :required_fields
-                }}
+      assert {:error, errs} = Forms.Login.builder(%{password: "anything"})
+      assert Enum.any?(errs, &match?(%{field: :email, action: :required_fields}, &1))
     end
 
     test "missing :password → :required_fields error" do
-      assert Forms.Login.builder(%{email: "x@y.io"}) ==
-               {:error,
-                %{
-                  message: "Please submit required fields.",
-                  fields: [:password],
-                  action: :required_fields
-                }}
+      assert {:error, errs} = Forms.Login.builder(%{email: "x@y.io"})
+      assert Enum.any?(errs, &match?(%{field: :password, action: :required_fields}, &1))
     end
 
     test "invalid email → :email_r action" do

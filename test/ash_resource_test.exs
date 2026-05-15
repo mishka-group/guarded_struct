@@ -68,8 +68,8 @@ defmodule GuardedStructTest.AshResourceTest do
       assert attrs.email == "foo@bar.com"
     end
 
-    test "missing required field → {:error, required_fields}" do
-      assert {:error, %{action: :required_fields, fields: [:email]}} =
+    test "missing required field → {:error, [required_fields]}" do
+      assert {:error, [%{field: :email, action: :required_fields}]} =
                FakeAshResource.__guarded_change__(%{})
     end
 

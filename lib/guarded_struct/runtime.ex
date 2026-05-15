@@ -44,7 +44,7 @@ defmodule GuardedStruct.Runtime do
   end
 
   def validate(_module, _attrs, _error?) do
-    {:error, %{message: translated_message(:builder), action: :bad_parameters}}
+    {:error, [%{field: :__root__, action: :bad_parameters, message: translated_message(:builder)}]}
   end
 
   @spec build(module(), map() | struct() | tuple(), boolean()) ::
@@ -79,7 +79,7 @@ defmodule GuardedStruct.Runtime do
   end
 
   def build(_module, _attrs, _error?) do
-    {:error, %{message: translated_message(:builder), action: :bad_parameters}}
+    {:error, [%{field: :__root__, action: :bad_parameters, message: translated_message(:builder)}]}
   end
 
   defp with_telemetry(module, fun) do
@@ -142,7 +142,7 @@ defmodule GuardedStruct.Runtime do
   def build_pattern_map(module, attrs, error?)
 
   def build_pattern_map(_module, attrs, _error?) when not is_map(attrs) do
-    {:error, %{message: translated_message(:builder), action: :bad_parameters}}
+    {:error, [%{field: :__root__, action: :bad_parameters, message: translated_message(:builder)}]}
   end
 
   def build_pattern_map(module, attrs, error?) do
@@ -242,14 +242,14 @@ defmodule GuardedStruct.Runtime do
   defp do_build_with_key(module, key, attrs, type, error?) when is_list(key) do
     case get_in(attrs, key) do
       sub when is_map(sub) -> do_build(module, sub, attrs, type, error?)
-      _ -> {:error, %{message: translated_message(:builder), action: :bad_parameters}}
+      _ -> {:error, [%{field: :__root__, action: :bad_parameters, message: translated_message(:builder)}]}
     end
   end
 
   defp do_build_with_key(module, key, attrs, type, error?) when is_atom(key) do
     case Map.get(attrs, key) do
       sub when is_map(sub) -> do_build(module, sub, attrs, type, error?)
-      _ -> {:error, %{message: translated_message(:builder), action: :bad_parameters}}
+      _ -> {:error, [%{field: :__root__, action: :bad_parameters, message: translated_message(:builder)}]}
     end
   end
 
@@ -353,17 +353,11 @@ defmodule GuardedStruct.Runtime do
           {:ok, struct_value}
       end
     else
-      {:error, %{action: :authorized_fields}} = err ->
-        handle_error(err, module, error?)
-
-      {:error, %{action: :required_fields}} = err ->
-        handle_error(err, module, error?)
-
       {:error, errs} when is_list(errs) ->
         handle_error({:error, errs}, module, error?)
 
-      {:error, _} = err ->
-        handle_error(err, module, error?)
+      {:error, err} ->
+        handle_error({:error, [err]}, module, error?)
     end
   end
 
@@ -392,11 +386,13 @@ defmodule GuardedStruct.Runtime do
       {:ok, attrs}
     else
       {:error,
-       %{
-         message: translated_message(:authorized_fields),
-         fields: extras,
-         action: :authorized_fields
-       }}
+       Enum.map(extras, fn field ->
+         %{
+           field: field,
+           action: :authorized_fields,
+           message: translated_message(:authorized_fields)
+         }
+       end)}
     end
   end
 
@@ -409,11 +405,13 @@ defmodule GuardedStruct.Runtime do
       :ok
     else
       {:error,
-       %{
-         message: translated_message(:required_fields),
-         fields: missing,
-         action: :required_fields
-       }}
+       Enum.map(missing, fn field ->
+         %{
+           field: field,
+           action: :required_fields,
+           message: translated_message(:required_fields)
+         }
+       end)}
     end
   end
 
@@ -822,10 +820,13 @@ defmodule GuardedStruct.Runtime do
               child.struct.builder(validated)
             else
               {:error,
-               %{
-                 message: translated_message(:builder),
-                 action: :bad_parameters
-               }}
+               [
+                 %{
+                   field: Map.get(child, :name, :__root__),
+                   action: :bad_parameters,
+                   message: translated_message(:builder)
+                 }
+               ]}
             end
 
           is_atom(Map.get(child, :structs)) and
@@ -902,10 +903,13 @@ defmodule GuardedStruct.Runtime do
               _ ->
                 [
                   {:error,
-                   %{
-                     message: translated_message(:builder),
-                     action: :bad_parameters
-                   }}
+                   [
+                     %{
+                       field: Map.get(child, :name, :__root__),
+                       action: :bad_parameters,
+                       message: translated_message(:builder)
+                     }
+                   ]}
                 ]
             end)
 
@@ -926,7 +930,7 @@ defmodule GuardedStruct.Runtime do
           submodule.builder(nested_input_for.(sanitized))
 
         true ->
-          {:error, %{message: translated_message(:builder), action: :bad_parameters}}
+          {:error, [%{field: :__root__, action: :bad_parameters, message: translated_message(:builder)}]}
       end
     end
   end

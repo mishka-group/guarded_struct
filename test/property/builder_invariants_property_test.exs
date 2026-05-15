@@ -48,17 +48,16 @@ defmodule GuardedStructTest.Property.BuilderInvariantsTest do
         attrs = Map.new(keys -- missing, fn k -> {k, "x"} end)
 
         assert {:error, errs} = RequiredOnly.builder(attrs)
+        assert is_list(errs)
 
-        flat_errors =
+        missing_in_errs =
           errs
-          |> List.wrap()
-          |> Enum.flat_map(fn
-            %{errors: inner} when is_list(inner) -> inner
-            other -> [other]
-          end)
+          |> Enum.filter(&match?(%{action: :required_fields}, &1))
+          |> Enum.map(& &1.field)
+          |> Enum.sort()
 
-        assert Enum.any?(flat_errors, &match?(%{action: :required_fields}, &1)),
-               "expected a :required_fields error in #{inspect(errs)}, missing=#{inspect(missing)}, _missing_gen=#{inspect(missing_gen)}"
+        assert Enum.sort(missing) == missing_in_errs,
+               "expected required_fields errors for #{inspect(missing)}, got #{inspect(errs)} (_missing_gen=#{inspect(missing_gen)})"
       end
     end
 

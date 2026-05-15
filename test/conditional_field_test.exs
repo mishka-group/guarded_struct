@@ -419,7 +419,7 @@ defmodule GuardedStructTest.ConditionalFieldTest do
   end
 
   test "Conditional field as a map with validator" do
-    {:error, %{message: "Your input must be a map or list of maps", action: :bad_parameters}} =
+    {:error, [%{action: :bad_parameters}]} =
       assert __MODULE__.ConditionalProfileFieldStructs.builder([
                %{
                  nickname: "Mishka",
@@ -569,22 +569,7 @@ defmodule GuardedStructTest.ConditionalFieldTest do
                ]
              })
 
-    {:error,
-     [
-       %{
-         field: :auth2,
-         errors: [
-           %{
-             message: "Please submit required fields.",
-             fields: [:provider, :username],
-             action: :required_fields,
-             __hint__: "auth1"
-           },
-           %{message: "It is not string", field: :auth2, action: :validator, __hint__: "auth3"}
-         ],
-         action: :conditionals
-       }
-     ]} =
+    {:error, [%{field: :auth2, action: :conditionals, errors: errs}]} =
       assert ConditionalProfileFieldStructs.builder(%{
                nickname: "Mishka",
                list_sub_field_on_header: "Mishka",
@@ -595,6 +580,10 @@ defmodule GuardedStructTest.ConditionalFieldTest do
                  %{username: "Mishka", provider: "yahoo"}
                ]
              })
+
+    assert Enum.any?(errs, &match?(%{field: :provider, action: :required_fields, __hint__: "auth1"}, &1))
+    assert Enum.any?(errs, &match?(%{field: :username, action: :required_fields, __hint__: "auth1"}, &1))
+    assert Enum.any?(errs, &match?(%{field: :auth2, action: :validator, __hint__: "auth3"}, &1))
   end
 
   test "Conditional field as a map with external field" do
@@ -619,7 +608,7 @@ defmodule GuardedStructTest.ConditionalFieldTest do
          errors: [
            %{
              message: "Please submit required fields.",
-             fields: [:like],
+             field: :like,
              action: :required_fields,
              __hint__: "post_activity1"
            },
@@ -728,7 +717,7 @@ defmodule GuardedStructTest.ConditionalFieldTest do
          errors: [
            %{
              message: "Please submit required fields.",
-             fields: [:family],
+             field: :family,
              action: :required_fields
            },
            %{message: "It is not string", field: :author, action: :validator}
@@ -787,7 +776,7 @@ defmodule GuardedStructTest.ConditionalFieldTest do
          errors: [
            %{
              message: "Please submit required fields.",
-             fields: [:city],
+             field: :city,
              action: :required_fields,
              __hint__: "location1"
            },
@@ -1515,7 +1504,7 @@ defmodule GuardedStructTest.ConditionalFieldTest do
          errors: [
            %{
              message: "Please submit required fields.",
-             fields: [:like],
+             field: :like,
              action: :required_fields,
              __hint__: "activities1"
            },
@@ -1614,7 +1603,7 @@ defmodule GuardedStructTest.ConditionalFieldTest do
          errors: [
            %{
              message: "Please submit required fields.",
-             fields: [:like],
+             field: :like,
              action: :required_fields,
              __hint__: "activities1"
            },
@@ -1700,7 +1689,7 @@ defmodule GuardedStructTest.ConditionalFieldTest do
            },
            %{
              message: "Please submit required fields.",
-             fields: [:action],
+             field: :action,
              action: :required_fields,
              __hint__: "activities2"
            },
@@ -1800,7 +1789,7 @@ defmodule GuardedStructTest.ConditionalFieldTest do
          errors: [
            %{
              message: "Please submit required fields.",
-             fields: [:like],
+             field: :like,
              action: :required_fields,
              __hint__: "activities1"
            }
@@ -1969,7 +1958,7 @@ defmodule GuardedStructTest.ConditionalFieldTest do
          errors: [
            %{
              message: "Please submit required fields.",
-             fields: [:family],
+             field: :family,
              action: :required_fields
            },
            %{message: "It is not string", field: :author2, action: :validator},
@@ -2009,7 +1998,7 @@ defmodule GuardedStructTest.ConditionalFieldTest do
          errors: [
            %{
              message: "Please submit required fields.",
-             fields: [:family],
+             field: :family,
              action: :required_fields,
              __hint__: "author1"
            },
@@ -2055,7 +2044,7 @@ defmodule GuardedStructTest.ConditionalFieldTest do
            %{message: "It is not map", field: :author3, action: :validator, __hint__: "author1"},
            %{
              message: "Please submit required fields.",
-             fields: [:family],
+             field: :family,
              action: :required_fields,
              __hint__: "author2"
            },

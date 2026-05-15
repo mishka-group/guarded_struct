@@ -336,35 +336,29 @@ defmodule GuardedStructFixtures.RecordsTest do
   # 6. Missing required fields
   # ============================================================
   describe "missing required fields" do
-    test "missing :event_kind → :required_fields map (not a list)" do
-      # ERROR REASON: orchestration-layer required-fields error returns
-      # a MAP (not a list-of-maps). Same shape as forms_test confirms.
+    test "missing :event_kind → :required_fields error per missing field" do
       rec = Records.user(name: "X", age: 1)
 
-      assert Records.UserEvent.builder(%{user: rec}) ==
-               {:error,
-                %{
-                  message: "Please submit required fields.",
-                  fields: [:event_kind],
-                  action: :required_fields
-                }}
+      assert {:error, errs} = Records.UserEvent.builder(%{user: rec})
+
+      assert Enum.any?(errs, &match?(%{field: :event_kind, action: :required_fields}, &1))
     end
 
-    test "missing :user → :required_fields map" do
-      assert Records.UserEvent.builder(%{event_kind: :created}) ==
-               {:error,
-                %{
-                  message: "Please submit required fields.",
-                  fields: [:user],
-                  action: :required_fields
-                }}
+    test "missing :user → :required_fields error" do
+      assert {:error, errs} = Records.UserEvent.builder(%{event_kind: :created})
+      assert Enum.any?(errs, &match?(%{field: :user, action: :required_fields}, &1))
     end
 
-    test "missing BOTH enforce'd fields → both listed in one :required_fields error" do
-      assert {:error, %{action: :required_fields, fields: fields}} =
-               Records.UserEvent.builder(%{})
+    test "missing BOTH enforce'd fields → one error per missing field" do
+      assert {:error, errs} = Records.UserEvent.builder(%{})
 
-      assert Enum.sort(fields) == [:event_kind, :user]
+      missing =
+        errs
+        |> Enum.filter(&match?(%{action: :required_fields}, &1))
+        |> Enum.map(& &1.field)
+        |> Enum.sort()
+
+      assert missing == [:event_kind, :user]
     end
   end
 

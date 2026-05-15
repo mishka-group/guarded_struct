@@ -163,9 +163,8 @@ defmodule GuardedStruct.AshResource.Change do
       {:ok, transformed_attrs} ->
         force_change_attributes(changeset, transformed_attrs)
 
-      {:error, errs} ->
+      {:error, errs} when is_list(errs) ->
         errs
-        |> List.wrap()
         |> maybe_filter_required(changeset.action_type)
         |> Enum.reduce(changeset, fn err, cs -> add_error(cs, to_ash_error(err)) end)
     end
@@ -188,11 +187,8 @@ defmodule GuardedStruct.AshResource.Change do
           {:atomic, atomic_map}
         end
 
-      {:error, errs} ->
-        errs =
-          errs
-          |> List.wrap()
-          |> maybe_filter_required(changeset.action_type)
+      {:error, errs} when is_list(errs) ->
+        errs = maybe_filter_required(errs, changeset.action_type)
 
         if errs == [] do
           :ok
@@ -230,15 +226,6 @@ defmodule GuardedStruct.AshResource.Change do
         message: message,
         value: Map.get(err, :value),
         vars: vars_for(err)
-      ]
-    ])
-  end
-
-  defp to_ash_error(%{fields: fields, action: :required_fields} = _err) do
-    apply(Ash.Error.Changes.InvalidChanges, :exception, [
-      [
-        fields: fields,
-        message: "required by guardedstruct: #{Enum.join(fields, ", ")}"
       ]
     ])
   end

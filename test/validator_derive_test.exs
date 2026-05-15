@@ -381,17 +381,7 @@ defmodule GuardedStructTest.ValidatorDeriveTest do
   end
 
   test "Call sub_field struct with list attrs and validator, derive and main_validator" do
-    {:error,
-     [
-       %{
-         field: :profile,
-         errors: %{
-           message: "Please submit required fields.",
-           fields: [:github],
-           action: :required_fields
-         }
-       }
-     ]} =
+    {:error, [%{field: :profile, errors: inner_errs}]} =
       assert TestUserAuthStruct.builder(%{
                name: "mishka",
                auth_path: [
@@ -400,6 +390,9 @@ defmodule GuardedStructTest.ValidatorDeriveTest do
                ],
                profile: [%{nickname: "mishka"}, %{nickname: "mishka1"}]
              })
+
+    flat = inner_errs |> List.wrap()
+    assert Enum.any?(flat, &match?(%{field: :github, action: :required_fields}, &1))
 
     {:ok, _nested_struct} =
       assert TestUserAuthStruct.builder(%{

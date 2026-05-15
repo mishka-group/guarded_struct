@@ -193,12 +193,15 @@ defmodule GuardedStructTest.GlobalTest do
     [:name, :family, :age, :auth, :profile, :username] = assert TestNestedStruct.keys()
     [:username, :auth, :age] = assert TestNestedStruct.enforce_keys()
 
-    {:error,
-     %{
-       message: "Please submit required fields.",
-       fields: [:username, :auth, :age],
-       action: :required_fields
-     }} = assert TestNestedStruct.builder(%{})
+    {:error, errs} = assert TestNestedStruct.builder(%{})
+
+    missing =
+      errs
+      |> Enum.filter(&match?(%{action: :required_fields}, &1))
+      |> Enum.map(& &1.field)
+      |> Enum.sort()
+
+    assert missing == Enum.sort([:username, :auth, :age])
 
     {:ok,
      %__MODULE__.TestNestedStruct{
@@ -355,29 +358,19 @@ defmodule GuardedStructTest.GlobalTest do
       end
     end
 
-    {:error,
-     %{
-       message: "Unauthorized keys are present in the sent data.",
-       fields: [:test],
-       action: :authorized_fields
-     }} =
+    {:error, top_errs} =
       assert TestAuthorizeKeys.builder(%{name: "Shahryar", test: "test"})
 
-    {:error,
-     [
-       %{
-         field: :auth,
-         errors: %{
-           message: "Unauthorized keys are present in the sent data.",
-           fields: [:test],
-           action: :authorized_fields
-         }
-       }
-     ]} =
+    assert Enum.any?(top_errs, &match?(%{field: :test, action: :authorized_fields}, &1))
+
+    {:error, [%{field: :auth, errors: inner}]} =
       assert TestAuthorizeKeys.builder(%{
                name: "Shahryar",
                auth: %{action: "admin", test: "test"}
              })
+
+    flat = List.wrap(inner)
+    assert Enum.any?(flat, &match?(%{field: :test, action: :authorized_fields}, &1))
   end
 
   test "auto generate value nested and root map" do

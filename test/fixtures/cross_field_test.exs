@@ -105,12 +105,15 @@ defmodule GuardedStructFixtures.CrossFieldTest do
                  payload: %{body: %{x: 1}}
                })
 
-      errs = List.wrap(errs)
+      flat =
+        errs
+        |> List.wrap()
+        |> Enum.flat_map(fn
+          %{errors: inner} when is_list(inner) -> inner
+          other -> [other]
+        end)
 
-      assert Enum.any?(errs, fn err ->
-               err[:action] == :required_fields or
-                 (is_map(err[:errors]) and err[:errors][:action] == :required_fields)
-             end)
+      assert Enum.any?(flat, &match?(%{action: :required_fields}, &1))
     end
 
     test "missing :body (cascaded enforce) → required error" do

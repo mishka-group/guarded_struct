@@ -50,9 +50,9 @@ defmodule GuardedStructTest.PatternMapTest do
     end
 
     test "rejects non-map input" do
-      {:error, %{action: :bad_parameters}} = ShardsMap.builder("not a map")
-      {:error, %{action: :bad_parameters}} = ShardsMap.builder([1, 2, 3])
-      {:error, %{action: :bad_parameters}} = ShardsMap.builder(nil)
+      assert {:error, [%{action: :bad_parameters}]} = ShardsMap.builder("not a map")
+      assert {:error, [%{action: :bad_parameters}]} = ShardsMap.builder([1, 2, 3])
+      assert {:error, [%{action: :bad_parameters}]} = ShardsMap.builder(nil)
     end
 
     test "per-value validation runs through the target struct" do
