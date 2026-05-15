@@ -67,9 +67,7 @@ defmodule GuardedStruct.Validate do
   @spec field(module(), atom(), any(), keyword()) :: {:ok, any()} | {:error, [error]}
   def field(module, field_name, value, opts \\ [])
       when is_atom(module) and is_atom(field_name) do
-    fields = module.__fields__()
-
-    case Enum.find(fields, &(&1.name == field_name)) do
+    case module.__field_meta__(field_name) do
       nil ->
         {:error,
          [
@@ -232,21 +230,6 @@ defmodule GuardedStruct.Validate do
     case Derive.derive({:ok, %{name => value}, [input]}) do
       {:ok, %{^name => validated}} -> {:ok, validated}
       {:error, errs} -> {:error, errs}
-    end
-  end
-
-  defp run_pre_derive(%{derive: str, name: name}, value) when is_binary(str) do
-    ops = str |> Parser.parser() |> OpEvaluator.preevaluate()
-
-    if is_nil(ops) do
-      {:ok, value}
-    else
-      input = %{field: name, derive: str, derive_ops: ops}
-
-      case Derive.derive({:ok, %{name => value}, [input]}) do
-        {:ok, %{^name => validated}} -> {:ok, validated}
-        {:error, errs} -> {:error, errs}
-      end
     end
   end
 

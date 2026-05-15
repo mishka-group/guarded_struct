@@ -63,6 +63,8 @@ defmodule GuardedStruct.Transformers.Codegen do
     {keys, defstruct_kw, types, enforce_keys, fields_runtime} =
       build_struct_pieces(entities, block_enforce)
 
+    field_meta_map = Map.new(fields_runtime, fn m -> {m.name, m} end)
+
     json? = Map.get(options, :json, false) == true
 
     # `json: true` opts into JSON encoding. Precedence:
@@ -92,6 +94,12 @@ defmodule GuardedStruct.Transformers.Codegen do
       |> Enum.map(& &1.name)
       |> Enum.uniq()
 
+    virtual_keys =
+      fields_runtime |> Enum.filter(&(&1.kind == :virtual_field)) |> Enum.map(& &1.name)
+
+    dynamic_keys =
+      fields_runtime |> Enum.filter(&(&1.kind == :dynamic_field)) |> Enum.map(& &1.name)
+
     info_map =
       Macro.escape(%{
         path: path,
@@ -99,6 +107,8 @@ defmodule GuardedStruct.Transformers.Codegen do
         keys: keys,
         enforce_keys: enforce_keys,
         conditional_keys: conditional_keys,
+        virtual_keys: virtual_keys,
+        dynamic_keys: dynamic_keys,
         options: options
       })
 
@@ -151,8 +161,11 @@ defmodule GuardedStruct.Transformers.Codegen do
 
       def __fields__, do: unquote(Macro.escape(fields_runtime))
 
+      def __field_meta__(name), do: Map.get(unquote(Macro.escape(field_meta_map)), name)
+
       def __guarded_information__, do: __information__()
       def __guarded_fields__, do: __fields__()
+      def __guarded_field_meta__(name), do: __field_meta__(name)
 
       @__guarded_has_validator__ Module.defines?(__MODULE__, {:validator, 2}, :def)
       def __guarded_has_validator__, do: @__guarded_has_validator__
@@ -243,8 +256,11 @@ defmodule GuardedStruct.Transformers.Codegen do
 
       def __fields__, do: unquote(Macro.escape(fields_runtime))
 
+      def __field_meta__(_), do: nil
+
       def __guarded_information__, do: __information__()
       def __guarded_fields__, do: __fields__()
+      def __guarded_field_meta__(_), do: nil
 
       @__guarded_has_validator__ Module.defines?(__MODULE__, {:validator, 2}, :def)
       def __guarded_has_validator__, do: @__guarded_has_validator__

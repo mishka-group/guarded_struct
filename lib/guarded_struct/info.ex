@@ -69,13 +69,11 @@ defmodule GuardedStruct.Info do
   def fields_meta(module), do: module.__fields__()
 
   @doc "Return the field metadata for a single name, or `nil` if absent."
-  def field(module, name) when is_atom(name) do
-    Enum.find(module.__fields__(), &(&1.name == name))
-  end
+  def field(module, name) when is_atom(name), do: module.__field_meta__(name)
 
   @doc "True if the field exists on this module (or any sub_field cascade)."
   def field?(module, name) when is_atom(name) do
-    name in module.keys() or Enum.any?(module.__fields__(), &(&1.name == name))
+    name in module.keys() or not is_nil(module.__field_meta__(name))
   end
 
   # ────────────────────────────────────────────────────────────────────────

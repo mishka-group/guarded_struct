@@ -44,6 +44,12 @@ defmodule GuardedStruct.Transformers.GenerateAshValidator do
       |> Enum.map(& &1.name)
       |> Enum.uniq()
 
+    virtual_keys =
+      fields_runtime |> Enum.filter(&(&1.kind == :virtual_field)) |> Enum.map(& &1.name)
+
+    dynamic_keys =
+      fields_runtime |> Enum.filter(&(&1.kind == :dynamic_field)) |> Enum.map(& &1.name)
+
     info_map =
       Macro.escape(%{
         path: [],
@@ -51,6 +57,8 @@ defmodule GuardedStruct.Transformers.GenerateAshValidator do
         keys: keys,
         enforce_keys: enforce_keys,
         conditional_keys: conditional_keys,
+        virtual_keys: virtual_keys,
+        dynamic_keys: dynamic_keys,
         options: section_options
       })
 
@@ -58,6 +66,11 @@ defmodule GuardedStruct.Transformers.GenerateAshValidator do
       fields_runtime
       |> Enum.map(& &1.name)
       |> MapSet.new()
+      |> Macro.escape()
+
+    field_meta_map =
+      fields_runtime
+      |> Map.new(fn m -> {m.name, m} end)
       |> Macro.escape()
 
     body =
@@ -90,6 +103,14 @@ defmodule GuardedStruct.Transformers.GenerateAshValidator do
         belongs to the pipeline.
         """
         def __guarded_field_name_set__, do: unquote(field_name_set)
+
+        @doc """
+        O(1) lookup of a field's compile-time metadata by name. Returns
+        `nil` for unknown fields.
+        """
+        def __guarded_field_meta__(name), do: Map.get(unquote(field_meta_map), name)
+
+        def __field_meta__(name), do: __guarded_field_meta__(name)
 
         @__guarded_has_validator__ Module.defines?(__MODULE__, {:validator, 2}, :def)
         def __guarded_has_validator__, do: @__guarded_has_validator__

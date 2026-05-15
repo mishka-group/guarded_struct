@@ -47,15 +47,13 @@ defmodule GuardedStruct.AshResource.Info do
   @doc """
   Return metadata for a single field name, or `nil`.
   """
-  def field(module, name) when is_atom(name) do
-    Enum.find(module.__guarded_fields__(), &(&1.name == name))
-  end
+  def field(module, name) when is_atom(name), do: module.__guarded_field_meta__(name)
 
   @doc """
   True if a guardedstruct-declared field exists with this name.
   """
   def field?(module, name) when is_atom(name) do
-    Enum.any?(module.__guarded_fields__(), &(&1.name == name))
+    not is_nil(module.__guarded_field_meta__(name))
   end
 
   @doc """

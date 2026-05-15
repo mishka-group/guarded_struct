@@ -53,6 +53,8 @@ defmodule GuardedStruct.Derive.Extension do
   use Spark.Dsl,
     default_extensions: [extensions: [GuardedStruct.Derive.Extension.Dsl]]
 
+  @cache_key {__MODULE__, :registered_cache}
+
   @doc false
   def __dispatch_validator__(true, input, _field, _name), do: input
 
@@ -65,12 +67,39 @@ defmodule GuardedStruct.Derive.Extension do
   def __dispatch_validator__(other, _input, _field, _name), do: other
 
   @doc """
-  Returns the list of registered extension modules from app config.
-  Loads each module and filters to only those that `use` this extension.
+  Resolved list of registered extension modules from `:guarded_struct,
+  :derive_extensions` application config.
+
+  Cached in `:persistent_term` and invalidated automatically when the
+  underlying config changes (e.g. between test cases that call
+  `Application.put_env/3`).
   """
-  def registered_extensions, do: load_extensions(global_extensions())
+  def registered_extensions do
+    raw = global_extensions()
+
+    case :persistent_term.get(@cache_key, :__miss__) do
+      {^raw, resolved} -> resolved
+      _ -> recompute_cache(raw)
+    end
+  end
+
+  @doc """
+  Clear the cached extension list. Call from test setup if you mutate
+  `:guarded_struct, :derive_extensions` and need the change visible
+  before the next `registered_extensions/0` call.
+  """
+  def clear_cache do
+    :persistent_term.erase(@cache_key)
+    :ok
+  end
 
   defp global_extensions, do: Application.get_env(:guarded_struct, :derive_extensions, [])
+
+  defp recompute_cache(raw) do
+    resolved = load_extensions(raw)
+    :persistent_term.put(@cache_key, {raw, resolved})
+    resolved
+  end
 
   defp load_extensions(list) do
     list

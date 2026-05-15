@@ -518,7 +518,7 @@ flowchart TD
 
 | Area | Status |
 |---|---|
-| `0.1.0-beta` rewrite on Spark | 🟡 Beta — feature-complete, API stable |
+| `0.1.0` rewrite on Spark | 🟢 Shipped |
 | Backward compatibility with `0.0.x` | 🟢 Drop-in — every 0.0.x API preserved |
 | Nested `conditional_field` (closes #7, #8, #25) | 🟢 Shipped |
 | Pattern-keyed maps (closes #11) | 🟢 Shipped |
@@ -528,7 +528,7 @@ flowchart TD
 | Custom validators via Spark DSL | 🟢 Shipped |
 | Ash extension + auto-wire + atomic mode | 🟢 Shipped |
 | Test coverage | 🟢 743+ tests, real Ash integration suite |
-| `1.0.0` release | 🔵 Pending community feedback on `0.1.0-beta` |
+| `1.0.0` release | 🟢 Shipped |
 
 Breaking changes will be flagged in the [CHANGELOG](./CHANGELOG.md).
 

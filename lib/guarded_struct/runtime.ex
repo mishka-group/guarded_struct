@@ -146,10 +146,7 @@ defmodule GuardedStruct.Runtime do
   end
 
   def build_pattern_map(module, attrs, error?) do
-    fields_meta = module.__fields__()
-
-    pattern_fields =
-      Enum.filter(fields_meta, &(Map.get(&1, :kind) == :pattern_field))
+    pattern_fields = module.__fields__()
 
     with {:ok, _} <- run_pattern_whole_map_derive(attrs, pattern_fields),
          {:ok, validated} <- process_pattern_entries(attrs, pattern_fields, module) do
@@ -273,14 +270,7 @@ defmodule GuardedStruct.Runtime do
 
     keys = info.keys
     enforce_keys = info.enforce_keys
-
-    # Names of `dynamic_field` entries — their inner map values are left
-    # UNTOUCHED during atom-conversion. See the "Atom-attack safety"
-    # section of the `GuardedStruct` module `@moduledoc` for the rationale.
-    dynamic_field_names =
-      fields_meta
-      |> Enum.filter(&(&1[:kind] == :dynamic_field))
-      |> Enum.map(& &1.name)
+    dynamic_field_names = Map.get(info, :dynamic_keys, [])
 
     full_attrs_atomized = Parser.convert_to_atom_map(full_attrs, dynamic_field_names)
 
@@ -303,10 +293,7 @@ defmodule GuardedStruct.Runtime do
 
       all_errors = sub_errors ++ validator_errors
 
-      virtual_names =
-        fields_meta
-        |> Enum.filter(&(&1[:kind] == :virtual_field))
-        |> Enum.map(& &1.name)
+      virtual_names = Map.get(info, :virtual_keys, [])
 
       # The Ash-extension entry point (`validate/3`) sets `:guarded_as_map?`
       # on the process dict, forcing every nested build to return a map
@@ -331,7 +318,7 @@ defmodule GuardedStruct.Runtime do
             # Virtuals are dropped by `wrap.()`, so this is the one chance
             # to validate them. Defaults aren't relevant here (virtuals
             # don't get default-substituted through struct/2).
-            virtual_meta = Enum.filter(fields_meta, &(&1[:kind] == :virtual_field))
+            virtual_meta = Enum.map(virtual_names, &module.__field_meta__/1)
 
             virtual_errs =
               case run_derives(merged, virtual_meta) do
@@ -706,25 +693,17 @@ defmodule GuardedStruct.Runtime do
     end
   end
 
-  defp pre_derive(%{derive: nil}, value), do: {:ok, value}
+  defp pre_derive(%{__derive_ops__: ops, name: name}, value)
+       when not is_nil(ops) do
+    input = %{field: name, derive_ops: ops}
 
-  defp pre_derive(%{name: name} = meta, value) do
-    ops = Map.get(meta, :__derive_ops__)
-    str = Map.get(meta, :derive)
-
-    cond do
-      is_nil(ops) and is_nil(str) ->
-        {:ok, value}
-
-      true ->
-        input = %{field: name, derive: str, derive_ops: ops}
-
-        case Derive.derive({:ok, %{name => value}, [input]}) do
-          {:ok, %{^name => sanitized}} -> {:ok, sanitized}
-          {:error, errs} -> {:error, errs}
-        end
+    case Derive.derive({:ok, %{name => value}, [input]}) do
+      {:ok, %{^name => sanitized}} -> {:ok, sanitized}
+      {:error, errs} -> {:error, errs}
     end
   end
+
+  defp pre_derive(_meta, value), do: {:ok, value}
 
   defp dispatch(meta, value, parent_module, ok_acc, err_acc, full_attrs, parent_path) do
     cond do
@@ -1113,9 +1092,9 @@ defmodule GuardedStruct.Runtime do
     end
   end
 
-  defp run_per_field_validators_collect(attrs, fields_meta, module) do
+  defp run_per_field_validators_collect(attrs, _fields_meta, module) do
     Enum.reduce(attrs, {%{}, []}, fn {key, value}, {ok_acc, err_acc} ->
-      meta = Enum.find(fields_meta, fn f -> f.name == key end)
+      meta = module.__field_meta__(key)
 
       cond do
         embedded?(meta) ->
@@ -1218,13 +1197,8 @@ defmodule GuardedStruct.Runtime do
 
   @doc false
   def all_keys(module) do
-    info = module.__information__()
-    fields_meta = module.__fields__()
-
-    Enum.map(info.keys, fn k ->
-      meta = Enum.find(fields_meta, fn f -> f.name == k end)
-
-      case meta do
+    Enum.map(module.__information__().keys, fn k ->
+      case module.__field_meta__(k) do
         %{kind: :sub_field} -> %{k => all_keys(Module.concat(module, atom_to_module(k)))}
         _ -> k
       end
@@ -1233,19 +1207,10 @@ defmodule GuardedStruct.Runtime do
 
   @doc false
   def all_enforce_keys(module) do
-    info = module.__information__()
-    fields_meta = module.__fields__()
-
-    Enum.flat_map(info.enforce_keys, fn k ->
-      meta = Enum.find(fields_meta, fn f -> f.name == k end)
-
-      case meta do
-        %{kind: :sub_field} ->
-          submodule = Module.concat(module, atom_to_module(k))
-          [%{k => all_keys(submodule)}]
-
-        _ ->
-          [k]
+    Enum.flat_map(module.__information__().enforce_keys, fn k ->
+      case module.__field_meta__(k) do
+        %{kind: :sub_field} -> [%{k => all_keys(Module.concat(module, atom_to_module(k)))}]
+        _ -> [k]
       end
     end)
   end

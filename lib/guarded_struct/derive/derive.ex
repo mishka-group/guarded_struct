@@ -1,12 +1,11 @@
 defmodule GuardedStruct.Derive do
   @moduledoc false
 
-  alias GuardedStruct.Derive.{Parser, SanitizerDerive, ValidationDerive}
+  alias GuardedStruct.Derive.{SanitizerDerive, ValidationDerive}
 
   @type derive_input :: %{
           required(:field) => atom(),
-          optional(:derive) => String.t() | nil,
-          optional(:derive_ops) => map() | nil,
+          required(:derive_ops) => map(),
           optional(:hint) => any()
         }
 
@@ -19,16 +18,10 @@ defmodule GuardedStruct.Derive do
   def derive({:ok, data, derive_inputs}) do
     reduced =
       Enum.reduce(derive_inputs, %{}, fn input, acc ->
-        ops =
-          case Map.get(input, :derive_ops, :__missing__) do
-            :__missing__ -> Parser.parser(input.derive)
-            v -> v
-          end
-
         field_value = Map.get(data, input.field)
         hint = Map.get(input, :hint) || []
 
-        update(field_value, ops, hint, input, acc)
+        update(field_value, input.derive_ops, hint, input, acc)
       end)
 
     case collect_errors(reduced) do
