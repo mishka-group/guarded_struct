@@ -48,8 +48,8 @@ defmodule GuardedStructFixtures.DynamicTest do
       # Keys are still STRINGS — atomized versions DON'T exist:
       assert Map.has_key?(doc.metadata, key1)
       assert Map.has_key?(doc.metadata, key2)
-      refute_raise(fn -> String.to_existing_atom(key1) end)
-      refute_raise(fn -> String.to_existing_atom(key2) end)
+      assert_raise ArgumentError, fn -> String.to_existing_atom(key1) end
+      assert_raise ArgumentError, fn -> String.to_existing_atom(key2) end
     end
 
     test "declared FIELD-NAME keys (as strings) ARE still converted to atoms" do
@@ -78,14 +78,6 @@ defmodule GuardedStructFixtures.DynamicTest do
       refute Map.has_key?(doc.metadata, :id)
     end
 
-    defp refute_raise(fun) do
-      try do
-        fun.()
-        flunk("expected #{inspect(fun)} to raise but it didn't")
-      rescue
-        ArgumentError -> :ok
-      end
-    end
   end
 
   describe "dynamic_field — free-form map" do

@@ -52,10 +52,21 @@ defmodule GuardedStructTest.NestedConditionalFieldTest do
     {:ok, %TripleNest{choice: "outer-match"}} = TripleNest.builder(%{choice: "outer-match"})
   end
 
-  test "three-deep conditional: deeply-nested integer match" do
-    {:ok, %TripleNest{choice: result}} = TripleNest.builder(%{choice: %{}})
-    _ = result
-  rescue
-    _ -> :ok
+  test "three-deep conditional: unmatched value returns a 3-level aggregated error" do
+    assert {:error, [%{field: :choice, action: :conditionals, errors: level1_errs}]} =
+             TripleNest.builder(%{choice: %{}})
+
+    assert Enum.any?(level1_errs, &match?(%{__hint__: "level1_string"}, &1))
+
+    assert %{action: :conditionals, errors: level2_errs} =
+             Enum.find(level1_errs, &match?(%{action: :conditionals}, &1))
+
+    assert Enum.any?(level2_errs, &match?(%{__hint__: "level2_string"}, &1))
+
+    assert %{action: :conditionals, errors: level3_errs} =
+             Enum.find(level2_errs, &match?(%{action: :conditionals}, &1))
+
+    assert Enum.any?(level3_errs, &match?(%{__hint__: "level3_string"}, &1))
+    assert Enum.any?(level3_errs, &match?(%{__hint__: "level3_int"}, &1))
   end
 end

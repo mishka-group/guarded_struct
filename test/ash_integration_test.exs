@@ -443,18 +443,8 @@ defmodule GuardedStructTest.AshIntegrationTest do
       end
       """
 
-      output =
-        capture_io(:stderr, fn ->
-          try do
-            Code.compile_string(src)
-          rescue
-            _ -> :ok
-          catch
-            _, _ -> :ok
-          end
-        end)
+      output = capture_io(:stderr, fn -> Code.compile_string(src) end)
 
-      # No "cannot be done atomically" complaint anymore.
       refute output =~ "cannot be done atomically"
     end
   end
