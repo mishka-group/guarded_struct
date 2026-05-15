@@ -1,5 +1,4 @@
 spark_locals_without_parens = [
-  atomic: 1,
   authorized_fields: 1,
   auto: 1,
   auto_wire: 1,

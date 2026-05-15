@@ -359,25 +359,55 @@ defmodule GuardedStructTest.AshIntegrationTest do
     end
   end
 
-  describe "atomic mode — Change has no atomic/3 callback (Ash compile-time detection)" do
-    test "Change.atomic?/0 returns false" do
-      # `Ash.Resource.Verifiers.VerifyActionsAtomic` checks `module.atomic?()`
-      # at compile time. With `atomic?: false` AND no `atomic/3` callback,
-      # any action declaring `require_atomic?: true` with this Change in
-      # its changes list raises `Spark.Error.DslError` at compile time.
-      assert GuardedStruct.AshResource.Change.atomic?() == false
+  describe "atomic mode — Zach's pattern (atomic/3 runs pipeline in Elixir, force_change result back)" do
+    test "Change.atomic?/0 returns true — Ash sees us as atomic-compatible" do
+      assert GuardedStruct.AshResource.Change.atomic?() == true
     end
 
-    test "Change does not export atomic/3 — Ash gets the compile-time signal" do
-      refute function_exported?(GuardedStruct.AshResource.Change, :atomic, 3)
+    test "Change exports atomic/3" do
+      assert function_exported?(GuardedStruct.AshResource.Change, :atomic, 3)
     end
 
-    test "an action with require_atomic? true + our Change raises at compile time" do
+    test "atomic/3 with a plain attribute value: returns {:atomic, sanitized_map}" do
+      changeset =
+        Ash.Changeset.for_create(UserAuto, :create, %{email: "  Alice@X.IO  "})
+
+      assert {:atomic, atomic_map} =
+               GuardedStruct.AshResource.Change.atomic(changeset, [], %{})
+
+      assert atomic_map.email == "alice@x.io"
+    end
+
+    test "atomic/3 with an Ash.Expr in changeset.atomics: bails with :not_atomic" do
+      require Ash.Expr
+
+      changeset =
+        UserAuto
+        |> Ash.Changeset.for_create(:create, %{email: "x@y.com"})
+        |> Map.put(:attributes, %{})
+        |> Map.put(:atomics, email: Ash.Expr.expr(fragment("lower(?)", "X@Y.COM")))
+
+      result = GuardedStruct.AshResource.Change.atomic(changeset, [], %{})
+      assert {:not_atomic, reason} = result
+      assert reason =~ "Ash.Expr"
+    end
+
+    test "atomic/3 with no attributes being changed: passes through" do
+      changeset =
+        UserAuto
+        |> Ash.Changeset.for_create(:create, %{email: "ok@x.com"})
+        |> Map.put(:attributes, %{})
+        |> Map.put(:atomics, [])
+
+      assert :ok = GuardedStruct.AshResource.Change.atomic(changeset, [], %{})
+    end
+
+    test "an action with require_atomic? true + our Change now compiles cleanly" do
       import ExUnit.CaptureIO
       suffix = :erlang.unique_integer([:positive])
 
       src = """
-      defmodule TestRequireAtomicFail#{suffix} do
+      defmodule TestAtomicWorks#{suffix} do
         use Ash.Resource,
           domain: GuardedStructTest.Support.TestDomain,
           data_layer: Ash.DataLayer.Ets,
@@ -388,12 +418,12 @@ defmodule GuardedStructTest.AshIntegrationTest do
         end
 
         guardedstruct do
-          field :email, :string, derives: "validate(email_r)"
+          field :email, :string, derives: "sanitize(trim, downcase) validate(email_r)"
         end
 
         attributes do
           uuid_primary_key :id
-          attribute :email, :string, public?: true
+          attribute :email, :string, allow_nil?: false, public?: true
         end
 
         actions do
@@ -423,11 +453,8 @@ defmodule GuardedStructTest.AshIntegrationTest do
           end
         end)
 
-      # Ash's `VerifyActionsAtomic` runs at compile time, names the change
-      # that blocks atomic, and tells the user precisely how to fix it.
-      assert output =~ "cannot be done atomically"
-      assert output =~ "GuardedStruct.AshResource.Change"
-      assert output =~ "require_atomic? false"
+      # No "cannot be done atomically" complaint anymore.
+      refute output =~ "cannot be done atomically"
     end
   end
 
@@ -455,10 +482,9 @@ defmodule GuardedStructTest.AshIntegrationTest do
     end
   end
 
-  describe "atomic: true — real Ash resource end-to-end" do
-    test "resource compiles cleanly (VerifyAtomic accepts all-safe ops)" do
+  describe "real Ash resource — validation surface end-to-end" do
+    test "resource compiles cleanly" do
       assert Code.ensure_loaded?(AtomicEligibleUser)
-      assert GuardedStruct.AshResource.Info.guardedstruct_atomic!(AtomicEligibleUser) == true
     end
 
     test "sanitize runs end-to-end through create" do
@@ -605,18 +631,13 @@ defmodule GuardedStructTest.AshIntegrationTest do
       assert attrs.username == "bob"
     end
 
-    test "Info.describe/1 reports atomic: true in section options" do
-      d = GuardedStruct.AshResource.Info.guardedstruct_atomic!(AtomicEligibleUser)
-      assert d == true
-    end
-
-    test "auto-wire still injected on top of atomic: true" do
+    test "auto-wire injected the GuardedStruct change" do
       assert Enum.any?(Ash.Resource.Info.changes(AtomicEligibleUser), fn c ->
                c.change == {GuardedStruct.AshResource.Change, []}
              end)
     end
 
-    test "update action sanitizes the new value with all-safe ops" do
+    test "update action sanitizes the new value" do
       {:ok, user} =
         AtomicEligibleUser
         |> Ash.Changeset.for_create(:create, valid_atomic_input())
@@ -644,212 +665,5 @@ defmodule GuardedStructTest.AshIntegrationTest do
       },
       Map.new(overrides)
     )
-  end
-
-  describe "atomic: true — compile-time rejection on real Ash resources" do
-    import ExUnit.CaptureIO
-
-    defp compile_atomic_fixture(body) do
-      suffix = :erlang.unique_integer([:positive])
-
-      src = """
-      defmodule TestAtomicFixture#{suffix} do
-        use Ash.Resource,
-          domain: GuardedStructTest.Support.TestDomain,
-          data_layer: Ash.DataLayer.Ets,
-          extensions: [GuardedStruct.AshResource]
-
-        ets do
-          private? true
-        end
-
-        guardedstruct do
-          atomic true
-          #{body}
-        end
-
-        actions do
-          defaults [:read, :destroy]
-          create :create, accept: [:value]
-        end
-
-        attributes do
-          uuid_primary_key :id
-          attribute :value, :string, public?: true
-        end
-      end
-      """
-
-      capture_io(:stderr, fn ->
-        try do
-          Code.compile_string(src)
-        rescue
-          _ -> :ok
-        catch
-          _, _ -> :ok
-        end
-      end)
-    end
-
-    test "validate(email) DNS validator is rejected at compile time" do
-      output = compile_atomic_fixture(~s{field :value, :string, derives: "validate(email)"})
-
-      assert output =~ "Spark.Error.DslError"
-      assert output =~ "atomic: true"
-      assert output =~ ":value"
-      assert output =~ "DNS"
-      assert output =~ "validate(email_r)"
-    end
-
-    test "validate(url) is rejected" do
-      output = compile_atomic_fixture(~s{field :value, :string, derives: "validate(url)"})
-
-      assert output =~ "Spark.Error.DslError"
-      assert output =~ ":value"
-      assert output =~ "DNS"
-      assert output =~ "validate(url_r)"
-    end
-
-    test "per-field validator: MFA is rejected" do
-      output =
-        compile_atomic_fixture("""
-        field :value, :string,
-          validator: {ConditionalFieldValidatorTestValidators, :is_string_data}
-        """)
-
-      assert output =~ "Spark.Error.DslError"
-      assert output =~ ":value"
-      assert output =~ "validator:"
-      assert output =~ "arbitrary Elixir"
-    end
-
-    test "auto: MFA is rejected" do
-      output =
-        compile_atomic_fixture("""
-        field :value, :string,
-          auto: {GuardedStructTest.Support.TestDomain, :no_such_fn}
-        """)
-
-      assert output =~ "Spark.Error.DslError"
-      assert output =~ ":value"
-      assert output =~ "auto:"
-      assert output =~ "arbitrary Elixir"
-    end
-
-    test "cross-field on: dependency is rejected" do
-      output =
-        compile_atomic_fixture("""
-        field :value, :string,
-          derives: "validate(string)",
-          on: "root::other_field"
-        """)
-
-      assert output =~ "Spark.Error.DslError"
-      assert output =~ ":value"
-      assert output =~ "on:"
-    end
-
-    test "typo / unknown op is rejected with a typo-aware diagnostic" do
-      output =
-        compile_atomic_fixture(~s{field :value, :string, derives: "validate(emaill_r)"})
-
-      assert output =~ "Spark.Error.DslError"
-      assert output =~ "NOT a known built-in op"
-      assert output =~ "typo"
-    end
-
-    test "known built-in (but not atomic-safe) gets a different message than typos" do
-      # `validate(custom)` is in Derive.Registry but not in our atomic-safe
-      # list — message should say "built-in op but not in the atomic-safe
-      # registry", NOT "typo".
-      output =
-        compile_atomic_fixture(~s{field :value, :string, derives: "validate(custom)"})
-
-      assert output =~ "Spark.Error.DslError"
-      assert output =~ "is a built-in op but not in the atomic-safe registry"
-      refute output =~ "typo"
-    end
-
-    test "multiple blockers in one resource are aggregated in one error" do
-      output =
-        compile_atomic_fixture("""
-        field :a, :string, derives: "validate(email)"
-        field :b, :string, derives: "validate(url)"
-        field :c, :string, derives: "validate(totally_unknown)"
-        """)
-
-      assert output =~ "Spark.Error.DslError"
-      assert output =~ ":a"
-      assert output =~ ":b"
-      assert output =~ ":c"
-    end
-
-    test "unsafe op inside a sub_field is caught" do
-      output =
-        compile_atomic_fixture("""
-        sub_field :nested, :map do
-          field :value, :string, derives: "validate(email)"
-        end
-        """)
-
-      assert output =~ "Spark.Error.DslError"
-      assert output =~ ":nested"
-      assert output =~ ":value"
-    end
-
-    test "error message points users to AtomicClassifier" do
-      output = compile_atomic_fixture(~s{field :value, :string, derives: "validate(email)"})
-
-      assert output =~ "AtomicClassifier"
-    end
-
-    test "error message names the resource module" do
-      output = compile_atomic_fixture(~s{field :value, :string, derives: "validate(email)"})
-
-      assert output =~ "TestAtomicFixture"
-    end
-
-    test "atomic: false (default) compiles the SAME bad ops cleanly" do
-      suffix = :erlang.unique_integer([:positive])
-
-      src = """
-      defmodule TestAtomicOffFixture#{suffix} do
-        use Ash.Resource,
-          domain: GuardedStructTest.Support.TestDomain,
-          data_layer: Ash.DataLayer.Ets,
-          extensions: [GuardedStruct.AshResource]
-
-        ets do
-          private? true
-        end
-
-        guardedstruct do
-          field :email, :string, derives: "validate(email)"
-        end
-
-        actions do
-          defaults [:read, :destroy]
-          create :create, accept: [:email]
-        end
-
-        changes do
-          change GuardedStruct.AshResource.Change
-        end
-
-        attributes do
-          uuid_primary_key :id
-          attribute :email, :string, public?: true
-        end
-      end
-      """
-
-      output =
-        capture_io(:stderr, fn ->
-          Code.compile_string(src)
-        end)
-
-      refute output =~ "atomic: true"
-      refute output =~ "Spark.Error.DslError"
-    end
   end
 end

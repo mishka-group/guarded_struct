@@ -374,9 +374,9 @@ MyApp.User.__guarded_change__(%{email: " ALICE@X.io "})
 
 The function is called `__guarded_change__` (not `__guarded_validate__`) because it can both validate AND transform values — sanitize ops trim/downcase/slugify, derives cast types.
 
-### Update actions — `require_atomic? false`
+### Update actions — atomic-safe by default
 
-`GuardedStruct.AshResource.Change` runs an imperative Elixir pipeline (sanitize → validate → derive → main_validator). It cannot be expressed as atomic SQL, so on UPDATE actions you must set `require_atomic? false`:
+`GuardedStruct.AshResource.Change` implements `atomic/3`, so update / destroy actions stay atomic without setting `require_atomic? false`:
 
 ```elixir
 actions do
@@ -385,12 +385,19 @@ actions do
 
   update :update do
     accept [:email, :nickname]
-    require_atomic? false   # ← required for guardedstruct on updates
   end
 end
 ```
 
-Internally our `Change.atomic/3` callback returns `{:not_atomic, reason}`, but Ash's update planner still requires the action-level flag when `require_atomic?` is the default-`true` setting.
+`Change.atomic/3` runs the pipeline (sanitize → validate → derive → `auto:` → main_validator) in Elixir on the plain literal values Ash places in `changeset.attributes` + `changeset.atomics`, then returns `{:atomic, sanitized_map}`. Ash substitutes those values into the single-statement UPDATE — no extra round-trip, no imperative fallback.
+
+The only case that bails to `{:not_atomic, reason}` is when the caller passes an `Ash.Expr` via `Ash.Changeset.atomic_update/3`:
+
+```elixir
+Ash.Changeset.atomic_update(record, :counter, expr(counter + 1))
+```
+
+We can't sanitize a value we won't see until the SQL evaluates, so Ash falls back to the imperative `change/3` path. This is rare in practice — 99% of changesets carry plain values.
 
 ### Bulk operations
 
@@ -405,20 +412,13 @@ result = Ash.bulk_create(
 )
 # result.records is a list of %MyApp.User{email: "alice@x.io", ...} structs
 
-# Bulk update — use stream strategy because the pipeline is imperative
+# Bulk update — atomic strategy works via Change.atomic/3
 result = Ash.bulk_update(MyApp.User, :update, %{email: "  New@X.com  "},
-  return_records?: true,
-  strategy: :stream
+  return_records?: true
 )
 ```
 
-The pipeline still runs per row (no SQL vectorization is possible for arbitrary Elixir sanitize/validate code), but Ash's batch dispatch is fully supported.
-
-### Why atomic mode is `not_atomic`
-
-Atomic mode would translate the change to a single SQL `UPDATE ... SET email = lower(trim(?)) WHERE ...` statement. Our pipeline runs arbitrary Elixir — `sanitize(trim, downcase, slugify, strip_tags)`, `auto:` MFAs, `main_validator/1` — that can't be safely translated to SQL/`Ash.Expr` in the general case.
-
-Pure validate-only derives (no transformation) could be made atomic. That's the planned `GuardedStruct.AshResource.Validation` companion module — separate from this `Change`, designed for the atomic-friendly path.
+Both `strategy: :atomic` (default) and `strategy: :stream` produce identical sanitized results.
 
 ### Auto-map cascade — Ash-friendly nested payloads
 

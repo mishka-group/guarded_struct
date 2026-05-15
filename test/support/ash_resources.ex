@@ -23,7 +23,6 @@ defmodule GuardedStructTest.AshResources.Manual do
 
     update :update do
       accept [:email, :nickname]
-      require_atomic? false
     end
   end
 
@@ -63,7 +62,6 @@ defmodule GuardedStructTest.AshResources.AutoWired do
 
     update :update do
       accept [:email]
-      require_atomic? false
     end
   end
 
@@ -125,7 +123,6 @@ defmodule GuardedStructTest.AshResources.UserManual do
 
     update :update do
       accept [:email, :nickname]
-      require_atomic? false
     end
   end
 
@@ -167,7 +164,6 @@ defmodule GuardedStructTest.AshResources.UserAuto do
 
     update :update do
       accept [:email, :nickname]
-      require_atomic? false
     end
   end
 
@@ -295,11 +291,10 @@ end
 
 defmodule GuardedStructTest.AshResources.AtomicEligibleUser do
   @moduledoc """
-  Real-world Ash resource that opts into atomic mode (`atomic: true`)
-  and exercises every atomic-safe op category — type checks, length,
-  comparison, regex patterns, enum, sanitize transforms. All ops in
-  this resource are in `GuardedStruct.AtomicClassifier`'s safe registry,
-  so the compile-time `VerifyAtomic` verifier accepts it.
+  Real-world Ash resource exercising the atomic-mode path end-to-end:
+  type checks, length, comparison, regex patterns, enum, sanitize
+  transforms. Updates go through `Change.atomic/3` and the resulting
+  UPDATE stays atomic with the sanitized values substituted by Ash.
   """
   use Ash.Resource,
     domain: GuardedStructTest.Support.TestDomain,
@@ -311,7 +306,6 @@ defmodule GuardedStructTest.AshResources.AtomicEligibleUser do
   end
 
   guardedstruct do
-    atomic true
     auto_wire true
 
     field :email, :string,
@@ -341,7 +335,6 @@ defmodule GuardedStructTest.AshResources.AtomicEligibleUser do
 
     update :update do
       accept [:email, :username, :age, :role, :status]
-      require_atomic? false
     end
   end
 

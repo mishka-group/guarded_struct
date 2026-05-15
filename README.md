@@ -29,7 +29,7 @@
   - [Nested + conditional](#-nested--conditional)
   - [Custom validators / sanitizers](#-custom-validators--sanitizers)
   - [Ash integration](#-ash-integration)
-- [Atomic mode (Ash)](#-atomic-mode-ash)
+- [Atomic mode (Ash)](#️-atomic-mode-ash)
 - [Introspection](#-introspection)
 - [Architecture](#-architecture)
 - [Compatibility](#-compatibility)
@@ -160,7 +160,7 @@ end
 - ⚡ **`auto_wire true`** — Spark transformer injects the change for you; no `changes do ... end` block needed.
 - 📦 **`batch_change/3`** — `Ash.bulk_create/3` and `Ash.bulk_update/3` (with `strategy: :stream`) work end-to-end.
 - 🌊 **Auto-map cascade** — every `sub_field` returns a plain map at every depth (matches Ash's `:map` attribute type).
-- 🔒 **`atomic: true`** — compile-time verifier rejects (with `Spark.Error.DslError` at the offending field) any op that can't translate to atomic SQL.
+- ⚛️ **Atomic-safe by default** — `Change.atomic/3` runs the pipeline on plain literals and returns `{:atomic, sanitized_map}`; update actions stay atomic without `require_atomic? false`.
 
 ### 🔮 Standalone validation API
 
@@ -185,7 +185,7 @@ Every top-level `builder/1` emits `[:guarded_struct, :builder, :start | :stop | 
 GuardedStruct.Info.describe(User)
 # => %{module: User, keys: [...], enforce_keys: [...],
 #       fields: [%{name: :email, kind: :field, ...}, ...],
-#       options: %{enforce: true, json: false, atomic: false, ...}}
+#       options: %{enforce: true, json: false, ...}}
 
 GuardedStruct.Info.field_kind(User, :email)         #=> :field
 GuardedStruct.Info.enforce?(User, :email)           #=> true
@@ -377,7 +377,6 @@ defmodule MyApp.User do
 
     update :update do
       accept [:email, :nickname]
-      require_atomic? false
     end
   end
 end
@@ -390,13 +389,12 @@ MyApp.User
 
 ---
 
-## 🔒 Atomic mode (Ash)
+## ⚛️ Atomic mode (Ash)
 
-For Ash resources where every derive op is SQL-translatable, set `atomic true` to opt into compile-time verification:
+`GuardedStruct.AshResource.Change` is atomic-safe by default. There's no flag to flip and no `require_atomic? false` to add — update and destroy actions run as single-statement SQL with sanitized values.
 
 ```elixir
 guardedstruct do
-  atomic true
   auto_wire true
 
   field :email,    :string,  derives: "sanitize(trim, downcase) validate(email_r, max_len=320)"
@@ -404,21 +402,19 @@ guardedstruct do
   field :role,     :string,  derives: "validate(enum=String[admin::user::guest])"
   field :tenant_id, :string, derives: "validate(uuid)"
 end
+
+# Update goes through atomic/3 — pipeline runs in Elixir on the plain
+# literal input, sanitized value is substituted into the UPDATE SQL.
+record
+|> Ash.Changeset.for_update(:update, %{email: "  New@X.IO  "})
+|> Ash.update()
+# => {:ok, %{email: "new@x.io", ...}}
 ```
 
-The compile-time `VerifyAtomic` verifier rejects (with `Spark.Error.DslError` pointing at the offending field's source line) any op that can't translate to atomic SQL:
+**How it works.** `Change.atomic/3` reads `changeset.attributes` and `changeset.atomics`, detects whether any atomic value is an `Ash.Expr`, and:
 
-| ❌ Blocked op | Reason | Fix |
-|---|---|---|
-| `validate(email)` | DNS lookup via `:email_checker` | Use `validate(email_r)` |
-| `validate(url)` | DNS/port via `:ex_url` | Use `validate(url_r)` |
-| `validator: {Mod, :fn}` | Arbitrary Elixir | Move rule into `derives:` |
-| `auto: {Mod, :fn}` | Arbitrary Elixir | Use SQL default or migration |
-| `main_validator/1` | Cross-field Elixir | Express as per-field derive |
-| Custom `Derive.Extension` op | Arbitrary Elixir | Express as built-in |
-| `on:` / `from:` / `domain:` | Cross-field at runtime | Express as per-field rule |
-
-Sanitize ops (`trim`, `downcase`, `strip_tags`, `slugify`, …) are **always allowed** — they run in Elixir before the atomic SQL fires. The error message **distinguishes typos from custom Extension ops** so you don't chase the wrong fix. Full safe-op registry: `GuardedStruct.AtomicClassifier`.
+- if every value is a plain literal → runs the full `__guarded_change__/1` pipeline (sanitize → validate → derive → `auto:` → main_validator) and returns `{:atomic, sanitized_map}` for Ash to substitute into the SQL,
+- if any value is an `Ash.Expr` (e.g. from `Ash.Changeset.atomic_update(record, :counter, expr(counter + 1))`) → returns `{:not_atomic, reason}` and Ash falls back to the imperative path. This is rare in practice; 99% of changesets pass plain values.
 
 ---
 
@@ -432,7 +428,7 @@ GuardedStruct.Info.describe(MyApp.User)
 #   path: [], key: :root, shape: :struct,
 #   keys: [:email, :nickname], enforce_keys: [:email],
 #   conditional_keys: [],
-#   options: %{enforce: true, json: false, atomic: false, ...},
+#   options: %{enforce: true, json: false, ...},
 #   fields: [
 #     %{name: :email, kind: :field, enforce?: true,
 #       type: "String.t()", derive: "...", auto: nil, ...},
@@ -471,7 +467,7 @@ flowchart TD
     User --> Spark
 
     Spark --> Transformers["<b>Transformers</b><br/>ParseDerive · ParseCoreKeys<br/>GenerateBuilder · GenerateSubFieldModules<br/>GenerateAshValidator · AutoWireAshChange"]
-    Spark --> Verifiers["<b>Verifiers</b><br/>VerifyValidatorMFA · VerifyAutoMFA<br/>VerifyNoStructCycles · VerifyAtomic"]
+    Spark --> Verifiers["<b>Verifiers</b><br/>VerifyValidatorMFA · VerifyAutoMFA<br/>VerifyNoStructCycles"]
     Spark --> AsyncCompile["<b>Async submodule compile</b><br/>Spark.Dsl.Transformer.async_compile<br/>for sub_field branches"]
 
     Transformers --> Fields["<b>__fields__/0</b> · <b>__information__/0</b><br/>introspection metadata<br/>(read by GuardedStruct.Info)"]
@@ -486,7 +482,7 @@ flowchart TD
 
 - 🧠 **DSL layer** — Spark sections + entities define `field`, `sub_field`, `conditional_field`, `virtual_field`, `dynamic_field`. Every op-string parsed at compile time.
 - 🔧 **Transformers** — codegen for `defstruct`/`builder`/`keys`/`__information__`/`__fields__`, async sub_field submodule generation, derive parsing, core-key parsing, Ash-variant codegen, auto-wire injection.
-- 🔍 **Verifiers** — validator MFAs exist, auto MFAs exist, no struct cycles, atomic-safety (when opted in).
+- 🔍 **Verifiers** — validator MFAs exist, auto MFAs exist, no struct cycles.
 - 🏃 **Runtime** — receives a map, walks pre-parsed op-lists per field, hands back `{:ok, %Struct{}}` or `{:error, [%{field, action, message}]}`. The Ash bridge routes the same pipeline through `__guarded_change__/1` into changeset attributes.
 
 ---
@@ -531,7 +527,7 @@ flowchart TD
 | Standalone `Validate` API (closes #2) | 🟢 Shipped |
 | Erlang Records (closes #6) | 🟢 Shipped |
 | Custom validators via Spark DSL | 🟢 Shipped |
-| Ash extension + auto-wire + atomic verifier | 🟢 Shipped |
+| Ash extension + auto-wire + atomic mode | 🟢 Shipped |
 | Test coverage | 🟢 743+ tests, real Ash integration suite |
 | `1.0.0` release | 🔵 Pending community feedback on `0.1.0-beta` |
 

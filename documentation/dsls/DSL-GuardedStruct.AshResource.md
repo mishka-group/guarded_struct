@@ -103,22 +103,19 @@ is a process-local flag — concurrency-safe (sibling processes don't see
 it), re-entrancy-safe (saved+restored across nested calls), zero overhead
 for standalone callers.
 
-## Update actions — `require_atomic? false`
+## Update actions — atomic-safe by default
 
-`GuardedStruct.AshResource.Change` runs an imperative Elixir pipeline.
-Ash 3.x's update planner requires changes to declare atomic-safety, and
-ours opts out via `atomic/3` returning `{:not_atomic, reason}`. On any
-UPDATE action that uses this change, set `require_atomic? false`:
+`GuardedStruct.AshResource.Change` implements `atomic/3` and returns
+`{:atomic, sanitized_map}` to Ash, so update / destroy actions stay
+atomic without setting `require_atomic? false`. The pipeline
+(sanitize / validate / derive / `auto:` MFAs / `Derive.Extension`)
+runs in Elixir on the plain literal inputs, and the resulting UPDATE
+is a single SQL statement.
 
-    actions do
-      update :update do
-        accept [:email]
-        require_atomic? false
-      end
-    end
-
-CREATE actions don't need this flag — Ash only enforces atomic mode on
-updates.
+The only case that falls back to imperative mode is when the caller
+passes an `Ash.Expr` via `Ash.Changeset.atomic_update/3` — `atomic/3`
+returns `{:not_atomic, reason}` since we can't sanitize a value we
+won't see until the SQL evaluates.
 
 ## sub_field vs Ash relationships
 
@@ -191,7 +188,6 @@ has_one :preferences, ... end`.
 | [`sanitize_derive`](#guardedstruct-sanitize_derive){: #guardedstruct-sanitize_derive } | `atom \| list(atom)` |  |  |
 | [`json`](#guardedstruct-json){: #guardedstruct-json } | `boolean` | `false` | When `true`, derives a JSON encoder. Uses `Jason.Encoder` if `:jason` is in the user's deps; otherwise falls back to the built-in `JSON.Encoder` on Elixir 1.18+. No-op if neither is available. |
 | [`auto_wire`](#guardedstruct-auto_wire){: #guardedstruct-auto_wire } | `boolean` | `false` | Only effective inside the `GuardedStruct.AshResource` extension. When `true`, injects `GuardedStruct.AshResource.Change` into the resource's top-level `changes` section so every `:create` and `:update` action automatically runs the GuardedStruct pipeline. Equivalent to writing `changes do change GuardedStruct.AshResource.Change end` by hand. No-op outside the Ash extension. |
-| [`atomic`](#guardedstruct-atomic){: #guardedstruct-atomic } | `boolean` | `false` | Opt into atomic-SQL mode. When `true`, the `VerifyAtomic` verifier rejects at compile time any field whose derive ops, per-field `validator:`, `auto:`, or top-level `main_validator/1` callback can't translate to atomic SQL (e.g. `validate(email)` which does DNS lookup, custom MFAs, custom Derive.Extension ops). Errors point at the offending field with the exact reason. Default `false` keeps the imperative path. |
 
 
 

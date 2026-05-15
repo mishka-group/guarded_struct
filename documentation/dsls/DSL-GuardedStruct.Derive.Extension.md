@@ -52,7 +52,7 @@ any GuardedStruct module that has this extension wired in.
 | Name | Type | Default | Docs |
 |------|------|---------|------|
 | [`name`](#derives-validator-name){: #derives-validator-name .spark-required} | `atom` |  | Op name. Used as `validate(<name>)` in derive strings. |
-| [`fun`](#derives-validator-fun){: #derives-validator-fun .spark-required} | `any` |  | Single-arg function. Return value semantics: * `true` — input passes * `false` — input fails (default error message) * `{:error, field, action, message}` — explicit error * any other value — used as the validated (coerced) output |
+| [`fun`](#derives-validator-fun){: #derives-validator-fun .spark-required} | `any` |  | Single-arg function. Return value semantics:   * `true` — input passes   * `false` — input fails (default error message)   * `{:error, field, action, message}` — explicit error   * any other value — used as the validated (coerced) output |
 
 
 

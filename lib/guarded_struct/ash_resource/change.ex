@@ -5,7 +5,7 @@ defmodule GuardedStruct.AshResource.Change do
 
   ## Usage
 
-  ### Manual wiring (Option A)
+  ### Manual wiring
 
       defmodule MyApp.User do
         use Ash.Resource, extensions: [GuardedStruct.AshResource]
@@ -19,61 +19,48 @@ defmodule GuardedStruct.AshResource.Change do
         end
       end
 
-  By default Ash applies the change on every `:create` and `:update` action.
-  Use the standard `change ..., on: [:create]` / `where: [...]` options to
-  scope it.
-
-  ### Auto-wiring (Option B)
+  ### Auto-wiring
 
   Set `auto_wire: true` on the `guardedstruct` section and the change is
-  injected for you — no `changes do ... end` block needed. See the
-  `GuardedStruct.AshResource` moduledoc for the trade-offs.
-
-  ## What it does
-
-  On every fire, this change:
-
-    1. Reads `changeset.attributes`.
-    2. Calls `resource.__guarded_change__/1` — runs the full GuardedStruct
-       pipeline (sanitize → validate → derive → main_validator).
-    3. On `{:ok, transformed_attrs}`: calls `Ash.Changeset.force_change_attributes/2`.
-    4. On `{:error, errs}`: appends each error to the changeset via
-       `Ash.Changeset.add_error/2`.
-
-  ## Ash callback support matrix
-
-  | Callback | Supported? |
-  |---|---|
-  | `change/3` | ✅ |
-  | `batch_change/3` | ✅ (works with `Ash.bulk_create/3` and `Ash.bulk_update/3`) |
-  | `atomic/3` | ✅ but always `{:not_atomic, …}` — see below |
-  | `before_batch/3` / `after_batch/3` | ❌ no-op pass-through wouldn't add value |
-  | `before_action/3` / `after_action/3` | ❌ use Ash's own lifecycle hooks |
-  | `validate/3` (Ash.Resource.Validation) | n/a — different behavior |
+  injected automatically — no `changes do ... end` block needed.
 
   ## Atomic mode
 
-  `atomic/3` returns `{:not_atomic, reason}` unconditionally. The pipeline
-  runs arbitrary Elixir that can't be expressed as a single SQL
-  `UPDATE ... SET ...`. Users must set `require_atomic? false` on `update`
-  actions that include this change. See `GuardedStruct.AtomicClassifier`
-  and the `atomic: true` section option on `guardedstruct` for the
-  compile-time-verified atomic path.
+  `atomic/3` runs the GuardedStruct pipeline in Elixir on the plain
+  literal values Ash placed in `changeset.attributes` and
+  `changeset.atomics`, then returns `{:atomic, sanitized_map}` — the
+  shape Ash uses to substitute pre-computed values into the single SQL
+  statement. The action stays atomic (one UPDATE, no extra round-trip)
+  and the persisted value is the sanitized one.
 
-  ## Bulk usage
+  This means sanitize / validate / derive / `auto:` MFAs / custom
+  `Derive.Extension` ops all work in atomic mode. The only blocker is
+  when the user explicitly provides an `Ash.Expr` for a field via
+  `Ash.Changeset.atomic_update/3`:
 
-      result =
-        Ash.bulk_create(input_list, MyApp.User, :create,
-          return_records?: true,
-          return_errors?: true
-        )
+      Ash.Changeset.atomic_update(record, :counter, expr(counter + 1))
 
-  For `Ash.bulk_update/3` use `strategy: :stream` (atomic-stream isn't
-  possible while our change is non-atomic).
+  In that case we can't sanitize a value we won't know until the SQL
+  evaluates, so `atomic/3` returns `{:not_atomic, reason}` and Ash
+  falls back to the imperative path. This is rare in practice — 99% of
+  changesets pass plain literals.
+
+  No `require_atomic? false` flag is needed on update / destroy actions.
+
+  ## Bulk operations
+
+      Ash.bulk_create(input_list, MyApp.User, :create,
+        return_records?: true,
+        return_errors?: true
+      )
+
+  `Ash.bulk_update/3` also works — `strategy: :atomic` (the default) uses
+  our atomic pattern; `strategy: :stream` uses the imperative `change/3`
+  path. Both produce identical results.
   """
 
   def has_change?, do: true
-  def has_atomic?, do: false
+  def has_atomic?, do: true
   def has_batch_change?, do: true
   def has_before_batch?, do: false
   def has_after_batch?, do: false
@@ -83,13 +70,7 @@ defmodule GuardedStruct.AshResource.Change do
   def has_around_action?, do: false
   def has_init?, do: true
 
-  # `atomic?/0` is what `Ash.Resource.Verifiers.VerifyActionsAtomic` checks at
-  # compile time. Returning `false` AND not defining `atomic/3` makes Ash
-  # raise `Spark.Error.DslError` at compile time when an action with
-  # `require_atomic?: true` references this change — pointing at the action,
-  # naming the change. No `atomic/3` callback is defined; Ash falls back to
-  # the imperative `change/3` path automatically when atomic is not required.
-  def atomic?, do: false
+  def atomic?, do: true
   def batch_change?, do: true
   def before_batch?, do: false
   def after_batch?, do: false
@@ -105,11 +86,73 @@ defmodule GuardedStruct.AshResource.Change do
   def batch_callbacks?(_, _, _), do: true
 
   @doc """
-  The `Ash.Resource.Change` callback. Runs the GuardedStruct pipeline via
-  `resource.__guarded_change__/1` and either applies the transformed
-  attrs back to the changeset or adds errors.
+  The `Ash.Resource.Change` callback for the non-atomic / regular-change
+  path. Runs the GuardedStruct pipeline on `changeset.attributes` and
+  applies the transformed values back, or adds errors.
   """
   def change(changeset, _opts, _context) do
+    apply_pipeline(changeset)
+  end
+
+  @doc """
+  The atomic-mode callback.
+
+    * If any field's atomic value is an `Ash.Expr`, bail with
+      `{:not_atomic, reason}` — we can't transform a value we won't
+      know until the SQL evaluates.
+    * Otherwise, run the GuardedStruct pipeline on the combined
+      `attributes` + `atomics` literals and return
+      `{:atomic, sanitized_map}` for Ash to substitute into the
+      single-statement UPDATE.
+  """
+  def atomic(changeset, _opts, _context) do
+    attrs = changeset.attributes || %{}
+    atomics_map = atomics_to_map(changeset)
+
+    expr_keys =
+      atomics_map
+      |> Enum.filter(fn {_k, v} -> ash_expr?(v) end)
+      |> Enum.map(fn {k, _v} -> k end)
+
+    cond do
+      expr_keys != [] ->
+        {:not_atomic,
+         "fields #{inspect(expr_keys)} were provided as Ash.Expr in " <>
+           "changeset.atomics — the GuardedStruct pipeline can't " <>
+           "sanitize/validate a value it won't see until the SQL evaluates"}
+
+      map_size(attrs) == 0 and map_size(atomics_map) == 0 ->
+        :ok
+
+      true ->
+        run_atomic(changeset, Map.merge(atomics_map, attrs))
+    end
+  end
+
+  defp atomics_to_map(changeset) do
+    case Map.get(changeset, :atomics) do
+      nil -> %{}
+      list when is_list(list) -> Map.new(list)
+      map when is_map(map) -> map
+      _ -> %{}
+    end
+  end
+
+  defp ash_expr?(value) do
+    Code.ensure_loaded?(Ash.Expr) and apply(Ash.Expr, :expr?, [value])
+  end
+
+  @doc """
+  Bulk-action entry. Maps `change/3` over each changeset.
+  """
+  def batch_change(changesets, opts, context) do
+    Enum.map(changesets, &change(&1, opts, context))
+  end
+
+  # Imperative change path — `change/3`. `force_change_attribute` is fine
+  # here because Ash's non-atomic pipeline reads attributes from the
+  # changeset before issuing SQL.
+  defp apply_pipeline(changeset) do
     resource = changeset.resource
     attrs = changeset.attributes
 
@@ -118,6 +161,7 @@ defmodule GuardedStruct.AshResource.Change do
         force_change_attributes(changeset, transformed_attrs)
 
       {:error, errs} when is_list(errs) ->
+        errs = maybe_filter_required(errs, changeset.action_type)
         Enum.reduce(errs, changeset, fn err, cs -> add_error(cs, to_ash_error(err)) end)
 
       {:error, err} ->
@@ -125,14 +169,49 @@ defmodule GuardedStruct.AshResource.Change do
     end
   end
 
-  @doc """
-  Bulk-action entry. Maps `change/3` over each changeset — semantic
-  guarantee identical to calling `change/3` N times, one less function-call
-  hop per element.
-  """
-  def batch_change(changesets, opts, context) do
-    Enum.map(changesets, &change(&1, opts, context))
+  # Atomic change path — returns `{:atomic, %{attr => value}}` directly,
+  # which is the shape Ash accepts for atomic-SQL substitution. Plain
+  # values are fine (Ash casts them through the attribute type); we only
+  # use Ash.Expr when we need data-layer-side computation.
+  defp run_atomic(changeset, input_attrs) do
+    resource = changeset.resource
+
+    case resource.__guarded_change__(input_attrs) do
+      {:ok, transformed_attrs} ->
+        atomic_map = Map.take(transformed_attrs, Map.keys(input_attrs))
+
+        if map_size(atomic_map) == 0 do
+          :ok
+        else
+          {:atomic, atomic_map}
+        end
+
+      {:error, errs} when is_list(errs) ->
+        errs = maybe_filter_required(errs, changeset.action_type)
+
+        if errs == [] do
+          :ok
+        else
+          cs = Enum.reduce(errs, changeset, fn err, c -> add_error(c, to_ash_error(err)) end)
+          {:ok, cs}
+        end
+
+      {:error, err} ->
+        {:ok, add_error(changeset, to_ash_error(err))}
+    end
   end
+
+  # On UPDATE / DESTROY actions the user provides only a subset of
+  # attributes — fields not in the changeset shouldn't trigger required
+  # errors (Ash already enforces required-ness via `allow_nil?` on the
+  # attribute schema). Drop `:required_fields` errors for updates.
+  defp maybe_filter_required(errs, :update),
+    do: Enum.reject(errs, &(Map.get(&1, :action) == :required_fields))
+
+  defp maybe_filter_required(errs, :destroy),
+    do: Enum.reject(errs, &(Map.get(&1, :action) == :required_fields))
+
+  defp maybe_filter_required(errs, _), do: errs
 
   # `apply/3` defers the Ash.* references to runtime so the module
   # compiles without warnings when Ash isn't in the user's deps.

@@ -1606,7 +1606,7 @@ GuardedStruct.Info.describe(User)
 #        %{name: :address, kind: :sub_field, sub_module: User.Address, ...},
 #        %{name: :password_confirm, kind: :virtual_field, enforce?: false, ...}
 #      ],
-#      options: %{enforce: true, json: false, atomic: false, ...}
+#      options: %{enforce: true, json: false, ...}
 #    }
 
 # Field-level lookups
@@ -1830,18 +1830,17 @@ end
 
 ### Bulk operations
 
-The bridge implements `batch_change/3`, so `Ash.bulk_create/3` and `Ash.bulk_update/3` (use `strategy: :stream`) work end-to-end. Sanitize runs per row through the imperative pipeline.
+The bridge implements `batch_change/3`, so `Ash.bulk_create/3` and `Ash.bulk_update/3` work end-to-end — both `strategy: :atomic` (default) and `strategy: :stream` produce identical sanitized results.
 
-### Atomic mode (compile-time-verified)
+### Atomic mode
 
-For resources where every derive op is SQL-translatable, set `atomic true` to opt into compile-time atomic-safety verification:
+`GuardedStruct.AshResource.Change` is atomic-safe by default. No flag to set, no `require_atomic? false` on update / destroy actions.
 
 ```elixir
 defmodule MyApp.Resources.User do
   use Ash.Resource, extensions: [GuardedStruct.AshResource]
 
   guardedstruct do
-    atomic true
     auto_wire true
 
     field :email,     :string,  derives: "sanitize(trim, downcase) validate(email_r, max_len=320)"
@@ -1857,7 +1856,6 @@ defmodule MyApp.Resources.User do
 
     update :update do
       accept [:email, :username, :age, :role]
-      require_atomic? false
     end
   end
 
@@ -1872,13 +1870,9 @@ defmodule MyApp.Resources.User do
 end
 ```
 
-The `VerifyAtomic` compile-time verifier rejects (with `Spark.Error.DslError` pointing at the offending field) any derive op that can't translate to atomic SQL:
+**How `Change.atomic/3` works.** It reads `changeset.attributes` and `changeset.atomics`, detects whether any atomic value is an `Ash.Expr`, and:
 
-* `validate(email)` / `validate(url)` — need DNS / network I/O (use `email_r` / `url_r` instead)
-* per-field `validator: {Mod, :fn}` MFAs — arbitrary Elixir
-* `auto: {Mod, :fn}` MFAs — arbitrary Elixir
-* `main_validator/1` callback — cross-field Elixir
-* cross-field `on:` / `from:` / `domain:` options
-* Custom ops from `GuardedStruct.Derive.Extension`
+* if every value is a plain literal → runs the full pipeline (sanitize → validate → derive → `auto:` → main_validator) in Elixir and returns `{:atomic, sanitized_map}` for Ash to substitute into the single-statement UPDATE,
+* if any value is an `Ash.Expr` (e.g. `Ash.Changeset.atomic_update(record, :counter, expr(counter + 1))`) → returns `{:not_atomic, reason}` and Ash falls back to the imperative path.
 
-Sanitize ops (`trim`, `downcase`, `strip_tags`, `slugify`, …) are **always allowed** — they run in Elixir before the atomic SQL fires. The full atomic-safe registry lives in `GuardedStruct.AtomicClassifier`. Default is `atomic: false`.
+Sanitize ops (`trim`, `downcase`, `strip_tags`, `slugify`, …) all work — they run in Elixir before the atomic SQL fires. So do `auto:` MFAs, custom `Derive.Extension` ops, `main_validator/1`, and cross-field options like `on:` / `from:` / `domain:`.
