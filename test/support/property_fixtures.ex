@@ -21,8 +21,7 @@ defmodule GuardedStructTest.PropertyFixtures do
         enforce: true,
         derives: "sanitize(trim, downcase) validate(string, not_empty, email_r, max_len=320)"
 
-      field :nickname, :string,
-        derives: "sanitize(trim) validate(string, min_len=3, max_len=24)"
+      field :nickname, :string, derives: "sanitize(trim) validate(string, min_len=3, max_len=24)"
 
       field :age, :integer, derives: "validate(integer, min_len=0, max_len=150)"
     end

@@ -77,7 +77,6 @@ defmodule GuardedStructFixtures.DynamicTest do
       assert doc.metadata == %{"id" => "user-supplied-string", "name" => "x"}
       refute Map.has_key?(doc.metadata, :id)
     end
-
   end
 
   describe "dynamic_field — free-form map" do

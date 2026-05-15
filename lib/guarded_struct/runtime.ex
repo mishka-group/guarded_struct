@@ -44,7 +44,8 @@ defmodule GuardedStruct.Runtime do
   end
 
   def validate(_module, _attrs, _error?) do
-    {:error, [%{field: :__root__, action: :bad_parameters, message: translated_message(:builder)}]}
+    {:error,
+     [%{field: :__root__, action: :bad_parameters, message: translated_message(:builder)}]}
   end
 
   @spec build(module(), map() | struct() | tuple(), boolean()) ::
@@ -79,7 +80,8 @@ defmodule GuardedStruct.Runtime do
   end
 
   def build(_module, _attrs, _error?) do
-    {:error, [%{field: :__root__, action: :bad_parameters, message: translated_message(:builder)}]}
+    {:error,
+     [%{field: :__root__, action: :bad_parameters, message: translated_message(:builder)}]}
   end
 
   defp with_telemetry(module, fun) do
@@ -142,7 +144,8 @@ defmodule GuardedStruct.Runtime do
   def build_pattern_map(module, attrs, error?)
 
   def build_pattern_map(_module, attrs, _error?) when not is_map(attrs) do
-    {:error, [%{field: :__root__, action: :bad_parameters, message: translated_message(:builder)}]}
+    {:error,
+     [%{field: :__root__, action: :bad_parameters, message: translated_message(:builder)}]}
   end
 
   def build_pattern_map(module, attrs, error?) do
@@ -241,15 +244,23 @@ defmodule GuardedStruct.Runtime do
 
   defp do_build_with_key(module, key, attrs, type, error?) when is_list(key) do
     case get_in(attrs, key) do
-      sub when is_map(sub) -> do_build(module, sub, attrs, type, error?)
-      _ -> {:error, [%{field: :__root__, action: :bad_parameters, message: translated_message(:builder)}]}
+      sub when is_map(sub) ->
+        do_build(module, sub, attrs, type, error?)
+
+      _ ->
+        {:error,
+         [%{field: :__root__, action: :bad_parameters, message: translated_message(:builder)}]}
     end
   end
 
   defp do_build_with_key(module, key, attrs, type, error?) when is_atom(key) do
     case Map.get(attrs, key) do
-      sub when is_map(sub) -> do_build(module, sub, attrs, type, error?)
-      _ -> {:error, [%{field: :__root__, action: :bad_parameters, message: translated_message(:builder)}]}
+      sub when is_map(sub) ->
+        do_build(module, sub, attrs, type, error?)
+
+      _ ->
+        {:error,
+         [%{field: :__root__, action: :bad_parameters, message: translated_message(:builder)}]}
     end
   end
 
@@ -930,7 +941,8 @@ defmodule GuardedStruct.Runtime do
           submodule.builder(nested_input_for.(sanitized))
 
         true ->
-          {:error, [%{field: :__root__, action: :bad_parameters, message: translated_message(:builder)}]}
+          {:error,
+           [%{field: :__root__, action: :bad_parameters, message: translated_message(:builder)}]}
       end
     end
   end

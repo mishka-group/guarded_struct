@@ -215,14 +215,14 @@ defmodule GuardedStruct.Derive.Extension do
   end
 
   @doc "Try the current module's extensions for a sanitizer op."
-  def dispatch_sanitize(op, input) do
-    dispatch_sanitize(op, input, extensions_for(current_module()))
+  def dispatch_sanitize(input, op) do
+    dispatch_sanitize(input, op, extensions_for(current_module()))
   end
 
   @doc "Try a specific list of extensions for a sanitizer op."
-  def dispatch_sanitize(op, input, extensions) when is_list(extensions) do
+  def dispatch_sanitize(input, op, extensions) when is_list(extensions) do
     Enum.find_value(extensions, :__not_found__, fn mod ->
-      if op in mod.__sanitizers__(), do: mod.__sanitize__(op, input)
+      if op in mod.__sanitizers__(), do: mod.__sanitize__(input, op)
     end)
   end
 

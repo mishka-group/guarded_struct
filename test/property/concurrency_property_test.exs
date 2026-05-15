@@ -37,9 +37,7 @@ defmodule GuardedStructTest.Property.ConcurrencyTest do
     property "the auto-map flag set by another process is invisible to this one" do
       check all(_ <- StreamData.integer(1..3)) do
         # In a separate process, force the as-map flag on.
-        Task.await(
-          Task.async(fn -> Process.put(:guarded_as_map?, true) end)
-        )
+        Task.await(Task.async(fn -> Process.put(:guarded_as_map?, true) end))
 
         assert Process.get(:guarded_as_map?) == nil
       end

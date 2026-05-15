@@ -36,7 +36,7 @@ defmodule GuardedStruct.Derive.Extension.Transformers.Codegen do
       def __validate__(_op, _input, _field), do: :__not_found__
 
       unquote_splicing(sanitizer_clauses)
-      def __sanitize__(_op, input), do: input
+      def __sanitize__(input, _op), do: input
     end
   end
 
@@ -55,7 +55,7 @@ defmodule GuardedStruct.Derive.Extension.Transformers.Codegen do
 
   defp sanitizer_clause(%Sanitizer{name: name, fun: fun_ast}) do
     quote do
-      def __sanitize__(unquote(name), input) do
+      def __sanitize__(input, unquote(name)) do
         unquote(fun_ast).(input)
       end
     end

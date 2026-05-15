@@ -11,24 +11,24 @@ defmodule GuardedStructTest.Property.DerivePipelineTest do
   describe "sanitizer idempotence" do
     property "trim applied twice equals trim applied once (binary inputs)" do
       check all(input <- StreamData.binary()) do
-        once = SanitizerDerive.sanitize(:trim, input)
-        twice = SanitizerDerive.sanitize(:trim, once)
+        once = SanitizerDerive.sanitize(input, :trim)
+        twice = SanitizerDerive.sanitize(once, :trim)
         assert once == twice
       end
     end
 
     property "downcase applied twice equals downcase applied once" do
       check all(input <- StreamData.string(:printable)) do
-        once = SanitizerDerive.sanitize(:downcase, input)
-        twice = SanitizerDerive.sanitize(:downcase, once)
+        once = SanitizerDerive.sanitize(input, :downcase)
+        twice = SanitizerDerive.sanitize(once, :downcase)
         assert once == twice
       end
     end
 
     property "upcase applied twice equals upcase applied once" do
       check all(input <- StreamData.string(:printable)) do
-        once = SanitizerDerive.sanitize(:upcase, input)
-        twice = SanitizerDerive.sanitize(:upcase, once)
+        once = SanitizerDerive.sanitize(input, :upcase)
+        twice = SanitizerDerive.sanitize(once, :upcase)
         assert once == twice
       end
     end
@@ -43,9 +43,9 @@ defmodule GuardedStructTest.Property.DerivePipelineTest do
                   StreamData.list_of(StreamData.integer())
                 ])
             ) do
-        assert SanitizerDerive.sanitize(:trim, input) == input
-        assert SanitizerDerive.sanitize(:downcase, input) == input
-        assert SanitizerDerive.sanitize(:upcase, input) == input
+        assert SanitizerDerive.sanitize(input, :trim) == input
+        assert SanitizerDerive.sanitize(input, :downcase) == input
+        assert SanitizerDerive.sanitize(input, :upcase) == input
       end
     end
   end
@@ -53,8 +53,8 @@ defmodule GuardedStructTest.Property.DerivePipelineTest do
   describe "sanitizer order independence (commutative pairs)" do
     property "trim ∘ downcase ≡ downcase ∘ trim on printable strings" do
       check all(input <- StreamData.string(:printable)) do
-        a = SanitizerDerive.sanitize(:downcase, SanitizerDerive.sanitize(:trim, input))
-        b = SanitizerDerive.sanitize(:trim, SanitizerDerive.sanitize(:downcase, input))
+        a = input |> SanitizerDerive.sanitize(:trim) |> SanitizerDerive.sanitize(:downcase)
+        b = input |> SanitizerDerive.sanitize(:downcase) |> SanitizerDerive.sanitize(:trim)
         assert a == b
       end
     end
@@ -63,7 +63,7 @@ defmodule GuardedStructTest.Property.DerivePipelineTest do
   describe "trim contract" do
     property "trimmed binary has no leading or trailing whitespace" do
       check all(input <- StreamData.binary(max_length: 200)) do
-        case SanitizerDerive.sanitize(:trim, input) do
+        case SanitizerDerive.sanitize(input, :trim) do
           out when is_binary(out) ->
             refute String.starts_with?(out, [" ", "\t", "\n", "\r"])
             refute String.ends_with?(out, [" ", "\t", "\n", "\r"])

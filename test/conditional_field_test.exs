@@ -581,8 +581,16 @@ defmodule GuardedStructTest.ConditionalFieldTest do
                ]
              })
 
-    assert Enum.any?(errs, &match?(%{field: :provider, action: :required_fields, __hint__: "auth1"}, &1))
-    assert Enum.any?(errs, &match?(%{field: :username, action: :required_fields, __hint__: "auth1"}, &1))
+    assert Enum.any?(
+             errs,
+             &match?(%{field: :provider, action: :required_fields, __hint__: "auth1"}, &1)
+           )
+
+    assert Enum.any?(
+             errs,
+             &match?(%{field: :username, action: :required_fields, __hint__: "auth1"}, &1)
+           )
+
     assert Enum.any?(errs, &match?(%{field: :auth2, action: :validator, __hint__: "auth3"}, &1))
   end
 

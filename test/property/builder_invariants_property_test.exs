@@ -41,7 +41,9 @@ defmodule GuardedStructTest.Property.BuilderInvariantsTest do
   describe "required-fields enforcement" do
     property "any input missing at least one enforce-true key surfaces a :required_fields error" do
       keys = [:a, :b, :c]
-      missing_gen = StreamData.nonempty(StreamData.list_of(StreamData.member_of(keys), max_length: 3))
+
+      missing_gen =
+        StreamData.nonempty(StreamData.list_of(StreamData.member_of(keys), max_length: 3))
 
       check all(raw <- missing_gen) do
         missing = Enum.uniq(raw)

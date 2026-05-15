@@ -4,63 +4,63 @@ defmodule GuardedStructTest.DeriveTest do
 
   ############## (▰˘◡˘▰) Sanitizer Derive (▰˘◡˘▰) ##############
   test "sanitize(:trim, input)" do
-    "Mishka Group" = assert SanitizerDerive.sanitize(:trim, "  Mishka Group  ")
+    "Mishka Group" = assert SanitizerDerive.sanitize("  Mishka Group  ", :trim)
   end
 
   test "sanitize(:upcase, input)" do
-    "MISHKA GROUP" = assert SanitizerDerive.sanitize(:upcase, "Mishka Group")
+    "MISHKA GROUP" = assert SanitizerDerive.sanitize("Mishka Group", :upcase)
   end
 
   test "sanitize(:downcase, input)" do
-    "mishka group" = assert SanitizerDerive.sanitize(:downcase, "MISHKA GROUP")
+    "mishka group" = assert SanitizerDerive.sanitize("MISHKA GROUP", :downcase)
   end
 
   test "sanitize(:capitalize, input)" do
-    "Mishka group" = assert SanitizerDerive.sanitize(:capitalize, "mishka group")
+    "Mishka group" = assert SanitizerDerive.sanitize("mishka group", :capitalize)
   end
 
   test "sanitize(:basic_html, input)" do
-    "<p>Hi Shahryar</p>" = assert SanitizerDerive.sanitize(:basic_html, "<p>Hi Shahryar</p>")
+    "<p>Hi Shahryar</p>" = assert SanitizerDerive.sanitize("<p>Hi Shahryar</p>", :basic_html)
   end
 
   test "sanitize(:html5, input)" do
     "<section>Hi Shahryar</section>" =
-      assert SanitizerDerive.sanitize(:html5, "<section>Hi Shahryar</section>")
+      assert SanitizerDerive.sanitize("<section>Hi Shahryar</section>", :html5)
   end
 
-  test "sanitize(:markdown_html, input)" do
+  test "sanitize(input, :markdown_html)" do
     "[Mishka Group](https://mishka.tools)" =
-      assert SanitizerDerive.sanitize(:markdown_html, "[Mishka Group](https://mishka.tools)")
+      assert SanitizerDerive.sanitize("[Mishka Group](https://mishka.tools)", :markdown_html)
   end
 
-  test "sanitize(:strip_tags, input)" do
-    "Hi Shahryar" = assert SanitizerDerive.sanitize(:strip_tags, "<p>Hi Shahryar</p>")
+  test "sanitize(input, :strip_tags)" do
+    "Hi Shahryar" = assert SanitizerDerive.sanitize("<p>Hi Shahryar</p>", :strip_tags)
   end
 
-  test "sanitize(:tag, input)" do
-    "Hi Shahryar" = assert SanitizerDerive.sanitize({:tag, :strip_tags}, "<p>Hi Shahryar</p>")
+  test "sanitize(input, {:tag, :op})" do
+    "Hi Shahryar" = assert SanitizerDerive.sanitize("<p>Hi Shahryar</p>", {:tag, :strip_tags})
   end
 
   test "sanitize(:not_exist, input)" do
-    "<p>Hi Shahryar</p>" = assert SanitizerDerive.sanitize(:not_exist, "<p>Hi Shahryar</p>")
+    "<p>Hi Shahryar</p>" = assert SanitizerDerive.sanitize("<p>Hi Shahryar</p>", :not_exist)
   end
 
   test "sanitize(:string_float, input)" do
-    2369.0 = assert SanitizerDerive.sanitize(:string_float, "<p>2369</p>")
-    3.0 = assert SanitizerDerive.sanitize(:string_float, "3s4s6.65")
-    346.65 = assert SanitizerDerive.sanitize(:string_float, "346.65sss")
-    346.65 = assert SanitizerDerive.sanitize(:string_float, "346.65")
-    346.65 = assert SanitizerDerive.sanitize(:string_float, 346.65)
+    2369.0 = assert SanitizerDerive.sanitize("<p>2369</p>", :string_float)
+    3.0 = assert SanitizerDerive.sanitize("3s4s6.65", :string_float)
+    346.65 = assert SanitizerDerive.sanitize("346.65sss", :string_float)
+    346.65 = assert SanitizerDerive.sanitize("346.65", :string_float)
+    346.65 = assert SanitizerDerive.sanitize(346.65, :string_float)
   end
 
   test "sanitize(:string_integer, input)" do
-    2369 = assert SanitizerDerive.sanitize(:string_integer, "<p>2369</p>")
-    3 = assert SanitizerDerive.sanitize(:string_integer, "3s4s6.65")
-    346 = assert SanitizerDerive.sanitize(:string_integer, "346.65sss")
-    346 = assert SanitizerDerive.sanitize(:string_integer, "346.65")
-    346 = assert SanitizerDerive.sanitize(:string_integer, 346)
+    2369 = assert SanitizerDerive.sanitize("<p>2369</p>", :string_integer)
+    3 = assert SanitizerDerive.sanitize("3s4s6.65", :string_integer)
+    346 = assert SanitizerDerive.sanitize("346.65sss", :string_integer)
+    346 = assert SanitizerDerive.sanitize("346.65", :string_integer)
+    346 = assert SanitizerDerive.sanitize(346, :string_integer)
     # We just sanitize string values
-    346.6 = assert SanitizerDerive.sanitize(:string_integer, 346.6)
+    346.6 = assert SanitizerDerive.sanitize(346.6, :string_integer)
   end
 
   ############## (▰˘◡˘▰) Validation Derive (▰˘◡˘▰) ##############
@@ -634,13 +634,13 @@ defmodule GuardedStructTest.DeriveTest do
   end
 
   defmodule TestSanitize do
-    def sanitize(:capitalize_v1, input) do
+    def sanitize(input, :capitalize_v1) do
       if is_binary(input), do: String.capitalize(input), else: input
     end
   end
 
   defmodule TestSanitize2 do
-    def sanitize(:capitalize_v2, input) do
+    def sanitize(input, :capitalize_v2) do
       if is_binary(input), do: String.capitalize(input), else: input
     end
   end
