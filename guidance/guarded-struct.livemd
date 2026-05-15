@@ -1792,7 +1792,7 @@ Per-module resolution rules:
 - `[A, :config]` — [A] ++ global (A wins on collisions)
 - `[A, :config, B]` — [A] ++ global ++ [B]
 
-A compile-time warning fires if a custom op-name shadows a built-in registered in `GuardedStruct.Derive.Registry` (the custom would be dead code since built-in clauses match first).
+A compile-time warning fires if a custom op-name shadows a built-in registered in the internal Derive registry (the custom would be dead code since built-in clauses match first).
 
 ## Splode errors
 

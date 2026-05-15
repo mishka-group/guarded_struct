@@ -50,11 +50,11 @@ case MyApp.User.builder(input) do
 end
 ```
 
-Implementations:
+Implementations (internal — accessed only through `GuardedStruct.Errors.from_tuple/1`):
 
-* `GuardedStruct.Errors.Validation` — wraps per-field errors.
-* `GuardedStruct.Errors.Unknown` — fallback for anything else.
-* `GuardedStruct.Errors.Invalid` — class container.
+* `Validation` — wraps per-field errors.
+* `Unknown` — fallback for anything else.
+* `Invalid` — class container.
 
 Each child error becomes a `%GuardedStruct.Errors.Validation{}` struct with
 `field`, `action`, `message`, `hint`, and `vars` fields. `:conditionals`

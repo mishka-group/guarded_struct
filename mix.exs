@@ -52,7 +52,8 @@ defmodule GuardedStruct.MixProject do
 
   defp package() do
     [
-      files: ~w(lib .formatter.exs mix.exs LICENSE README* CHANGELOG* SECURITY*),
+      files:
+        ~w(lib .formatter.exs mix.exs LICENSE README* CHANGELOG* SECURITY* usage-rules.md usage-rules guidance/guarded-struct.livemd .claude/skills),
       licenses: ["Apache-2.0"],
       maintainers: ["Shahryar Tavakkoli"],
       links: %{
@@ -73,11 +74,26 @@ defmodule GuardedStruct.MixProject do
       extras: [
         "README.md",
         "CHANGELOG.md",
+        "SECURITY.md",
+        "LICENSE",
+        "guidance/guarded-struct.livemd",
+        "usage-rules.md",
+        "usage-rules/dsl.md",
+        "usage-rules/derive.md",
+        "usage-rules/conditional.md",
+        "usage-rules/validators.md",
+        "usage-rules/core-keys.md",
+        "usage-rules/extensions.md",
+        "usage-rules/ash.md",
+        "usage-rules/api.md",
+        "usage-rules/errors.md",
         "documentation/dsls/DSL-GuardedStruct.md",
         "documentation/dsls/DSL-GuardedStruct.AshResource.md",
         "documentation/dsls/DSL-GuardedStruct.Derive.Extension.md"
       ],
       groups_for_extras: [
+        Guidance: ~r"^guidance/.*",
+        "Agent Usage Rules": ~r"^usage-rules.*",
         "DSL Reference": ~r"^documentation/dsls/.*"
       ],
       groups_for_modules: [

@@ -64,7 +64,7 @@ GuardedStruct.Diff.equal?(a, b)          # → boolean
 
 Mixed-type inputs return `:not_comparable`.
 
-## `Module.example/0`
+## `example/0` on every generated module
 
 Returns a struct populated from declared defaults plus type-based placeholders.
 Useful for REPL exploration and seed fixtures.
