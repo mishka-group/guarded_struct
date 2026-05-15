@@ -39,6 +39,12 @@ MyApp.User.builder(%{email: "  Alice@X.IO  "})
 | `Builder`, `Validate`, `Diff`, `Info` runtime API | `guarded_struct:api` |
 | Error shape, Splode wrapping, telemetry | `guarded_struct:errors` |
 
+## Runnable walkthrough
+
+The [`guidance/guarded-struct.livemd`](./guidance/guarded-struct.livemd) LiveBook
+runs every public feature end-to-end against a fresh BEAM. Open it in Livebook
+and `Run all` to verify the contract claims below match the installed version.
+
 ## Universal contracts
 
 * `Module.builder/1,2` returns `{:ok, %Module{}}` or `{:error, [error_map]}`.

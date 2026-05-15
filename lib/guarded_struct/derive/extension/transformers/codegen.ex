@@ -14,10 +14,13 @@ defmodule GuardedStruct.Derive.Extension.Transformers.Codegen do
     validators = Enum.filter(entities, &match?(%Validator{}, &1))
     sanitizers = Enum.filter(entities, &match?(%Sanitizer{}, &1))
 
-    warn_shadows(validators, sanitizers, module)
-
     body = build_body(validators, sanitizers)
-    {:ok, Transformer.eval(dsl_state, [], body)}
+    new_dsl_state = Transformer.eval(dsl_state, [], body)
+
+    case shadow_warnings(validators, sanitizers, module) do
+      [] -> {:ok, new_dsl_state}
+      warnings -> {:warn, new_dsl_state, warnings}
+    end
   end
 
   defp build_body(validators, sanitizers) do
@@ -61,18 +64,20 @@ defmodule GuardedStruct.Derive.Extension.Transformers.Codegen do
     end
   end
 
-  defp warn_shadows(validators, sanitizers, module) do
-    Enum.each(validators, fn %Validator{name: name} = v ->
-      if GuardedStruct.Derive.Registry.known_validate?(name) do
-        Spark.Warning.warn(shadow_message(:validator, name, module), anno(v))
+  defp shadow_warnings(validators, sanitizers, module) do
+    validator_warnings =
+      for %Validator{name: name} <- validators,
+          GuardedStruct.Derive.Registry.known_validate?(name) do
+        shadow_message(:validator, name, module)
       end
-    end)
 
-    Enum.each(sanitizers, fn %Sanitizer{name: name} = s ->
-      if GuardedStruct.Derive.Registry.known_sanitize?(name) do
-        Spark.Warning.warn(shadow_message(:sanitizer, name, module), anno(s))
+    sanitizer_warnings =
+      for %Sanitizer{name: name} <- sanitizers,
+          GuardedStruct.Derive.Registry.known_sanitize?(name) do
+        shadow_message(:sanitizer, name, module)
       end
-    end)
+
+    validator_warnings ++ sanitizer_warnings
   end
 
   defp shadow_message(kind, name, module) do
@@ -82,7 +87,4 @@ defmodule GuardedStruct.Derive.Extension.Transformers.Codegen do
       "`#{op_kind}(#{name})` op. Built-in clauses match first, so this custom " <>
       "#{kind} will NEVER be called. Rename it to avoid the shadow."
   end
-
-  defp anno(%{__spark_metadata__: %{anno: anno}}), do: anno
-  defp anno(_), do: nil
 end

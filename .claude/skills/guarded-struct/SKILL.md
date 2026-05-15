@@ -26,6 +26,15 @@ deep-dives are split across `usage-rules/*.md`:
 | `usage-rules/api.md` | `builder/1,2`, `Validate.run/2,3`, `Diff`, `Info`, telemetry events |
 | `usage-rules/errors.md` | Canonical `%{field, action, message}` shape, multi-field splitting, Splode wrapping, compile-time `Spark.Error.DslError` |
 
+## Runnable reference
+
+For end-to-end examples of every public feature, open
+[`guidance/guarded-struct.livemd`](../../../guidance/guarded-struct.livemd) in
+Livebook and `Run all`. The notebook covers DSL declaration, derive ops,
+sub_field nesting, conditional dispatch, virtual / dynamic fields, the
+standalone `Validate` API, custom `Derive.Extension` ops, Splode wrapping, and
+the Ash integration — all runnable in a fresh BEAM.
+
 ## Universal contracts (load first)
 
 * `Module.builder/1` returns `{:ok, %Module{}}` or `{:error, [error_map]}`.

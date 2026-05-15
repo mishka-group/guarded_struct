@@ -72,7 +72,8 @@ Return value replaces the input. Sanitizers run before validators.
 
 ## Compile-time shadow warning
 
-Declaring `validator :string` / `sanitizer :trim` shadows a built-in.
-The Codegen transformer emits a Spark warning pointing at the
-offending entity's source line; the registry's `known_validate?/1` /
-`known_sanitize?/1` decide what counts as built-in.
+Declaring `validator :string` / `sanitizer :trim` shadows a built-in. The
+Codegen transformer returns `{:warn, dsl_state, warnings}` from its
+`transform/1` callback so the message reaches the user through Spark's own
+diagnostic channel and points at the offending entity's source line. The
+internal Derive registry decides what counts as built-in.
