@@ -73,7 +73,7 @@ defmodule GuardedStruct.AshResource.Change do
   """
 
   def has_change?, do: true
-  def has_atomic?, do: true
+  def has_atomic?, do: false
   def has_batch_change?, do: true
   def has_before_batch?, do: false
   def has_after_batch?, do: false
@@ -83,7 +83,12 @@ defmodule GuardedStruct.AshResource.Change do
   def has_around_action?, do: false
   def has_init?, do: true
 
-  # Ash 3.x checks both `has_*?/0` and `*?/0` aliases in different paths.
+  # `atomic?/0` is what `Ash.Resource.Verifiers.VerifyActionsAtomic` checks at
+  # compile time. Returning `false` AND not defining `atomic/3` makes Ash
+  # raise `Spark.Error.DslError` at compile time when an action with
+  # `require_atomic?: true` references this change — pointing at the action,
+  # naming the change. No `atomic/3` callback is defined; Ash falls back to
+  # the imperative `change/3` path automatically when atomic is not required.
   def atomic?, do: false
   def batch_change?, do: true
   def before_batch?, do: false
@@ -127,18 +132,6 @@ defmodule GuardedStruct.AshResource.Change do
   """
   def batch_change(changesets, opts, context) do
     Enum.map(changesets, &change(&1, opts, context))
-  end
-
-  @doc """
-  Returns `{:not_atomic, reason}` unconditionally. Sanitize ops, `auto:`
-  MFAs, and `main_validator/1` run arbitrary Elixir; not SQL-translatable.
-  Use the `atomic: true` section flag for a compile-time-verified
-  atomic-only resource.
-  """
-  def atomic(_changeset, _opts, _context) do
-    {:not_atomic,
-     "GuardedStruct.AshResource.Change runs an imperative sanitize/validate " <>
-       "pipeline; not safe to express as atomic SQL. See moduledoc."}
   end
 
   # `apply/3` defers the Ash.* references to runtime so the module

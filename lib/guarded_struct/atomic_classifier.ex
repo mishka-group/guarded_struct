@@ -28,18 +28,41 @@ defmodule GuardedStruct.AtomicClassifier do
     * `{:validate, {enum: ["a", "b"]}}` — keyword-list arg variant
   """
 
+  # Sanitize ops translatable to `Ash.Expr` (verified against
+  # `ash/query/function/*.ex`):
+  #   * `string_trim/1` — exists
+  #   * `string_downcase/1` — exists
+  # Anything not in Ash.Expr's portable function set is unsafe for atomic.
+  # `upcase`, `capitalize` are NOT in Ash.Expr core; they'd need
+  # data-layer-specific `fragment("upper(?)", ...)` which isn't portable.
   def classify_op({:sanitize, :trim}), do: :safe
   def classify_op({:sanitize, :downcase}), do: :safe
-  def classify_op({:sanitize, :upcase}), do: :safe
-  def classify_op({:sanitize, :capitalize}), do: :safe
+
+  def classify_op({:sanitize, :upcase}) do
+    {:unsafe,
+     "sanitize(upcase) has no portable Ash.Expr equivalent — Ash.Expr core " <>
+       "only ships string_downcase and string_trim. Drop the op or set atomic: false"}
+  end
+
+  def classify_op({:sanitize, :capitalize}) do
+    {:unsafe,
+     "sanitize(capitalize) has no portable Ash.Expr equivalent (no `initcap` " <>
+       "in Ash.Expr core). Drop the op or set atomic: false"}
+  end
+
+  def classify_op({:sanitize, op}) when op in [:strip_tags, :basic_html, :html5, :tag] do
+    {:unsafe,
+     "sanitize(#{op}) is HTML parsing — no SQL/Ash.Expr equivalent. Drop " <>
+       "the op or set atomic: false"}
+  end
+
+  def classify_op({:sanitize, {:tag, _}}) do
+    {:unsafe, "sanitize(tag=...) is HTML tag whitelisting — no SQL/Ash.Expr equivalent"}
+  end
+
   def classify_op({:sanitize, :string}), do: :safe
   def classify_op({:sanitize, :integer}), do: :safe
   def classify_op({:sanitize, :float}), do: :safe
-  def classify_op({:sanitize, :strip_tags}), do: :safe
-  def classify_op({:sanitize, :basic_html}), do: :safe
-  def classify_op({:sanitize, :html5}), do: :safe
-  def classify_op({:sanitize, :tag}), do: :safe
-  def classify_op({:sanitize, {:tag, _}}), do: :safe
 
   def classify_op({:sanitize, op}) when is_atom(op) do
     cond do

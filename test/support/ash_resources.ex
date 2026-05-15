@@ -327,7 +327,7 @@ defmodule GuardedStructTest.AshResources.AtomicEligibleUser do
     field :tenant_id, :string, derives: "validate(uuid)"
 
     field :country_code, :string,
-      derives: "sanitize(trim, upcase) validate(string, min_len=2, max_len=2)"
+      derives: "sanitize(trim, downcase) validate(string, min_len=2, max_len=2)"
 
     field :status, :string,
       default: "active",

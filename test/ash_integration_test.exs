@@ -359,17 +359,75 @@ defmodule GuardedStructTest.AshIntegrationTest do
     end
   end
 
-  describe "atomic mode — explicit opt-out behavior" do
-    test "atomic/3 returns {:not_atomic, reason}" do
-      reason = GuardedStruct.AshResource.Change.atomic(%{}, [], %{})
-      assert match?({:not_atomic, _}, reason)
-
-      {:not_atomic, msg} = reason
-      assert msg =~ "imperative"
+  describe "atomic mode — Change has no atomic/3 callback (Ash compile-time detection)" do
+    test "Change.atomic?/0 returns false" do
+      # `Ash.Resource.Verifiers.VerifyActionsAtomic` checks `module.atomic?()`
+      # at compile time. With `atomic?: false` AND no `atomic/3` callback,
+      # any action declaring `require_atomic?: true` with this Change in
+      # its changes list raises `Spark.Error.DslError` at compile time.
+      assert GuardedStruct.AshResource.Change.atomic?() == false
     end
 
-    test "actions that don't require_atomic: false fail at compile time" do
-      assert :ok = :ok
+    test "Change does not export atomic/3 — Ash gets the compile-time signal" do
+      refute function_exported?(GuardedStruct.AshResource.Change, :atomic, 3)
+    end
+
+    test "an action with require_atomic? true + our Change raises at compile time" do
+      import ExUnit.CaptureIO
+      suffix = :erlang.unique_integer([:positive])
+
+      src = """
+      defmodule TestRequireAtomicFail#{suffix} do
+        use Ash.Resource,
+          domain: GuardedStructTest.Support.TestDomain,
+          data_layer: Ash.DataLayer.Ets,
+          extensions: [GuardedStruct.AshResource]
+
+        ets do
+          private? true
+        end
+
+        guardedstruct do
+          field :email, :string, derives: "validate(email_r)"
+        end
+
+        attributes do
+          uuid_primary_key :id
+          attribute :email, :string, public?: true
+        end
+
+        actions do
+          defaults [:read, :destroy]
+          create :create, accept: [:email]
+
+          update :update do
+            accept [:email]
+            require_atomic? true
+          end
+        end
+
+        changes do
+          change GuardedStruct.AshResource.Change
+        end
+      end
+      """
+
+      output =
+        capture_io(:stderr, fn ->
+          try do
+            Code.compile_string(src)
+          rescue
+            _ -> :ok
+          catch
+            _, _ -> :ok
+          end
+        end)
+
+      # Ash's `VerifyActionsAtomic` runs at compile time, names the change
+      # that blocks atomic, and tells the user precisely how to fix it.
+      assert output =~ "cannot be done atomically"
+      assert output =~ "GuardedStruct.AshResource.Change"
+      assert output =~ "require_atomic? false"
     end
   end
 
@@ -421,7 +479,7 @@ defmodule GuardedStructTest.AshIntegrationTest do
           age: 30,
           role: "admin",
           tenant_id: "11111111-2222-3333-4444-555555555555",
-          country_code: "DE",
+          country_code: "de",
           status: "active"
         )
         |> Ash.create()
@@ -430,7 +488,7 @@ defmodule GuardedStructTest.AshIntegrationTest do
       assert user.username == "alice"
       assert user.age == 30
       assert user.role == "admin"
-      assert user.country_code == "DE"
+      assert user.country_code == "de"
       assert user.status == "active"
     end
 
@@ -479,13 +537,13 @@ defmodule GuardedStructTest.AshIntegrationTest do
                |> Ash.create()
     end
 
-    test "sanitize(upcase) normalizes country code casing" do
+    test "sanitize(downcase) normalizes country code casing" do
       {:ok, user} =
         AtomicEligibleUser
-        |> Ash.Changeset.for_create(:create, valid_atomic_input(%{country_code: "de"}))
+        |> Ash.Changeset.for_create(:create, valid_atomic_input(%{country_code: "DE"}))
         |> Ash.create()
 
-      assert user.country_code == "DE"
+      assert user.country_code == "de"
     end
 
     test "validate(min_len) on string rejects too-short username" do

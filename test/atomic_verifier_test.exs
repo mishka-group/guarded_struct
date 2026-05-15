@@ -74,18 +74,73 @@ defmodule GuardedStructTest.AtomicVerifierTest do
       assert :ok = VerifyAtomic.verify(state)
     end
 
-    test "all built-in sanitize ops are safe" do
+    test "only Ash.Expr-translatable sanitize ops are safe" do
+      # Only `trim` and `downcase` map to Ash.Expr (string_trim,
+      # string_downcase). Other sanitize ops have no portable equivalent.
       state =
         dsl_state(
           SanitizersOkMod,
+          [%Field{name: :body, __derive_ops__: ops([:string], [:trim, :downcase])}],
+          atomic: true
+        )
+
+      assert :ok = VerifyAtomic.verify(state)
+    end
+
+    test "non-Ash.Expr sanitize ops are rejected (upcase, capitalize, HTML)" do
+      for op <- [:upcase, :capitalize, :strip_tags, :basic_html, :html5] do
+        state =
+          dsl_state(
+            UnsafeSanitizeMod,
+            [%Field{name: :body, __derive_ops__: ops([], [op])}],
+            atomic: true
+          )
+
+        assert {:error, err} = VerifyAtomic.verify(state),
+               "expected sanitize(#{op}) to be rejected"
+
+        msg = Exception.message(err)
+        assert msg =~ ":body"
+        assert msg =~ "sanitize(#{op})"
+      end
+    end
+
+    test "sanitize(upcase) error message names Ash.Expr core limitation" do
+      state =
+        dsl_state(
+          UpcaseMod,
+          [%Field{name: :title, __derive_ops__: ops([], [:upcase])}],
+          atomic: true
+        )
+
+      assert {:error, err} = VerifyAtomic.verify(state)
+      msg = Exception.message(err)
+      assert msg =~ "Ash.Expr"
+      assert msg =~ "string_downcase"
+      assert msg =~ "string_trim"
+    end
+
+    test "sanitize(strip_tags) error message names HTML parsing limitation" do
+      state =
+        dsl_state(
+          StripMod,
+          [%Field{name: :body, __derive_ops__: ops([], [:strip_tags])}],
+          atomic: true
+        )
+
+      assert {:error, err} = VerifyAtomic.verify(state)
+      msg = Exception.message(err)
+      assert msg =~ "HTML parsing"
+    end
+
+    test "trim + downcase combo passes (both Ash.Expr-translatable)" do
+      state =
+        dsl_state(
+          EmailMod,
           [
             %Field{
-              name: :body,
-              __derive_ops__:
-                ops(
-                  [:string],
-                  [:trim, :downcase, :upcase, :capitalize, :strip_tags, :basic_html, :html5]
-                )
+              name: :email,
+              __derive_ops__: ops([:email_r], [:trim, :downcase])
             }
           ],
           atomic: true
@@ -357,10 +412,19 @@ defmodule GuardedStructTest.AtomicVerifierTest do
   end
 
   describe "AtomicClassifier" do
-    test "safe sanitize ops" do
-      for op <- [:trim, :downcase, :upcase, :capitalize, :strip_tags, :basic_html, :html5] do
+    test "safe sanitize ops — Ash.Expr-translatable only" do
+      # Verified against deps/ash/lib/ash/query/function/string_*.ex —
+      # Ash.Expr core only ships string_trim and string_downcase.
+      for op <- [:trim, :downcase, :string, :integer, :float] do
         assert AtomicClassifier.classify_op({:sanitize, op}) == :safe,
                "expected sanitize(#{op}) to be safe"
+      end
+    end
+
+    test "unsafe sanitize ops — no portable Ash.Expr equivalent" do
+      for op <- [:upcase, :capitalize, :strip_tags, :basic_html, :html5, :tag] do
+        assert {:unsafe, _} = AtomicClassifier.classify_op({:sanitize, op}),
+               "expected sanitize(#{op}) to be unsafe"
       end
     end
 
