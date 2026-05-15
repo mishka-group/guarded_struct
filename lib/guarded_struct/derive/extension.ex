@@ -122,16 +122,9 @@ defmodule GuardedStruct.Derive.Extension do
   def extensions_for(nil), do: registered_extensions()
 
   def extensions_for(module) when is_atom(module) do
-    cond do
-      function_exported?(module, :__guarded_derive_extensions_opt__, 0) ->
-        resolve_opt(module.__guarded_derive_extensions_opt__())
-
-      Code.ensure_loaded?(module) and
-          function_exported?(module, :__guarded_derive_extensions_opt__, 0) ->
-        resolve_opt(module.__guarded_derive_extensions_opt__())
-
-      true ->
-        registered_extensions()
+    case module.__guarded_derive_extensions_opt__() do
+      nil -> registered_extensions()
+      opt -> resolve_opt(opt)
     end
   end
 

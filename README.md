@@ -507,11 +507,10 @@ flowchart TD
 
 - 📖 **API docs** — [hexdocs.pm/guarded_struct](https://hexdocs.pm/guarded_struct)
 - 📘 **LiveBook walkthrough** — [`guidance/guarded-struct.livemd`](./guidance/guarded-struct.livemd) — runnable end-to-end examples
-- 📋 **Options reference** — [`OPTIONS-0.1.0.md`](./OPTIONS-0.1.0.md) — every new option in v0.1.0 with examples
 - 📜 **Changelog** — [`CHANGELOG.md`](./CHANGELOG.md)
 - 🔐 **Security policy** — [`SECURITY.md`](./SECURITY.md) — supported versions + how to report a vulnerability
 - 🧱 **DSL reference** — auto-generated cheat sheets in `documentation/dsls/` (published to hexdocs)
-- 📰 **Blog post** — [original motivation and design](https://mishka.tools/blog/guardedstruct-advanced-elixir-struct-data-validation-and-sanitization)
+- 📰 **Blog post** — [Consolidating Input and Output Validation and Sanitization in Elixir with GuardedStruct library](https://mishka.tools/blog/guardedstruct-advanced-elixir-struct-data-validation-and-sanitization)
 
 ---
 

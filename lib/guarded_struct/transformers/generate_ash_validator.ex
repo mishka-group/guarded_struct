@@ -54,6 +54,12 @@ defmodule GuardedStruct.Transformers.GenerateAshValidator do
         options: section_options
       })
 
+    field_name_set =
+      fields_runtime
+      |> Enum.map(& &1.name)
+      |> MapSet.new()
+      |> Macro.escape()
+
     body =
       quote do
         if Module.defines?(__MODULE__, {:__guarded_information__, 0}, :def),
@@ -61,6 +67,9 @@ defmodule GuardedStruct.Transformers.GenerateAshValidator do
 
         if Module.defines?(__MODULE__, {:__guarded_fields__, 0}, :def),
           do: defoverridable(__guarded_fields__: 0)
+
+        if Module.defines?(__MODULE__, {:__guarded_field_name_set__, 0}, :def),
+          do: defoverridable(__guarded_field_name_set__: 0)
 
         if Module.defines?(__MODULE__, {:__guarded_change__, 1}, :def),
           do: defoverridable(__guarded_change__: 1)
@@ -73,6 +82,26 @@ defmodule GuardedStruct.Transformers.GenerateAshValidator do
         end
 
         def __guarded_fields__, do: unquote(Macro.escape(fields_runtime))
+
+        @doc """
+        Compile-time-baked `MapSet` of every field name owned by the
+        `guardedstruct` block. Used by `GuardedStruct.AshResource.Change`
+        to decide, in O(1), whether a key in `changeset.atomics`
+        belongs to the pipeline.
+        """
+        def __guarded_field_name_set__, do: unquote(field_name_set)
+
+        @__guarded_has_validator__ Module.defines?(__MODULE__, {:validator, 2}, :def)
+        def __guarded_has_validator__, do: @__guarded_has_validator__
+
+        @__guarded_has_main_validator__ Module.defines?(__MODULE__, {:main_validator, 1}, :def)
+        def __guarded_has_main_validator__, do: @__guarded_has_main_validator__
+
+        unless Module.defines?(__MODULE__, {:__guarded_derive_extensions_opt__, 0}, :def) do
+          def __guarded_derive_extensions_opt__, do: nil
+        end
+
+        def __guarded_error_module__, do: nil
 
         @doc """
         Apply the full GuardedStruct pipeline (sanitize → validate → derive →

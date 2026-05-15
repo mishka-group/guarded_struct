@@ -273,8 +273,8 @@ defmodule GuardedStruct.Validate do
   end
 
   defp run_field_validator(%{name: name}, value, module) do
-    if function_exported?(module, :validator, 2) do
-      case apply(module, :validator, [name, value]) do
+    if module.__guarded_has_validator__() do
+      case module.validator(name, value) do
         {:ok, _, validated} ->
           {:ok, validated}
 

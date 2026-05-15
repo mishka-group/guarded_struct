@@ -151,6 +151,19 @@ defmodule GuardedStruct.Transformers.Codegen do
 
       def __fields__, do: unquote(Macro.escape(fields_runtime))
 
+      def __guarded_information__, do: __information__()
+      def __guarded_fields__, do: __fields__()
+
+      @__guarded_has_validator__ Module.defines?(__MODULE__, {:validator, 2}, :def)
+      def __guarded_has_validator__, do: @__guarded_has_validator__
+
+      @__guarded_has_main_validator__ Module.defines?(__MODULE__, {:main_validator, 1}, :def)
+      def __guarded_has_main_validator__, do: @__guarded_has_main_validator__
+
+      unless Module.defines?(__MODULE__, {:__guarded_derive_extensions_opt__, 0}, :def) do
+        def __guarded_derive_extensions_opt__, do: nil
+      end
+
       def builder(attrs_or_input, error \\ false)
 
       def builder({_, _} = input, error),
@@ -178,6 +191,10 @@ defmodule GuardedStruct.Transformers.Codegen do
             """
           end
         end
+
+        def __guarded_error_module__, do: __MODULE__.Error
+      else
+        def __guarded_error_module__, do: nil
       end
     end
   end
@@ -226,6 +243,19 @@ defmodule GuardedStruct.Transformers.Codegen do
 
       def __fields__, do: unquote(Macro.escape(fields_runtime))
 
+      def __guarded_information__, do: __information__()
+      def __guarded_fields__, do: __fields__()
+
+      @__guarded_has_validator__ Module.defines?(__MODULE__, {:validator, 2}, :def)
+      def __guarded_has_validator__, do: @__guarded_has_validator__
+
+      @__guarded_has_main_validator__ Module.defines?(__MODULE__, {:main_validator, 1}, :def)
+      def __guarded_has_main_validator__, do: @__guarded_has_main_validator__
+
+      unless Module.defines?(__MODULE__, {:__guarded_derive_extensions_opt__, 0}, :def) do
+        def __guarded_derive_extensions_opt__, do: nil
+      end
+
       def example, do: %{}
 
       def builder(attrs, error \\ false)
@@ -255,6 +285,10 @@ defmodule GuardedStruct.Transformers.Codegen do
             """
           end
         end
+
+        def __guarded_error_module__, do: __MODULE__.Error
+      else
+        def __guarded_error_module__, do: nil
       end
     end
   end

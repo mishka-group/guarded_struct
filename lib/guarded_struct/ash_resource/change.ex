@@ -108,24 +108,29 @@ defmodule GuardedStruct.AshResource.Change do
   def atomic(changeset, _opts, _context) do
     attrs = changeset.attributes || %{}
     atomics_map = atomics_to_map(changeset)
+    owned = changeset.resource.__guarded_field_name_set__()
 
-    expr_keys =
-      atomics_map
-      |> Enum.filter(fn {_k, v} -> ash_expr?(v) end)
-      |> Enum.map(fn {k, _v} -> k end)
+    {owned_expr_keys, owned_plain_atomics} =
+      Enum.reduce(atomics_map, {[], %{}}, fn {k, v}, {exprs, plains} ->
+        cond do
+          not MapSet.member?(owned, k) -> {exprs, plains}
+          ash_expr?(v) -> {[k | exprs], plains}
+          true -> {exprs, Map.put(plains, k, v)}
+        end
+      end)
 
     cond do
-      expr_keys != [] ->
+      owned_expr_keys != [] ->
         {:not_atomic,
-         "fields #{inspect(expr_keys)} were provided as Ash.Expr in " <>
+         "fields #{inspect(owned_expr_keys)} were provided as Ash.Expr in " <>
            "changeset.atomics — the GuardedStruct pipeline can't " <>
            "sanitize/validate a value it won't see until the SQL evaluates"}
 
-      map_size(attrs) == 0 and map_size(atomics_map) == 0 ->
+      map_size(attrs) == 0 and map_size(owned_plain_atomics) == 0 ->
         :ok
 
       true ->
-        run_atomic(changeset, Map.merge(atomics_map, attrs))
+        run_atomic(changeset, Map.merge(owned_plain_atomics, attrs))
     end
   end
 
@@ -138,9 +143,7 @@ defmodule GuardedStruct.AshResource.Change do
     end
   end
 
-  defp ash_expr?(value) do
-    Code.ensure_loaded?(Ash.Expr) and apply(Ash.Expr, :expr?, [value])
-  end
+  defp ash_expr?(value), do: apply(Ash.Expr, :expr?, [value])
 
   @doc """
   Bulk-action entry. Maps `change/3` over each changeset.
@@ -160,12 +163,11 @@ defmodule GuardedStruct.AshResource.Change do
       {:ok, transformed_attrs} ->
         force_change_attributes(changeset, transformed_attrs)
 
-      {:error, errs} when is_list(errs) ->
-        errs = maybe_filter_required(errs, changeset.action_type)
-        Enum.reduce(errs, changeset, fn err, cs -> add_error(cs, to_ash_error(err)) end)
-
-      {:error, err} ->
-        add_error(changeset, to_ash_error(err))
+      {:error, errs} ->
+        errs
+        |> List.wrap()
+        |> maybe_filter_required(changeset.action_type)
+        |> Enum.reduce(changeset, fn err, cs -> add_error(cs, to_ash_error(err)) end)
     end
   end
 
@@ -186,8 +188,11 @@ defmodule GuardedStruct.AshResource.Change do
           {:atomic, atomic_map}
         end
 
-      {:error, errs} when is_list(errs) ->
-        errs = maybe_filter_required(errs, changeset.action_type)
+      {:error, errs} ->
+        errs =
+          errs
+          |> List.wrap()
+          |> maybe_filter_required(changeset.action_type)
 
         if errs == [] do
           :ok
@@ -195,9 +200,6 @@ defmodule GuardedStruct.AshResource.Change do
           cs = Enum.reduce(errs, changeset, fn err, c -> add_error(c, to_ash_error(err)) end)
           {:ok, cs}
         end
-
-      {:error, err} ->
-        {:ok, add_error(changeset, to_ash_error(err))}
     end
   end
 

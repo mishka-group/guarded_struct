@@ -289,6 +289,60 @@ defmodule GuardedStructTest.AshResources.WithAshChange do
   end
 end
 
+defmodule GuardedStructTest.AshResources.AtomicWithCounter do
+  @moduledoc """
+  Fixture for the three atomic-mode options when an `Ash.Expr` is in play.
+
+    * `:login_count` — IS in guardedstruct, has a derive that needs Elixir
+      (integer range). Used to demo Option A (atomic_update + expr falls
+      back to imperative) and Option B (plain literal stays atomic).
+    * `:last_seen_at` — NOT in guardedstruct, plain Ash attribute. Used to
+      demo Option C (atomic_update + expr on a non-owned field stays
+      atomic, no bail).
+  """
+  use Ash.Resource,
+    domain: GuardedStructTest.Support.TestDomain,
+    data_layer: Ash.DataLayer.Ets,
+    extensions: [GuardedStruct.AshResource]
+
+  ets do
+    private? true
+  end
+
+  guardedstruct do
+    auto_wire true
+
+    field :email, :string,
+      enforce: true,
+      derives: "sanitize(trim, downcase) validate(email_r)"
+
+    field :login_count, :integer,
+      default: 0,
+      derives: "validate(integer, min_len=0, max_len=1_000_000)"
+  end
+
+  actions do
+    defaults [:read, :destroy]
+    create :create, accept: [:email, :login_count]
+
+    update :update do
+      accept [:email, :login_count, :last_seen_at]
+    end
+
+    update :update_imperative do
+      accept [:email, :login_count, :last_seen_at]
+      require_atomic? false
+    end
+  end
+
+  attributes do
+    uuid_primary_key :id
+    attribute :email, :string, allow_nil?: false, public?: true
+    attribute :login_count, :integer, default: 0, public?: true
+    attribute :last_seen_at, :utc_datetime, public?: true
+  end
+end
+
 defmodule GuardedStructTest.AshResources.AtomicEligibleUser do
   @moduledoc """
   Real-world Ash resource exercising the atomic-mode path end-to-end:

@@ -9,7 +9,8 @@ defmodule GuardedStructTest.AshIntegrationTest do
     WithSubField,
     WithListSubField,
     WithAshChange,
-    AtomicEligibleUser
+    AtomicEligibleUser,
+    AtomicWithCounter
   }
 
   describe "sanitize end-to-end through Ash.create/1" do
@@ -649,6 +650,101 @@ defmodule GuardedStructTest.AshIntegrationTest do
         |> Ash.update()
 
       assert updated.email == "new@email.com"
+    end
+  end
+
+  describe "atomic mode — Ash.Expr handling (the 3 options)" do
+    test "Option A — expr on a guardedstruct field via require_atomic? false action: falls back, succeeds" do
+      require Ash.Expr
+
+      {:ok, user} =
+        AtomicWithCounter
+        |> Ash.Changeset.for_create(:create, %{email: "a@x.io", login_count: 5})
+        |> Ash.create()
+
+      # On the :update_imperative action (require_atomic? false), atomic/3
+      # bails with {:not_atomic, ...} and Ash falls back to change/3.
+      {:ok, updated} =
+        user
+        |> Ash.Changeset.for_update(:update_imperative)
+        |> Ash.Changeset.atomic_update(:login_count, Ash.Expr.expr(login_count + 1))
+        |> Ash.update()
+
+      assert updated.login_count == 6
+    end
+
+    test "Option A (negative) — expr on a guardedstruct field via require_atomic? true action: Ash refuses" do
+      require Ash.Expr
+
+      {:ok, user} =
+        AtomicWithCounter
+        |> Ash.Changeset.for_create(:create, %{email: "a2@x.io", login_count: 0})
+        |> Ash.create()
+
+      # Default :update action has require_atomic? true. atomic/3 says
+      # :not_atomic for our owned field → Ash raises MustBeAtomic.
+      assert {:error, %Ash.Error.Framework{errors: [%Ash.Error.Framework.MustBeAtomic{}]}} =
+               user
+               |> Ash.Changeset.for_update(:update)
+               |> Ash.Changeset.atomic_update(:login_count, Ash.Expr.expr(login_count + 1))
+               |> Ash.update()
+    end
+
+    test "Option B — plain literal on a guardedstruct field stays atomic, sanitize runs" do
+      {:ok, user} =
+        AtomicWithCounter
+        |> Ash.Changeset.for_create(:create, %{email: "b@x.io", login_count: 0})
+        |> Ash.create()
+
+      # Plain literals → atomic/3 runs pipeline, returns {:atomic, %{...}}
+      # → single-statement UPDATE with sanitized email + validated count.
+      {:ok, updated} =
+        user
+        |> Ash.Changeset.for_update(:update, %{
+          email: "  Bob@X.IO  ",
+          login_count: 42
+        })
+        |> Ash.update()
+
+      assert updated.email == "bob@x.io"
+      assert updated.login_count == 42
+    end
+
+    test "Option C — atomic_update + expr on a NON-guardedstruct field stays atomic, no bail" do
+      require Ash.Expr
+
+      {:ok, user} =
+        AtomicWithCounter
+        |> Ash.Changeset.for_create(:create, %{email: "c@x.io"})
+        |> Ash.create()
+
+      # :last_seen_at is a plain Ash attribute (not in guardedstruct).
+      # atomic/3 must ignore expr atomics for fields it doesn't own.
+      {:ok, updated} =
+        user
+        |> Ash.Changeset.for_update(:update)
+        |> Ash.Changeset.atomic_update(:last_seen_at, Ash.Expr.expr(now()))
+        |> Ash.update()
+
+      refute is_nil(updated.last_seen_at)
+    end
+
+    test "mixed: owned plain literal + non-owned expr in same changeset — stays atomic" do
+      require Ash.Expr
+
+      {:ok, user} =
+        AtomicWithCounter
+        |> Ash.Changeset.for_create(:create, %{email: "d@x.io"})
+        |> Ash.create()
+
+      {:ok, updated} =
+        user
+        |> Ash.Changeset.for_update(:update, %{email: "  Dean@X.IO  "})
+        |> Ash.Changeset.atomic_update(:last_seen_at, Ash.Expr.expr(now()))
+        |> Ash.update()
+
+      assert updated.email == "dean@x.io"
+      refute is_nil(updated.last_seen_at)
     end
   end
 

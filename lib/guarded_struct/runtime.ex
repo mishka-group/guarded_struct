@@ -381,18 +381,7 @@ defmodule GuardedStruct.Runtime do
   end
 
   defp read_metadata(module) do
-    cond do
-      function_exported?(module, :__information__, 0) ->
-        {module.__information__(), module.__fields__()}
-
-      function_exported?(module, :__guarded_information__, 0) ->
-        {module.__guarded_information__(), module.__guarded_fields__()}
-
-      true ->
-        raise ArgumentError,
-              "module #{inspect(module)} doesn't appear to be a GuardedStruct or " <>
-                "an Ash resource using GuardedStruct.AshResource"
-    end
+    {module.__guarded_information__(), module.__guarded_fields__()}
   end
 
   defp section_options_from(info) do
@@ -706,8 +695,8 @@ defmodule GuardedStruct.Runtime do
   end
 
   defp apply_caller_validator(mod, field, value) do
-    if Code.ensure_loaded?(mod) and function_exported?(mod, :validator, 2) do
-      case apply(mod, :validator, [field, value]) do
+    if mod.__guarded_has_validator__() do
+      case mod.validator(field, value) do
         {:ok, _key, new_value} -> {:ok, new_value}
         {:error, key, message} -> {:error, %{field: key, message: message, action: :validator}}
         _ -> {:ok, value}
@@ -1099,26 +1088,28 @@ defmodule GuardedStruct.Runtime do
     end
   end
 
-  # Switches the process-dict current module for the duration of `fun.()`
-  # ONLY when `module` is a separate user module (one declared with
-  # `use GuardedStruct`). Auto-generated sub_field submodules don't have
-  # `__guarded_derive_extensions_opt__/0` defined, so we leave pdict alone
-  # for them — they inherit the root user module's per-module opt.
+  # Push `module` onto the process-dict current-module stack so derive
+  # extension lookups inside this build resolve against it. We only push
+  # when `module` has a per-module `derive_extensions:` opt — otherwise
+  # we inherit the caller's pdict (this is how sub_field auto-generated
+  # submodules pick up the root user module's opt).
   defp with_module_context(module, fun) do
-    if function_exported?(module, :__guarded_derive_extensions_opt__, 0) do
-      previous = Process.get(:guarded_struct_current_module)
-      Process.put(:guarded_struct_current_module, module)
-
-      try do
+    case module.__guarded_derive_extensions_opt__() do
+      nil ->
         fun.()
-      after
-        case previous do
-          nil -> Process.delete(:guarded_struct_current_module)
-          prev -> Process.put(:guarded_struct_current_module, prev)
+
+      _opt ->
+        previous = Process.get(:guarded_struct_current_module)
+        Process.put(:guarded_struct_current_module, module)
+
+        try do
+          fun.()
+        after
+          case previous do
+            nil -> Process.delete(:guarded_struct_current_module)
+            prev -> Process.put(:guarded_struct_current_module, prev)
+          end
         end
-      end
-    else
-      fun.()
     end
   end
 
@@ -1163,8 +1154,8 @@ defmodule GuardedStruct.Runtime do
   end
 
   defp run_field_validator(_meta, key, value, module) do
-    if function_exported?(module, :validator, 2) do
-      case apply(module, :validator, [key, value]) do
+    if module.__guarded_has_validator__() do
+      case module.validator(key, value) do
         {:ok, _key, new_value} -> {:ok, new_value}
         {:error, _key, message} -> {:error, message}
         _ -> {:ok, value}
@@ -1175,17 +1166,15 @@ defmodule GuardedStruct.Runtime do
   end
 
   defp run_main_validator(attrs, module) do
-    cond do
-      function_exported?(module, :main_validator, 1) ->
-        case apply(module, :main_validator, [attrs]) do
-          {:ok, value} -> {:ok, value}
-          {:error, errs} when is_list(errs) -> {:error, errs}
-          {:error, err} -> {:error, [err]}
-          _ -> {:ok, attrs}
-        end
-
-      true ->
-        {:ok, attrs}
+    if module.__guarded_has_main_validator__() do
+      case module.main_validator(attrs) do
+        {:ok, value} -> {:ok, value}
+        {:error, errs} when is_list(errs) -> {:error, errs}
+        {:error, err} -> {:error, [err]}
+        _ -> {:ok, attrs}
+      end
+    else
+      {:ok, attrs}
     end
   end
 
@@ -1219,12 +1208,9 @@ defmodule GuardedStruct.Runtime do
   end
 
   defp handle_error({:error, errs} = result, module, true) do
-    error_module = Module.concat(module, Error)
-
-    if Code.ensure_loaded?(error_module) do
-      raise error_module, errors: errs, term: nil
-    else
-      result
+    case module.__guarded_error_module__() do
+      nil -> result
+      error_module -> raise error_module, errors: errs, term: nil
     end
   end
 
@@ -1239,15 +1225,8 @@ defmodule GuardedStruct.Runtime do
       meta = Enum.find(fields_meta, fn f -> f.name == k end)
 
       case meta do
-        %{kind: :sub_field} ->
-          submodule = Module.concat(module, atom_to_module(k))
-
-          if Code.ensure_loaded?(submodule) and function_exported?(submodule, :__information__, 0),
-            do: %{k => all_keys(submodule)},
-            else: k
-
-        _ ->
-          k
+        %{kind: :sub_field} -> %{k => all_keys(Module.concat(module, atom_to_module(k)))}
+        _ -> k
       end
     end)
   end
@@ -1263,14 +1242,7 @@ defmodule GuardedStruct.Runtime do
       case meta do
         %{kind: :sub_field} ->
           submodule = Module.concat(module, atom_to_module(k))
-
-          nested =
-            if Code.ensure_loaded?(submodule) and
-                 function_exported?(submodule, :__information__, 0),
-               do: all_keys(submodule),
-               else: []
-
-          [%{k => nested}]
+          [%{k => all_keys(submodule)}]
 
         _ ->
           [k]
