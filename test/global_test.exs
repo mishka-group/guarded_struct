@@ -218,7 +218,7 @@ defmodule GuardedStructTest.GlobalTest do
            status: %{status: 2}
          },
          identity_provider: "google",
-         server: "users@mishka.tools"
+         server: "users@mishka.group"
        },
        age: 18,
        family: "Group",
@@ -227,7 +227,7 @@ defmodule GuardedStructTest.GlobalTest do
       assert TestNestedStruct.builder(%{
                username: " <p>Mishka   </p>",
                auth: %{
-                 server: "users@mishka.tools",
+                 server: "users@mishka.group",
                  identity_provider: "google",
                  role: %{
                    name: :user,
@@ -272,7 +272,7 @@ defmodule GuardedStructTest.GlobalTest do
       assert TestNestedStruct.builder(%{
                username: "mishka",
                auth: %{
-                 server: "users@mishka.tools",
+                 server: "users@mishka.group",
                  identity_provider: "google",
                  role: %{
                    name: :admin,

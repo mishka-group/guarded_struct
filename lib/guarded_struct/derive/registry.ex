@@ -50,7 +50,14 @@ defmodule GuardedStruct.Derive.Registry do
                   :string_float,
                   :string_integer,
                   :some_string_float,
-                  :some_string_integer
+                  :some_string_integer,
+                  :slug,
+                  :hostname,
+                  :port_number,
+                  :hex_color,
+                  :semver,
+                  :optional,
+                  :each
                 ])
 
   @sanitize_ops MapSet.new([
@@ -64,7 +71,18 @@ defmodule GuardedStruct.Derive.Registry do
                   :strip_tags,
                   :tag,
                   :string_float,
-                  :string_integer
+                  :string_integer,
+                  :uniq,
+                  :compact,
+                  :reject_empty,
+                  :sort,
+                  :squish,
+                  :no_control,
+                  :no_zero_width,
+                  :clamp,
+                  :default_when_nil,
+                  :default_when_empty,
+                  :each
                 ])
 
   def validate_ops, do: @validate_ops

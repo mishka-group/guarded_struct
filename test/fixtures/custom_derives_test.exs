@@ -20,16 +20,16 @@ defmodule GuardedStructFixtures.CustomDerivesTest do
 
   describe "slugify sanitizer + slug validator (composed custom ops)" do
     test "slugify transforms the input; slug validator passes" do
-      # `:slug` has `derives: "sanitize(slugify) validate(slug)"`.
+      # `:my_slug` has `derives: "sanitize(slugify) validate(slug)"`.
       # `slugify` (custom sanitizer) downcases + replaces non-alnum
       # with hyphens, then `slug` (custom validator) accepts the result.
       assert {:ok, art} =
                CustomDerives.Article.builder(%{
                  title: "Hello, World!",
-                 slug: "Hello, World!"
+                 my_slug: "Hello, World!"
                })
 
-      assert art.slug == "hello-world"
+      assert art.my_slug == "hello-world"
     end
 
     test "slugify collapses runs of non-alphanumerics into single hyphens" do
@@ -38,19 +38,19 @@ defmodule GuardedStructFixtures.CustomDerivesTest do
       assert {:ok, art} =
                CustomDerives.Article.builder(%{
                  title: "x",
-                 slug: "  Mishka --- Group !! 2026  "
+                 my_slug: "  Mishka --- Group !! 2026  "
                })
 
-      assert art.slug == "mishka-group-2026"
+      assert art.my_slug == "mishka-group-2026"
     end
 
     test "slug validator rejects an empty/whitespace-only slug after slugify" do
       # ERROR REASON: slugify turns "!!!" into "" (all chars stripped),
       # then the `slug` validator (regex `^[a-z0-9][a-z0-9-]*$`) rejects
-      # the empty string → :slug action error.
-      assert {:error, errs} = CustomDerives.Article.builder(%{title: "x", slug: "!!!"})
+      # the empty string → :my_slug action error.
+      assert {:error, errs} = CustomDerives.Article.builder(%{title: "x", my_slug: "!!!"})
       errs = List.wrap(errs)
-      assert Enum.any?(errs, &(&1[:field] == :slug))
+      assert Enum.any?(errs, &(&1[:field] == :my_slug))
     end
   end
 
@@ -61,7 +61,7 @@ defmodule GuardedStructFixtures.CustomDerivesTest do
       assert {:error, errs} =
                CustomDerives.Article.builder(%{
                  title: "x",
-                 slug: "x",
+                 my_slug: "x",
                  views: -1
                })
 
@@ -74,7 +74,7 @@ defmodule GuardedStructFixtures.CustomDerivesTest do
       assert {:ok, %{views: 42}} =
                CustomDerives.Article.builder(%{
                  title: "x",
-                 slug: "x",
+                 my_slug: "x",
                  views: 42
                })
     end
@@ -83,7 +83,7 @@ defmodule GuardedStructFixtures.CustomDerivesTest do
       # `:views` has `default: 1`, which is > 0, so the validator
       # passes on the default.
       assert {:ok, %{views: 1}} =
-               CustomDerives.Article.builder(%{title: "x", slug: "x"})
+               CustomDerives.Article.builder(%{title: "x", my_slug: "x"})
     end
   end
 end

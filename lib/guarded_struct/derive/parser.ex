@@ -29,11 +29,23 @@ defmodule GuardedStruct.Derive.Parser do
     wrapped =
       input
       |> String.trim()
+      |> quote_regex_values()
       |> balance_parens()
       |> String.replace(~r/\)\s+/u, ")\n")
       |> then(&"(\n#{&1}\n)")
 
     Code.string_to_quoted(wrapped, emit_warnings: false)
+  end
+
+  defp quote_regex_values(input) do
+    Regex.replace(~r/(\bregex\s*=\s*)(?!["'])([^,)]+)/u, input, fn _, prefix, pattern ->
+      cleaned =
+        pattern
+        |> String.trim_trailing()
+        |> String.replace(~S("), ~S(\"))
+
+      prefix <> ~s("#{cleaned}")
+    end)
   end
 
   defp balance_parens(input) do

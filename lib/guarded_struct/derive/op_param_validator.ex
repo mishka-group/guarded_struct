@@ -106,6 +106,28 @@ defmodule GuardedStruct.Derive.OpParamValidator do
     Enum.each(list, &check_validate(&1, field_name, module))
   end
 
+  defp check_validate({:optional, list}, field_name, module) when is_list(list),
+    do: Enum.each(list, &check_validate(&1, field_name, module))
+
+  defp check_validate({:optional, inner}, _f, _m)
+       when is_atom(inner) or is_binary(inner),
+       do: :ok
+
+  defp check_validate({:optional, other}, field_name, module),
+    do: bad_param!(:optional, "atom op name or [op, op, …] list", other, field_name, module)
+
+  defp check_validate(%{optional: list}, field_name, module) when is_list(list),
+    do: Enum.each(list, &check_validate(&1, field_name, module))
+
+  defp check_validate({:each, list}, field_name, module) when is_list(list),
+    do: Enum.each(list, &check_validate(&1, field_name, module))
+
+  defp check_validate(%{each: list}, field_name, module) when is_list(list),
+    do: Enum.each(list, &check_validate(&1, field_name, module))
+
+  defp check_validate({:each, other}, field_name, module),
+    do: bad_param!(:each, "[op, op, …] list of inner ops", other, field_name, module)
+
   defp check_validate(_other, _f, _m), do: :ok
 
   defp check_sanitize({:tag, sub_op}, _f, _m) when is_atom(sub_op) or is_binary(sub_op),
@@ -113,6 +135,22 @@ defmodule GuardedStruct.Derive.OpParamValidator do
 
   defp check_sanitize({:tag, other}, field_name, module),
     do: bad_param!(:tag, "atom (e.g. :strip_tags) or string", other, field_name, module)
+
+  defp check_sanitize({:clamp, [min, max]}, _f, _m)
+       when is_number(min) and is_number(max) and min <= max,
+       do: :ok
+
+  defp check_sanitize({:clamp, other}, field_name, module),
+    do: bad_param!(:clamp, "[min, max] with min <= max (numbers)", other, field_name, module)
+
+  defp check_sanitize({:default_when_nil, _value}, _f, _m), do: :ok
+  defp check_sanitize({:default_when_empty, _value}, _f, _m), do: :ok
+
+  defp check_sanitize({:each, list}, _f, _m) when is_list(list), do: :ok
+  defp check_sanitize(%{each: list}, _f, _m) when is_list(list), do: :ok
+
+  defp check_sanitize({:each, other}, field_name, module),
+    do: bad_param!(:each, "[op, op, …] list of inner sanitize ops", other, field_name, module)
 
   defp check_sanitize(_other, _f, _m), do: :ok
 

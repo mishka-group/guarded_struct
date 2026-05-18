@@ -843,4 +843,234 @@ defmodule GuardedStructTest.DeriveTest do
 
     "0" = assert ValidationDerive.validate(:some_string_integer, "0", :test)
   end
+
+  describe "list hygiene sanitizers" do
+    test ":uniq removes duplicates while preserving order" do
+      assert SanitizerDerive.sanitize([1, 2, 2, 3, 1], :uniq) == [1, 2, 3]
+    end
+
+    test ":uniq passes non-list through" do
+      assert SanitizerDerive.sanitize("hi", :uniq) == "hi"
+    end
+
+    test ":compact drops nils" do
+      assert SanitizerDerive.sanitize([1, nil, 2, nil], :compact) == [1, 2]
+    end
+
+    test ":reject_empty drops nil, empty string, empty list, empty map" do
+      assert SanitizerDerive.sanitize([1, "", nil, [], %{}, "ok"], :reject_empty) == [1, "ok"]
+    end
+
+    test ":sort sorts a list of comparables" do
+      assert SanitizerDerive.sanitize([3, 1, 2], :sort) == [1, 2, 3]
+    end
+  end
+
+  describe "string hygiene sanitizers" do
+    test ":squish collapses runs of whitespace and trims" do
+      assert SanitizerDerive.sanitize("  hello   world  ", :squish) == "hello world"
+    end
+
+    test ":no_control strips ASCII control characters" do
+      assert SanitizerDerive.sanitize("hi\x00there\x1F!", :no_control) == "hithere!"
+    end
+
+    test ":no_zero_width strips zero-width unicode chars" do
+      assert SanitizerDerive.sanitize("hi​there", :no_zero_width) == "hithere"
+    end
+
+    test "string-hygiene ops passthrough on non-binary" do
+      assert SanitizerDerive.sanitize(123, :squish) == 123
+      assert SanitizerDerive.sanitize(nil, :no_control) == nil
+    end
+  end
+
+  describe "clamp sanitizer" do
+    test "clamps below min" do
+      assert SanitizerDerive.sanitize(-5, {:clamp, [0, 100]}) == 0
+    end
+
+    test "clamps above max" do
+      assert SanitizerDerive.sanitize(200, {:clamp, [0, 100]}) == 100
+    end
+
+    test "leaves in-range untouched" do
+      assert SanitizerDerive.sanitize(50, {:clamp, [0, 100]}) == 50
+    end
+
+    test "works on floats" do
+      assert SanitizerDerive.sanitize(1.5, {:clamp, [0.0, 1.0]}) == 1.0
+    end
+
+    test "passthrough on non-number" do
+      assert SanitizerDerive.sanitize("hi", {:clamp, [0, 100]}) == "hi"
+    end
+  end
+
+  describe "default-fill sanitizers" do
+    test ":default_when_nil replaces nil" do
+      assert SanitizerDerive.sanitize(nil, {:default_when_nil, 42}) == 42
+    end
+
+    test ":default_when_nil leaves non-nil alone" do
+      assert SanitizerDerive.sanitize(7, {:default_when_nil, 42}) == 7
+    end
+
+    test ":default_when_empty handles nil, empty string, empty list, empty map" do
+      assert SanitizerDerive.sanitize(nil, {:default_when_empty, :x}) == :x
+      assert SanitizerDerive.sanitize("", {:default_when_empty, :x}) == :x
+      assert SanitizerDerive.sanitize([], {:default_when_empty, :x}) == :x
+      assert SanitizerDerive.sanitize(%{}, {:default_when_empty, :x}) == :x
+    end
+
+    test ":default_when_empty leaves non-empty alone" do
+      assert SanitizerDerive.sanitize("hi", {:default_when_empty, :x}) == "hi"
+      assert SanitizerDerive.sanitize([1], {:default_when_empty, :x}) == [1]
+    end
+  end
+
+  describe "named regex aliases" do
+    test ":slug accepts kebab-case lowercase" do
+      assert ValidationDerive.validate(:slug, "my-slug-1", :name) == "my-slug-1"
+    end
+
+    test ":slug rejects uppercase, underscores, leading/trailing dashes" do
+      assert {:error, :name, :slug, _} = ValidationDerive.validate(:slug, "MySlug", :name)
+      assert {:error, :name, :slug, _} = ValidationDerive.validate(:slug, "my_slug", :name)
+      assert {:error, :name, :slug, _} = ValidationDerive.validate(:slug, "-foo", :name)
+      assert {:error, :name, :slug, _} = ValidationDerive.validate(:slug, "foo-", :name)
+    end
+
+    test ":hostname accepts simple + subdomain forms" do
+      assert ValidationDerive.validate(:hostname, "example.com", :host) == "example.com"
+      assert ValidationDerive.validate(:hostname, "a.b.example.com", :host) == "a.b.example.com"
+    end
+
+    test ":hostname rejects underscore, scheme, length > 253" do
+      assert {:error, :host, :hostname, _} =
+               ValidationDerive.validate(:hostname, "bad_host.io", :host)
+
+      assert {:error, :host, :hostname, _} =
+               ValidationDerive.validate(:hostname, "https://example.com", :host)
+
+      long = String.duplicate("a", 254)
+
+      assert {:error, :host, :hostname, _} =
+               ValidationDerive.validate(:hostname, long, :host)
+    end
+
+    test ":port_number accepts 1..65535 integers" do
+      assert ValidationDerive.validate(:port_number, 1, :port) == 1
+      assert ValidationDerive.validate(:port_number, 65535, :port) == 65535
+      assert ValidationDerive.validate(:port_number, 8080, :port) == 8080
+    end
+
+    test ":port_number rejects out-of-range and non-integer" do
+      assert {:error, :port, :port_number, _} =
+               ValidationDerive.validate(:port_number, 0, :port)
+
+      assert {:error, :port, :port_number, _} =
+               ValidationDerive.validate(:port_number, 70000, :port)
+
+      assert {:error, :port, :port_number, _} =
+               ValidationDerive.validate(:port_number, "80", :port)
+    end
+
+    test ":hex_color accepts #RRGGBB and #RGB" do
+      assert ValidationDerive.validate(:hex_color, "#FF00aa", :color) == "#FF00aa"
+      assert ValidationDerive.validate(:hex_color, "#abc", :color) == "#abc"
+    end
+
+    test ":hex_color rejects missing hash, wrong length, bad chars" do
+      assert {:error, :color, :hex_color, _} =
+               ValidationDerive.validate(:hex_color, "FF0000", :color)
+
+      assert {:error, :color, :hex_color, _} =
+               ValidationDerive.validate(:hex_color, "#FF00", :color)
+
+      assert {:error, :color, :hex_color, _} =
+               ValidationDerive.validate(:hex_color, "#GG0000", :color)
+    end
+
+    test ":semver accepts basic + prerelease + build forms" do
+      assert ValidationDerive.validate(:semver, "1.2.3", :version) == "1.2.3"
+      assert ValidationDerive.validate(:semver, "1.0.0-alpha.1", :version) == "1.0.0-alpha.1"
+      assert ValidationDerive.validate(:semver, "1.0.0+build.42", :version) == "1.0.0+build.42"
+    end
+
+    test ":semver rejects malformed versions" do
+      assert {:error, :version, :semver, _} =
+               ValidationDerive.validate(:semver, "v1.2.3", :version)
+
+      assert {:error, :version, :semver, _} =
+               ValidationDerive.validate(:semver, "1.2", :version)
+
+      assert {:error, :version, :semver, _} =
+               ValidationDerive.validate(:semver, "1.2.3.4", :version)
+    end
+  end
+
+  describe "optional wrapper" do
+    test "nil passes through unchanged regardless of inner ops" do
+      assert nil == ValidationDerive.validate({:optional, [:string]}, nil, :f)
+      assert nil == ValidationDerive.validate({:optional, "string"}, nil, :f)
+      assert nil == ValidationDerive.validate({:optional, :string}, nil, :f)
+      assert nil == ValidationDerive.validate(%{optional: [:string, {:max_len, 5}]}, nil, :f)
+    end
+
+    test "non-nil value runs inner ops" do
+      assert "ok" == ValidationDerive.validate({:optional, [:string]}, "ok", :f)
+      assert "ok" == ValidationDerive.validate(%{optional: [:string, {:max_len, 5}]}, "ok", :f)
+    end
+
+    test "non-nil value fails when inner op rejects" do
+      assert {:error, :f, :string, _} =
+               ValidationDerive.validate({:optional, [:string]}, 42, :f)
+
+      assert {:error, :f, :max_len, _} =
+               ValidationDerive.validate(%{optional: [:string, {:max_len, 2}]}, "long", :f)
+    end
+  end
+
+  describe "each combinator — sanitize" do
+    test "applies inner sanitize ops to every element of a list" do
+      assert ["a", "b"] ==
+               SanitizerDerive.sanitize(["  A  ", "  B  "], %{each: [:trim, :downcase]})
+    end
+
+    test "tuple form (atoms-only inner list) also works" do
+      assert ["a", "b"] ==
+               SanitizerDerive.sanitize(["  A  ", "  B  "], {:each, [:trim, :downcase]})
+    end
+
+    test "passthrough on non-list input" do
+      assert "hi" == SanitizerDerive.sanitize("hi", %{each: [:downcase]})
+    end
+
+    test "empty list stays empty" do
+      assert [] == SanitizerDerive.sanitize([], %{each: [:trim]})
+    end
+  end
+
+  describe "each combinator — validate" do
+    test "every element passes inner ops → input returned unchanged" do
+      assert ["a", "b"] == ValidationDerive.validate(%{each: [:string]}, ["a", "b"], :tags)
+    end
+
+    test "any failing element makes the whole op error with indices" do
+      assert {:error, :tags, :each, msg} =
+               ValidationDerive.validate(%{each: [:string]}, ["a", 2, "c", 4], :tags)
+
+      assert msg =~ "failed indices: [1, 3]"
+    end
+
+    test "non-list input gets the generic :each error" do
+      assert {:error, :tags, :each, _} =
+               ValidationDerive.validate(%{each: [:string]}, "not-a-list", :tags)
+    end
+
+    test "tuple form (atoms-only inner list) also works" do
+      assert ["a"] == ValidationDerive.validate({:each, [:string]}, ["a"], :tags)
+    end
+  end
 end

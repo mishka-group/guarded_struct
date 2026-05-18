@@ -90,6 +90,12 @@ defmodule GuardedStruct.Messages do
   @callback convert_enum_output(any()) :: message()
   @callback equal(any()) :: message()
   @callback record(any()) :: message()
+  @callback slug(any()) :: message()
+  @callback hostname(any()) :: message()
+  @callback port_number(any()) :: message()
+  @callback hex_color(any()) :: message()
+  @callback semver(any()) :: message()
+  @callback each(any()) :: message()
 
   @optional_callbacks required_fields: 0,
                       authorized_fields: 0,
@@ -152,7 +158,13 @@ defmodule GuardedStruct.Messages do
                       is_type: 1,
                       convert_enum_output: 1,
                       equal: 1,
-                      record: 1
+                      record: 1,
+                      slug: 1,
+                      hostname: 1,
+                      port_number: 1,
+                      hex_color: 1,
+                      semver: 1,
+                      each: 1
 
   @doc false
   # Get idea from https://github.com/pow-auth/pow/blob/main/lib/pow/phoenix/messages.ex
@@ -223,6 +235,12 @@ defmodule GuardedStruct.Messages do
       def convert_enum_output(field), do: unquote(__MODULE__).convert_enum_output(field)
       def equal(field), do: unquote(__MODULE__).equal(field)
       def record(field), do: unquote(__MODULE__).record(field)
+      def slug(field), do: unquote(__MODULE__).slug(field)
+      def hostname(field), do: unquote(__MODULE__).hostname(field)
+      def port_number(field), do: unquote(__MODULE__).port_number(field)
+      def hex_color(field), do: unquote(__MODULE__).hex_color(field)
+      def semver(field), do: unquote(__MODULE__).semver(field)
+      def each(field), do: unquote(__MODULE__).each(field)
 
       defoverridable unquote(__MODULE__)
     end
@@ -394,6 +412,21 @@ defmodule GuardedStruct.Messages do
   def record(field) do
     "The #{field} field is not a valid Erlang record (a tagged tuple)."
   end
+
+  def slug(field), do: "Invalid slug format in the #{field} field"
+
+  def hostname(field), do: "Invalid hostname format in the #{field} field"
+
+  def port_number(field),
+    do: "The #{field} field must be a valid TCP/UDP port number between 1 and 65535"
+
+  def hex_color(field),
+    do: "Invalid hex color format in the #{field} field (expected #RRGGBB or #RGB)"
+
+  def semver(field),
+    do: "Invalid semantic version format in the #{field} field (expected MAJOR.MINOR.PATCH)"
+
+  def each(field), do: "One or more items in the #{field} field failed validation"
 
   # Helpers
   def translated_message(fn_atom), do: apply(@message_backend, fn_atom, [])
