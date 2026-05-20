@@ -147,4 +147,89 @@ defmodule GuardedStructTest.OpParamValidatorTest do
       end
     end
   end
+
+  describe "validate!/3 — optional/each combinator inner ops" do
+    test "optional with registered atom inner passes" do
+      ops = %{validate: [{:optional, [:string]}]}
+      assert ^ops = OpParamValidator.validate!(ops, :name, FakeMod)
+    end
+
+    test "optional with parameterised tuple inner passes and cascades param-shape check" do
+      ops = %{validate: [{:optional, [:string, {:max_len, 20}]}]}
+      assert ^ops = OpParamValidator.validate!(ops, :name, FakeMod)
+    end
+
+    test "optional map form with mixed atom and tuple inners passes" do
+      ops = %{validate: [%{optional: [:string, {:max_len, 20}]}]}
+      assert ^ops = OpParamValidator.validate!(ops, :name, FakeMod)
+    end
+
+    test "optional with unknown atom inner raises with op name" do
+      assert_raise Spark.Error.DslError, ~r/unknown validate op :strng inside `optional`/, fn ->
+        OpParamValidator.validate!(%{validate: [{:optional, [:strng]}]}, :name, FakeMod)
+      end
+    end
+
+    test "optional with bad param inside known tuple inner raises (cascade)" do
+      assert_raise Spark.Error.DslError, ~r/invalid parameter for `max_len`/, fn ->
+        OpParamValidator.validate!(
+          %{validate: [{:optional, [:string, {:max_len, "bad"}]}]},
+          :name,
+          FakeMod
+        )
+      end
+    end
+
+    test "each (validate side) with registered atom inner passes" do
+      ops = %{validate: [{:each, [:string]}]}
+      assert ^ops = OpParamValidator.validate!(ops, :name, FakeMod)
+    end
+
+    test "each (validate side) with parameterised tuple inner passes and cascades" do
+      ops = %{validate: [{:each, [:string, {:max_len, 200}]}]}
+      assert ^ops = OpParamValidator.validate!(ops, :name, FakeMod)
+    end
+
+    test "each (validate side) with unknown atom inner raises" do
+      assert_raise Spark.Error.DslError, ~r/unknown validate op :foo inside `each`/, fn ->
+        OpParamValidator.validate!(%{validate: [{:each, [:foo]}]}, :name, FakeMod)
+      end
+    end
+
+    test "each (validate side) with bad param inside known tuple inner raises (cascade)" do
+      assert_raise Spark.Error.DslError, ~r/invalid parameter for `max_len`/, fn ->
+        OpParamValidator.validate!(
+          %{validate: [{:each, [:string, {:max_len, "bad"}]}]},
+          :name,
+          FakeMod
+        )
+      end
+    end
+
+    test "each (sanitize side) with registered atom inners passes" do
+      ops = %{sanitize: [{:each, [:trim, :downcase]}]}
+      assert ^ops = OpParamValidator.validate!(ops, :name, FakeMod)
+    end
+
+    test "each (sanitize side) with unknown atom inner raises" do
+      assert_raise Spark.Error.DslError, ~r/unknown sanitize op :nope inside `each`/, fn ->
+        OpParamValidator.validate!(%{sanitize: [{:each, [:nope]}]}, :name, FakeMod)
+      end
+    end
+
+    test "each (sanitize side) with parameterised tuple inner passes and cascades" do
+      ops = %{sanitize: [{:each, [:trim, {:clamp, [0, 100]}]}]}
+      assert ^ops = OpParamValidator.validate!(ops, :name, FakeMod)
+    end
+
+    test "each (sanitize side) with bad param inside known tuple inner raises (cascade)" do
+      assert_raise Spark.Error.DslError, ~r/invalid parameter for `clamp`/, fn ->
+        OpParamValidator.validate!(
+          %{sanitize: [{:each, [:trim, {:clamp, [10, 0]}]}]},
+          :name,
+          FakeMod
+        )
+      end
+    end
+  end
 end

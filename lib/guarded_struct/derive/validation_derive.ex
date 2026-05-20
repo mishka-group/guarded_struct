@@ -637,10 +637,6 @@ defmodule GuardedStruct.Derive.ValidationDerive do
   def validate({:optional, _inner}, nil, _field), do: nil
   def validate(%{optional: _inner}, nil, _field), do: nil
 
-  def validate({:optional, inner}, input, field) when is_binary(inner) do
-    run_optional_inner([string_to_op(inner)], input, field)
-  end
-
   def validate({:optional, inner}, input, field) when is_atom(inner) do
     run_optional_inner([inner], input, field)
   end
@@ -712,12 +708,6 @@ defmodule GuardedStruct.Derive.ValidationDerive do
         _ -> true
       end
     end)
-  end
-
-  defp string_to_op(bin) when is_binary(bin) do
-    String.to_existing_atom(bin)
-  rescue
-    _ -> bin
   end
 
   defp fallback_dispatch(action, input, field) do

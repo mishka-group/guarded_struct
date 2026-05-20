@@ -100,6 +100,10 @@ defmodule GuardedStruct.Derive.Parser do
   end
 
   defp parse_arg({:=, _, [{key, _, nil}, {value, _, nil}]})
+       when key in [:optional, :each] and is_atom(value),
+       do: {key, [value]}
+
+  defp parse_arg({:=, _, [{key, _, nil}, {value, _, nil}]})
        when is_atom(key) and is_atom(value) do
     {key, Atom.to_string(value)}
   end
