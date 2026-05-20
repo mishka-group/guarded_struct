@@ -63,8 +63,6 @@ defmodule GuardedStruct.Transformers.Codegen do
     {keys, defstruct_kw, types, enforce_keys, fields_runtime} =
       build_struct_pieces(entities, block_enforce)
 
-    field_meta_map = Map.new(fields_runtime, fn m -> {m.name, m} end)
-
     json? = Map.get(options, :json, false) == true
 
     # `json: true` opts into JSON encoding. Precedence:
@@ -159,13 +157,19 @@ defmodule GuardedStruct.Transformers.Codegen do
         Map.put(unquote(info_map), :module, __MODULE__)
       end
 
-      def __fields__, do: unquote(Macro.escape(fields_runtime))
+      @__guarded_fields__ GuardedStruct.Transformers.Codegen.bake_child_modules(
+                            unquote(Macro.escape(fields_runtime)),
+                            __MODULE__
+                          )
+      def __fields__, do: @__guarded_fields__
 
-      def __field_meta__(name), do: Map.get(unquote(Macro.escape(field_meta_map)), name)
+      @__guarded_field_meta_map__ Map.new(@__guarded_fields__, fn m -> {m.name, m} end)
+      def __field_meta__(name), do: Map.get(@__guarded_field_meta_map__, name)
 
       def __guarded_information__, do: __information__()
       def __guarded_fields__, do: __fields__()
       def __guarded_field_meta__(name), do: __field_meta__(name)
+      def __guarded_atom_lookup__, do: unquote(Macro.escape(atom_lookup_for(keys)))
 
       @__guarded_has_validator__ Module.defines?(__MODULE__, {:validator, 2}, :def)
       def __guarded_has_validator__, do: @__guarded_has_validator__
@@ -261,6 +265,7 @@ defmodule GuardedStruct.Transformers.Codegen do
       def __guarded_information__, do: __information__()
       def __guarded_fields__, do: __fields__()
       def __guarded_field_meta__(_), do: nil
+      def __guarded_atom_lookup__, do: %{}
 
       @__guarded_has_validator__ Module.defines?(__MODULE__, {:validator, 2}, :def)
       def __guarded_has_validator__, do: @__guarded_has_validator__
@@ -341,6 +346,25 @@ defmodule GuardedStruct.Transformers.Codegen do
   defp entity_name(%Field{name: n}), do: n
   defp entity_name(%SubField{name: n}), do: n
   defp entity_name(other), do: Map.get(other, :name)
+
+  defp atom_lookup_for(keys) when is_list(keys) do
+    for k <- keys, is_atom(k), into: %{}, do: {Atom.to_string(k), k}
+  end
+
+  @doc """
+  Inject `:child_module` into every `:sub_field` entry of the fields list.
+  Called at parent module compile time so the value is
+  `Module.concat(parent, ChildPart)` baked in — runtime never recomputes it.
+  """
+  def bake_child_modules(fields, parent_module) when is_list(fields) do
+    Enum.map(fields, fn
+      %{kind: :sub_field, name: name} = meta ->
+        Map.put(meta, :child_module, Module.concat(parent_module, atom_to_module(name)))
+
+      meta ->
+        meta
+    end)
+  end
 
   defp build_struct_pieces(entities, block_enforce) do
     {virtual_entities, struct_entities} =

@@ -30,6 +30,16 @@
 - Add `@derives` decorator attribute — alternative to inline `derives:` for keeping fields short [#13](https://github.com/mishka-group/guarded_struct/pull/13)
 - Add editor autocomplete inside `guardedstruct do … end` via Spark's ElixirSense plugin (closes [#1](https://github.com/mishka-group/guarded_struct/issues/1)) [#13](https://github.com/mishka-group/guarded_struct/pull/13)
 - Add igniter installer — `mix igniter.install guarded_struct` [#13](https://github.com/mishka-group/guarded_struct/pull/13)
+- Add `each=[ops]` combinator on both sanitize and validate — applies inner ops to every element of a list; validate error message reports failing indices.
+- Add `optional=[ops]` validator wrapper — passes `nil` through, runs inner ops on non-nil values.
+- Add list hygiene sanitizers — `:uniq`, `:compact`, `:reject_empty`, `:sort`.
+- Add string hygiene sanitizers — `:squish` (collapse runs of whitespace + trim), `:no_control` (strip ASCII control chars), `:no_zero_width` (strip zero-width unicode).
+- Add named regex validators — `:slug`, `:hostname`, `:port_number`, `:hex_color`, `:semver`. Patterns are anchored, bounded, and ReDoS-safe; compiled once at module load.
+- Add `{:clamp, [min, max]}` sanitizer — snap out-of-range numbers to the nearest bound.
+- Add `{:default_when_nil, value}` / `{:default_when_empty, value}` sanitizers — fill missing values in the pipeline.
+- Compile-time param shape validation extended to every new parameterised op via `OpParamValidator`.
+- Localised error messages added through the `Messages` callbacks for `slug`, `hostname`, `port_number`, `hex_color`, `semver`, and `each`.
+
 
 ### Refactors:
 
@@ -56,6 +66,8 @@
 - Surface malformed `derives:` strings as `Spark.Error.DslError` with file:line — previously swallowed by a `rescue _ -> nil` and silently produced no validation [#13](https://github.com/mishka-group/guarded_struct/pull/13)
 - Fix re-entrancy in the auto-map cascade — process-dict flag is saved+restored across nested `validate/3` calls so a validator callback can recursively validate without clobbering outer state [#13](https://github.com/mishka-group/guarded_struct/pull/13)
 - Fix `Logger.configure(level: :warning)` global side-effect in `test_helper.exs` — replaced with `@moduletag capture_log: true` on Ash test modules [#13](https://github.com/mishka-group/guarded_struct/pull/13)
+- Parser silently dropped the entire derive string when a `regex=<pattern>` op contained unquoted special characters (`^`, `[`, `+`, `$`, …). Fixed via `quote_regex_values/1` pre-processor that wraps the pattern in `"…"` before AST conversion.
+
 
 ### Tests:
 

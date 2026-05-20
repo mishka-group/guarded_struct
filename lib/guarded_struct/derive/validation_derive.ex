@@ -4,6 +4,13 @@ defmodule GuardedStruct.Derive.ValidationDerive do
 
   @family_alphabet Enum.concat([?a..?z, ~c" "])
 
+  @slug_regex ~r/^[a-z0-9]+(?:-[a-z0-9]+)*$/
+  @hostname_regex ~r/^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)*[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/
+  @hex_color_regex ~r/^#(?:[0-9a-fA-F]{6}|[0-9a-fA-F]{3})$/
+  @semver_regex ~r/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/
+
+  @cache_key {__MODULE__, :fallback_module}
+
   @spec call({atom(), any()}, list(any()), String.t()) :: {any(), any()}
   def call({_field, input}, nil, _hint), do: {input, []}
 
@@ -321,6 +328,12 @@ defmodule GuardedStruct.Derive.ValidationDerive do
       {:error, field, :date, translated_message(:date_binary, field)}
   end
 
+  def validate({:regex, %Regex{} = regex}, input, field) when is_binary(input) do
+    if Regex.match?(regex, input),
+      do: input,
+      else: {:error, field, :regex, translated_message(:regex, field)}
+  end
+
   # All the regex that you want to use should put inside '' and see the result before using.
   def validate({:regex, pattern_str}, input, field)
       when is_binary(input) and is_list(pattern_str) do
@@ -486,7 +499,16 @@ defmodule GuardedStruct.Derive.ValidationDerive do
     |> vlidate_equal(input, field)
   end
 
-  def validate({:custom, {module_list, function}}, input, field) do
+  def validate({:custom, {module, function}}, input, field)
+      when is_atom(module) and is_atom(function) do
+    executed = apply(module, function, [input])
+    if is_boolean(executed) and executed, do: input, else: raise(ArgumentError, "")
+  rescue
+    _e ->
+      {:error, field, :custom, translated_message(:custom, field)}
+  end
+
+  def validate({:custom, {module_list, function}}, input, field) when is_list(module_list) do
     safe_module = Module.safe_concat(module_list)
     executed = apply(safe_module, function, [input])
     if is_boolean(executed) and executed, do: input, else: raise(ArgumentError, "")
@@ -586,6 +608,76 @@ defmodule GuardedStruct.Derive.ValidationDerive do
     validate({:record, String.to_atom(tag)}, input, field)
   end
 
+  def validate(:slug, input, field) when is_binary(input) do
+    if Regex.match?(@slug_regex, input),
+      do: input,
+      else: {:error, field, :slug, translated_message(:slug, field)}
+  end
+
+  def validate(:slug, _input, field),
+    do: {:error, field, :slug, translated_message(:slug, field)}
+
+  def validate(:hostname, input, field) when is_binary(input) do
+    if byte_size(input) <= 253 and Regex.match?(@hostname_regex, input),
+      do: input,
+      else: {:error, field, :hostname, translated_message(:hostname, field)}
+  end
+
+  def validate(:hostname, _input, field),
+    do: {:error, field, :hostname, translated_message(:hostname, field)}
+
+  def validate(:port_number, input, _field)
+      when is_integer(input) and input >= 1 and input <= 65535,
+      do: input
+
+  def validate(:port_number, _input, field),
+    do: {:error, field, :port_number, translated_message(:port_number, field)}
+
+  def validate(:hex_color, input, field) when is_binary(input) do
+    if Regex.match?(@hex_color_regex, input),
+      do: input,
+      else: {:error, field, :hex_color, translated_message(:hex_color, field)}
+  end
+
+  def validate(:hex_color, _input, field),
+    do: {:error, field, :hex_color, translated_message(:hex_color, field)}
+
+  def validate(:semver, input, field) when is_binary(input) do
+    if Regex.match?(@semver_regex, input),
+      do: input,
+      else: {:error, field, :semver, translated_message(:semver, field)}
+  end
+
+  def validate(:semver, _input, field),
+    do: {:error, field, :semver, translated_message(:semver, field)}
+
+  def validate({:optional, _inner}, nil, _field), do: nil
+  def validate(%{optional: _inner}, nil, _field), do: nil
+
+  def validate({:optional, inner}, input, field) when is_atom(inner) do
+    run_optional_inner([inner], input, field)
+  end
+
+  def validate({:optional, inner}, input, field) when is_list(inner) do
+    run_optional_inner(inner, input, field)
+  end
+
+  def validate(%{optional: inner}, input, field) when is_list(inner) do
+    run_optional_inner(inner, input, field)
+  end
+
+  def validate({:each, inner}, input, field) when is_list(input) and is_list(inner),
+    do: run_each(input, inner, field)
+
+  def validate(%{each: inner}, input, field) when is_list(input) and is_list(inner),
+    do: run_each(input, inner, field)
+
+  def validate({:each, _}, _input, field),
+    do: {:error, field, :each, translated_message(:each, field)}
+
+  def validate(%{each: _}, _input, field),
+    do: {:error, field, :each, translated_message(:each, field)}
+
   def validate(action, input, field) do
     case GuardedStruct.Derive.Extension.dispatch_validate(action, input, field) do
       :__not_found__ -> fallback_dispatch(action, input, field)
@@ -596,8 +688,47 @@ defmodule GuardedStruct.Derive.ValidationDerive do
       {:error, field, :type, translated_message(:validate_unexpected, field)}
   end
 
+  defp run_optional_inner(inner_ops, input, field) do
+    Enum.reduce_while(inner_ops, input, fn op, _acc ->
+      case validate(op, input, field) do
+        {:error, _, _, _} = err -> {:halt, err}
+        {:error, _, _, _, _} = err -> {:halt, err}
+        _ok -> {:cont, input}
+      end
+    end)
+  end
+
+  defp run_each(input, inner_ops, field) do
+    bad_indices =
+      input
+      |> Enum.with_index()
+      |> Enum.reduce([], fn {elem, idx}, acc ->
+        if each_element_ok?(elem, inner_ops, field), do: acc, else: [idx | acc]
+      end)
+      |> Enum.reverse()
+
+    case bad_indices do
+      [] ->
+        input
+
+      _ ->
+        {:error, field, :each,
+         translated_message(:each, field) <> " (failed indices: #{inspect(bad_indices)})"}
+    end
+  end
+
+  defp each_element_ok?(elem, inner_ops, field) do
+    Enum.all?(inner_ops, fn op ->
+      case validate(op, elem, field) do
+        {:error, _, _, _} -> false
+        {:error, _, _, _, _} -> false
+        _ -> true
+      end
+    end)
+  end
+
   defp fallback_dispatch(action, input, field) do
-    case Application.get_env(:guarded_struct, :validate_derive) do
+    case fallback_module() do
       nil ->
         {:error, field, :type, translated_message(:validate_unexpected, field)}
 
@@ -608,6 +739,22 @@ defmodule GuardedStruct.Derive.ValidationDerive do
         derive_module.validate(action, input, field)
     end
   end
+
+  defp fallback_module do
+    raw = Application.get_env(:guarded_struct, :validate_derive)
+
+    case :persistent_term.get(@cache_key, :__miss__) do
+      {^raw, cached} ->
+        cached
+
+      _ ->
+        :persistent_term.put(@cache_key, {raw, raw})
+        raw
+    end
+  end
+
+  @doc false
+  def clear_fallback_cache, do: :persistent_term.erase(@cache_key)
 
   if Code.ensure_loaded?(URL) do
     defp location(geo_link, field, action) do

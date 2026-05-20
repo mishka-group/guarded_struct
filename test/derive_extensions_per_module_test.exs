@@ -9,7 +9,7 @@ defmodule GuardedStructTest.DeriveExtensionsPerModuleTest do
     * No opt → falls back to global Application config (legacy behavior)
     * `[]`   → opts OUT entirely (no extensions, global ignored)
     * `[A]`  → REPLACE global with [A]
-    * `[:config, A]` → global ++ [A] (global wins on :slug-style collisions)
+    * `[:config, A]` → global ++ [A] (global wins on :my_slug-style collisions)
     * `[A, :config]` → [A] ++ global (A wins on collisions)
     * `[A, :config, B]` → [A] ++ global ++ [B] (in-position merge)
     * `[:config, :config]` → ArgumentError at compile time
@@ -20,7 +20,7 @@ defmodule GuardedStructTest.DeriveExtensionsPerModuleTest do
   # async: false — we mutate Application env, which is process-global.
   use ExUnit.Case, async: false
 
-  # Two extension modules with a deliberately overlapping op name `:slug`
+  # Two extension modules with a deliberately overlapping op name `:my_slug`
   # so we can prove who wins on collisions.
 
   defmodule GlobalDerives do
@@ -28,7 +28,7 @@ defmodule GuardedStructTest.DeriveExtensionsPerModuleTest do
 
     derives do
       # Accepts only "global:..." prefixed slugs
-      validator :slug, fn input ->
+      validator :my_slug, fn input ->
         is_binary(input) and String.starts_with?(input, "global:")
       end
 
@@ -41,8 +41,8 @@ defmodule GuardedStructTest.DeriveExtensionsPerModuleTest do
     use GuardedStruct.Derive.Extension
 
     derives do
-      # Accepts only "local:..." prefixed slugs (collides with GlobalDerives.:slug)
-      validator :slug, fn input ->
+      # Accepts only "local:..." prefixed slugs (collides with GlobalDerives.:my_slug)
+      validator :my_slug, fn input ->
         is_binary(input) and String.starts_with?(input, "local:")
       end
 
@@ -75,15 +75,15 @@ defmodule GuardedStructTest.DeriveExtensionsPerModuleTest do
       use GuardedStruct
 
       guardedstruct do
-        field(:slug, String.t(), derives: "validate(slug)")
+        field(:my_slug, String.t(), derives: "validate(my_slug)")
       end
     end
 
-    test "GlobalDerives.:slug active (only 'global:...' accepted)" do
-      assert {:ok, _} = NoOpt.builder(%{slug: "global:hello"})
+    test "GlobalDerives.:my_slug active (only 'global:...' accepted)" do
+      assert {:ok, _} = NoOpt.builder(%{my_slug: "global:hello"})
 
-      assert {:error, errs} = NoOpt.builder(%{slug: "local:hello"})
-      assert Enum.any?(errs, &(&1[:field] == :slug and &1[:action] == :slug))
+      assert {:error, errs} = NoOpt.builder(%{my_slug: "local:hello"})
+      assert Enum.any?(errs, &(&1[:field] == :my_slug and &1[:action] == :my_slug))
     end
 
     test "__guarded_derive_extensions_opt__/0 returns nil (no opt set)" do
@@ -102,7 +102,7 @@ defmodule GuardedStructTest.DeriveExtensionsPerModuleTest do
       end
     end
 
-    test "global is ignored — :slug is no longer known if we tried it" do
+    test "global is ignored — :my_slug is no longer known if we tried it" do
       # Use a built-in op so the field still validates; the point is to
       # confirm that the module's extension list resolves to [].
       assert {:ok, _} = EmptyOpt.builder(%{name: "x"})
@@ -123,15 +123,15 @@ defmodule GuardedStructTest.DeriveExtensionsPerModuleTest do
       use GuardedStruct, derive_extensions: [LocalDerives]
 
       guardedstruct do
-        field(:slug, String.t(), derives: "validate(slug)")
+        field(:my_slug, String.t(), derives: "validate(my_slug)")
       end
     end
 
-    test "LocalDerives.:slug active — only 'local:...' accepted" do
-      assert {:ok, _} = ReplaceOpt.builder(%{slug: "local:hello"})
+    test "LocalDerives.:my_slug active — only 'local:...' accepted" do
+      assert {:ok, _} = ReplaceOpt.builder(%{my_slug: "local:hello"})
 
-      assert {:error, errs} = ReplaceOpt.builder(%{slug: "global:hello"})
-      assert Enum.any?(errs, &(&1[:field] == :slug))
+      assert {:error, errs} = ReplaceOpt.builder(%{my_slug: "global:hello"})
+      assert Enum.any?(errs, &(&1[:field] == :my_slug))
     end
 
     test "global is COMPLETELY ignored — :uuid7 (only in global) becomes unknown" do
@@ -158,21 +158,21 @@ defmodule GuardedStructTest.DeriveExtensionsPerModuleTest do
       use GuardedStruct, derive_extensions: [:config, LocalDerives]
 
       guardedstruct do
-        field(:slug, String.t(), derives: "validate(slug)")
+        field(:my_slug, String.t(), derives: "validate(my_slug)")
         field(:tag, String.t(), derives: "validate(ksuid)")
       end
     end
 
-    test "GLOBAL :slug wins on collision (first in list)" do
-      assert {:ok, _} = ConfigFirst.builder(%{slug: "global:x", tag: "k"})
+    test "GLOBAL :my_slug wins on collision (first in list)" do
+      assert {:ok, _} = ConfigFirst.builder(%{my_slug: "global:x", tag: "k"})
 
-      # LocalDerives'.slug is shadowed → "local:..." rejected
-      assert {:error, errs} = ConfigFirst.builder(%{slug: "local:x", tag: "k"})
-      assert Enum.any?(errs, &(&1[:field] == :slug))
+      # LocalDerives'.my_slug is shadowed → "local:..." rejected
+      assert {:error, errs} = ConfigFirst.builder(%{my_slug: "local:x", tag: "k"})
+      assert Enum.any?(errs, &(&1[:field] == :my_slug))
     end
 
     test "non-colliding local op (:ksuid) is still available" do
-      assert {:ok, _} = ConfigFirst.builder(%{slug: "global:x", tag: "any-ksuid"})
+      assert {:ok, _} = ConfigFirst.builder(%{my_slug: "global:x", tag: "any-ksuid"})
     end
   end
 
@@ -183,20 +183,20 @@ defmodule GuardedStructTest.DeriveExtensionsPerModuleTest do
       use GuardedStruct, derive_extensions: [LocalDerives, :config]
 
       guardedstruct do
-        field(:slug, String.t(), derives: "validate(slug)")
+        field(:my_slug, String.t(), derives: "validate(my_slug)")
         field(:other, String.t(), derives: "validate(uuid7)")
       end
     end
 
-    test "LOCAL :slug wins on collision (first in list)" do
-      assert {:ok, _} = ConfigLast.builder(%{slug: "local:x", other: "x"})
+    test "LOCAL :my_slug wins on collision (first in list)" do
+      assert {:ok, _} = ConfigLast.builder(%{my_slug: "local:x", other: "x"})
 
-      assert {:error, _} = ConfigLast.builder(%{slug: "global:x", other: "x"})
+      assert {:error, _} = ConfigLast.builder(%{my_slug: "global:x", other: "x"})
     end
 
     test "global-only op (:uuid7) still available via fall-through" do
       # uuid7 doesn't exist in LocalDerives — falls through to GlobalDerives
-      assert {:ok, _} = ConfigLast.builder(%{slug: "local:x", other: "anything"})
+      assert {:ok, _} = ConfigLast.builder(%{my_slug: "local:x", other: "anything"})
     end
   end
 
@@ -207,25 +207,25 @@ defmodule GuardedStructTest.DeriveExtensionsPerModuleTest do
       use GuardedStruct, derive_extensions: [LocalDerives, :config, ExtraDerives]
 
       guardedstruct do
-        field(:slug, String.t(), derives: "validate(slug)")
+        field(:my_slug, String.t(), derives: "validate(my_slug)")
         field(:tag, String.t(), derives: "validate(ksuid)")
         field(:tel, String.t(), derives: "validate(phone)")
         field(:id, String.t(), derives: "validate(uuid7)")
       end
     end
 
-    test "LOCAL :slug wins (first in resolved list)" do
+    test "LOCAL :my_slug wins (first in resolved list)" do
       assert {:ok, _} =
-               InPosition.builder(%{slug: "local:x", tag: "k", tel: "p", id: "u"})
+               InPosition.builder(%{my_slug: "local:x", tag: "k", tel: "p", id: "u"})
 
       assert {:error, _} =
-               InPosition.builder(%{slug: "global:x", tag: "k", tel: "p", id: "u"})
+               InPosition.builder(%{my_slug: "global:x", tag: "k", tel: "p", id: "u"})
     end
 
     test "ops from all three sources are available" do
       # :ksuid from LocalDerives, :uuid7 from GlobalDerives, :phone from ExtraDerives
       assert {:ok, _} =
-               InPosition.builder(%{slug: "local:x", tag: "k", tel: "p", id: "u"})
+               InPosition.builder(%{my_slug: "local:x", tag: "k", tel: "p", id: "u"})
     end
   end
 
@@ -328,7 +328,7 @@ defmodule GuardedStructTest.DeriveExtensionsPerModuleTest do
       use GuardedStruct, derive_extensions: [LocalDerives]
 
       guardedstruct do
-        field(:slug, String.t(), derives: "validate(slug)")
+        field(:my_slug, String.t(), derives: "validate(my_slug)")
       end
     end
 
@@ -336,39 +336,39 @@ defmodule GuardedStructTest.DeriveExtensionsPerModuleTest do
       use GuardedStruct
 
       guardedstruct do
-        field(:slug, String.t(), derives: "validate(slug)")
+        field(:my_slug, String.t(), derives: "validate(my_slug)")
         field(:inner, struct(), struct: UsesLocal)
       end
     end
 
     test "outer module's extensions don't leak into inner builder" do
-      # The outer struct's :slug uses GLOBAL (no opt → global).
-      # The inner struct's :slug uses LOCAL (per-module opt).
+      # The outer struct's :my_slug uses GLOBAL (no opt → global).
+      # The inner struct's :my_slug uses LOCAL (per-module opt).
       # Both must enforce their own rule simultaneously.
       assert {:ok, _} =
                UsesGlobal.builder(%{
-                 slug: "global:outer",
-                 inner: %{slug: "local:inner"}
+                 my_slug: "global:outer",
+                 inner: %{my_slug: "local:inner"}
                })
 
       # Outer accepts "global:..." but inner rejects it (it expects "local:...")
       assert {:error, _} =
                UsesGlobal.builder(%{
-                 slug: "global:outer",
-                 inner: %{slug: "global:outer"}
+                 my_slug: "global:outer",
+                 inner: %{my_slug: "global:outer"}
                })
 
       # Outer rejects "local:..." while inner accepts it.
       assert {:error, _} =
                UsesGlobal.builder(%{
-                 slug: "local:outer",
-                 inner: %{slug: "local:inner"}
+                 my_slug: "local:outer",
+                 inner: %{my_slug: "local:inner"}
                })
     end
 
     test "Process dict is cleaned up after build (no leak between calls)" do
       refute Process.get(:guarded_struct_current_module)
-      {:ok, _} = UsesGlobal.builder(%{slug: "global:x", inner: %{slug: "local:y"}})
+      {:ok, _} = UsesGlobal.builder(%{my_slug: "global:x", inner: %{my_slug: "local:y"}})
       refute Process.get(:guarded_struct_current_module)
     end
   end
@@ -381,18 +381,18 @@ defmodule GuardedStructTest.DeriveExtensionsPerModuleTest do
 
       guardedstruct do
         sub_field(:nested, struct()) do
-          field(:slug, String.t(), derives: "validate(slug)")
+          field(:my_slug, String.t(), derives: "validate(my_slug)")
         end
       end
     end
 
-    test "field inside a sub_field uses the parent's :slug extension" do
+    test "field inside a sub_field uses the parent's :my_slug extension" do
       # WithSub's parent extension list is [LocalDerives]. The auto-generated
       # WithSub.Nested submodule doesn't have its own use GuardedStruct, so
       # its derive validation should use LocalDerives via the process dict.
-      assert {:ok, _} = WithSub.builder(%{nested: %{slug: "local:hello"}})
+      assert {:ok, _} = WithSub.builder(%{nested: %{my_slug: "local:hello"}})
 
-      assert {:error, _} = WithSub.builder(%{nested: %{slug: "global:hello"}})
+      assert {:error, _} = WithSub.builder(%{nested: %{my_slug: "global:hello"}})
     end
   end
 
@@ -403,24 +403,24 @@ defmodule GuardedStructTest.DeriveExtensionsPerModuleTest do
       use GuardedStruct, derive_extensions: [:config, LocalDerives]
 
       guardedstruct do
-        field(:slug, String.t(), derives: "validate(slug)")
+        field(:my_slug, String.t(), derives: "validate(my_slug)")
       end
     end
 
     test "swapping the global config affects already-compiled modules" do
       # Setup put [GlobalDerives] globally — LazyConfig accepts "global:..."
-      assert {:ok, _} = LazyConfig.builder(%{slug: "global:x"})
+      assert {:ok, _} = LazyConfig.builder(%{my_slug: "global:x"})
 
-      # Now swap the global config to [ExtraDerives] which has no :slug op.
-      # LazyConfig should now ONLY have LocalDerives.slug active.
+      # Now swap the global config to [ExtraDerives] which has no :my_slug op.
+      # LazyConfig should now ONLY have LocalDerives.my_slug active.
       Application.put_env(:guarded_struct, :derive_extensions, [ExtraDerives])
 
       try do
         # "global:..." no longer accepted — GlobalDerives is gone
-        assert {:error, _} = LazyConfig.builder(%{slug: "global:x"})
+        assert {:error, _} = LazyConfig.builder(%{my_slug: "global:x"})
 
         # "local:..." still works — LocalDerives still in the per-module opt
-        assert {:ok, _} = LazyConfig.builder(%{slug: "local:x"})
+        assert {:ok, _} = LazyConfig.builder(%{my_slug: "local:x"})
       after
         # The outer setup's on_exit will restore the original; we just
         # restore the test's expected value here so subsequent tests in

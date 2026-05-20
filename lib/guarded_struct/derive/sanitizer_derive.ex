@@ -7,6 +7,12 @@ defmodule GuardedStruct.Derive.SanitizerDerive do
       # => "hello"
   """
 
+  @squish_runs ~r/\s+/u
+  @control_chars ~r/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/
+  @zero_width_chars ~r/[\x{200B}-\x{200D}\x{FEFF}\x{2060}]/u
+
+  @cache_key {__MODULE__, :fallback_module}
+
   @spec call({atom(), any()}, list(any())) :: {any(), any()}
   def call({field, input}, nil), do: {field, input}
 
@@ -94,6 +100,72 @@ defmodule GuardedStruct.Derive.SanitizerDerive do
     end
   end
 
+  def sanitize(input, :uniq) when is_list(input), do: Enum.uniq(input)
+  def sanitize(input, :uniq), do: input
+
+  def sanitize(input, :compact) when is_list(input), do: Enum.reject(input, &is_nil/1)
+  def sanitize(input, :compact), do: input
+
+  def sanitize(input, :reject_empty) when is_list(input) do
+    Enum.reject(input, fn
+      nil -> true
+      "" -> true
+      [] -> true
+      %{} = m when map_size(m) == 0 -> true
+      _ -> false
+    end)
+  end
+
+  def sanitize(input, :reject_empty), do: input
+
+  def sanitize(input, :sort) when is_list(input), do: Enum.sort(input)
+  def sanitize(input, :sort), do: input
+
+  def sanitize(input, :squish) when is_binary(input) do
+    input |> String.replace(@squish_runs, " ") |> String.trim()
+  end
+
+  def sanitize(input, :squish), do: input
+
+  def sanitize(input, :no_control) when is_binary(input),
+    do: String.replace(input, @control_chars, "")
+
+  def sanitize(input, :no_control), do: input
+
+  def sanitize(input, :no_zero_width) when is_binary(input),
+    do: String.replace(input, @zero_width_chars, "")
+
+  def sanitize(input, :no_zero_width), do: input
+
+  def sanitize(input, {:clamp, [min, max]})
+      when is_number(input) and is_number(min) and is_number(max) do
+    cond do
+      input < min -> min
+      input > max -> max
+      true -> input
+    end
+  end
+
+  def sanitize(input, {:clamp, _}), do: input
+
+  def sanitize(nil, {:default_when_nil, value}), do: value
+  def sanitize(input, {:default_when_nil, _}), do: input
+
+  def sanitize(nil, {:default_when_empty, value}), do: value
+  def sanitize("", {:default_when_empty, value}), do: value
+  def sanitize([], {:default_when_empty, value}), do: value
+  def sanitize(%{} = m, {:default_when_empty, value}) when map_size(m) == 0, do: value
+  def sanitize(input, {:default_when_empty, _}), do: input
+
+  def sanitize(input, {:each, inner}) when is_list(input) and is_list(inner),
+    do: Enum.map(input, &apply_each_sanitize(&1, inner))
+
+  def sanitize(input, %{each: inner}) when is_list(input) and is_list(inner),
+    do: Enum.map(input, &apply_each_sanitize(&1, inner))
+
+  def sanitize(input, {:each, _}), do: input
+  def sanitize(input, %{each: _}), do: input
+
   def sanitize(input, action) do
     case GuardedStruct.Derive.Extension.dispatch_sanitize(input, action) do
       :__not_found__ -> fallback_dispatch(input, action)
@@ -103,8 +175,11 @@ defmodule GuardedStruct.Derive.SanitizerDerive do
     _ -> input
   end
 
+  defp apply_each_sanitize(value, inner_ops),
+    do: Enum.reduce(inner_ops, value, fn op, acc -> sanitize(acc, op) end)
+
   defp fallback_dispatch(input, action) do
-    case Application.get_env(:guarded_struct, :sanitize_derive) do
+    case fallback_module() do
       nil ->
         input
 
@@ -115,6 +190,22 @@ defmodule GuardedStruct.Derive.SanitizerDerive do
         derive_module.sanitize(input, action)
     end
   end
+
+  defp fallback_module do
+    raw = Application.get_env(:guarded_struct, :sanitize_derive)
+
+    case :persistent_term.get(@cache_key, :__miss__) do
+      {^raw, cached} ->
+        cached
+
+      _ ->
+        :persistent_term.put(@cache_key, {raw, raw})
+        raw
+    end
+  end
+
+  @doc false
+  def clear_fallback_cache, do: :persistent_term.erase(@cache_key)
 
   defp custom_derive(derive_list, input, action) do
     Enum.reduce_while(derive_list, nil, fn item, _acc ->

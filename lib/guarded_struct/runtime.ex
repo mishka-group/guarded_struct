@@ -283,9 +283,12 @@ defmodule GuardedStruct.Runtime do
     enforce_keys = info.enforce_keys
     dynamic_field_names = Map.get(info, :dynamic_keys, [])
 
-    full_attrs_atomized = Parser.convert_to_atom_map(full_attrs, dynamic_field_names)
+    full_attrs_atomized =
+      full_attrs
+      |> Parser.convert_to_atom_map(dynamic_field_names, module.__guarded_atom_lookup__())
 
-    with {:ok, normalized} <- normalize_keys(attrs, dynamic_field_names),
+    with {:ok, normalized} <-
+           normalize_keys(attrs, dynamic_field_names, module.__guarded_atom_lookup__()),
          {:ok, attrs_after_authorized} <-
            authorized_fields(normalized, keys, section_opts.authorized_fields),
          :ok <- check_enforce_keys(attrs_after_authorized, enforce_keys),
@@ -380,10 +383,10 @@ defmodule GuardedStruct.Runtime do
     Map.get(info, :options, %{authorized_fields: false})
   end
 
-  defp normalize_keys(attrs, dynamic_field_names) when is_map(attrs) do
+  defp normalize_keys(attrs, dynamic_field_names, atom_lookup) when is_map(attrs) do
     case Map.keys(attrs) |> List.first() do
       nil -> {:ok, attrs}
-      _ -> {:ok, Parser.convert_to_atom_map(attrs, dynamic_field_names)}
+      _ -> {:ok, Parser.convert_to_atom_map(attrs, dynamic_field_names, atom_lookup)}
     end
   end
 
@@ -726,12 +729,11 @@ defmodule GuardedStruct.Runtime do
         build_single(meta.struct, meta.name, value, ok_acc, err_acc, full_attrs, parent_path)
 
       meta.kind == :sub_field and Map.get(meta, :list?) == true and is_list(value) ->
-        submodule = Module.concat(parent_module, atom_to_module(meta.name))
-        build_list(submodule, meta.name, value, ok_acc, err_acc, full_attrs, parent_path)
+        build_list(meta.child_module, meta.name, value, ok_acc, err_acc, full_attrs, parent_path)
 
       meta.kind == :sub_field and is_map(value) ->
-        submodule = Module.concat(parent_module, atom_to_module(meta.name))
-        build_single(submodule, meta.name, value, ok_acc, err_acc, full_attrs, parent_path)
+        meta.child_module
+        |> build_single(meta.name, value, ok_acc, err_acc, full_attrs, parent_path)
 
       true ->
         {:ok, ok_acc, err_acc}
@@ -1215,7 +1217,7 @@ defmodule GuardedStruct.Runtime do
   def all_keys(module) do
     Enum.map(module.__information__().keys, fn k ->
       case module.__field_meta__(k) do
-        %{kind: :sub_field} -> %{k => all_keys(Module.concat(module, atom_to_module(k)))}
+        %{kind: :sub_field, child_module: child} -> %{k => all_keys(child)}
         _ -> k
       end
     end)
@@ -1225,7 +1227,7 @@ defmodule GuardedStruct.Runtime do
   def all_enforce_keys(module) do
     Enum.flat_map(module.__information__().enforce_keys, fn k ->
       case module.__field_meta__(k) do
-        %{kind: :sub_field} -> [%{k => all_keys(Module.concat(module, atom_to_module(k)))}]
+        %{kind: :sub_field, child_module: child} -> [%{k => all_keys(child)}]
         _ -> [k]
       end
     end)

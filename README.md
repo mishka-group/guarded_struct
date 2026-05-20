@@ -109,8 +109,9 @@ field :slug, :string,
 field :slug, :string  
 ```
 
-- 🧼 **Sanitize ops** — `trim`, `upcase`, `downcase`, `capitalize`, `strip_tags`, `basic_html`, `html5`, `tag`, plus user-defined custom ops.
-- ✅ **Validate ops** — `string`, `integer`, `float`, `boolean`, `atom`, `list`, `map`, `tuple`, `record`, `not_empty`, `not_empty_string`, `max_len`, `min_len`, `max`, `min`, `equal`, `uuid`, `email`, `email_r`, `url`, `url_r`, `ipv4`, `ipv6`, `regex`, `enum`, `datetime`, `date`, `time`, `geo`, `location`, plus user-defined.
+- 🧼 **Sanitize ops** — `trim`, `upcase`, `downcase`, `capitalize`, `strip_tags`, `basic_html`, `html5`, `tag`, `squish`, `no_control`, `no_zero_width`, `uniq`, `compact`, `reject_empty`, `sort`, `clamp=[min,max]`, `default_when_nil=v`, `default_when_empty=v`, `each=[ops]`, plus user-defined custom ops.
+- ✅ **Validate ops** — `string`, `integer`, `float`, `boolean`, `atom`, `list`, `map`, `tuple`, `record`, `not_empty`, `not_empty_string`, `max_len`, `min_len`, `max`, `min`, `equal`, `uuid`, `email`, `email_r`, `url`, `ipv4`, `ipv6`, `regex`, `enum`, `datetime`, `date`, `range`, `geo_url`, `location`, `slug`, `hostname`, `port_number`, `hex_color`, `semver`, `optional=[ops]`, `each=[ops]`, plus user-defined.
+- 🧩 **Combinators** — `optional=` wraps any inner ops, passing `nil` through; `each=` runs inner ops over every element of a list.
 - 🎯 **All ops parsed at compile time** — runtime reads pre-built op-maps from `__fields__/0`; zero `Code.eval_string` on the hot path.
 - 🧰 **`@derives` decorator** — alternative to inline `derives:` for keeping fields short.
 

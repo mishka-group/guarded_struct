@@ -90,6 +90,12 @@ defmodule GuardedStruct.Messages do
   @callback convert_enum_output(any()) :: message()
   @callback equal(any()) :: message()
   @callback record(any()) :: message()
+  @callback slug(any()) :: message()
+  @callback hostname(any()) :: message()
+  @callback port_number(any()) :: message()
+  @callback hex_color(any()) :: message()
+  @callback semver(any()) :: message()
+  @callback each(any()) :: message()
 
   @optional_callbacks required_fields: 0,
                       authorized_fields: 0,
@@ -152,7 +158,13 @@ defmodule GuardedStruct.Messages do
                       is_type: 1,
                       convert_enum_output: 1,
                       equal: 1,
-                      record: 1
+                      record: 1,
+                      slug: 1,
+                      hostname: 1,
+                      port_number: 1,
+                      hex_color: 1,
+                      semver: 1,
+                      each: 1
 
   @doc false
   # Get idea from https://github.com/pow-auth/pow/blob/main/lib/pow/phoenix/messages.ex
@@ -223,6 +235,12 @@ defmodule GuardedStruct.Messages do
       def convert_enum_output(field), do: unquote(__MODULE__).convert_enum_output(field)
       def equal(field), do: unquote(__MODULE__).equal(field)
       def record(field), do: unquote(__MODULE__).record(field)
+      def slug(field), do: unquote(__MODULE__).slug(field)
+      def hostname(field), do: unquote(__MODULE__).hostname(field)
+      def port_number(field), do: unquote(__MODULE__).port_number(field)
+      def hex_color(field), do: unquote(__MODULE__).hex_color(field)
+      def semver(field), do: unquote(__MODULE__).semver(field)
+      def each(field), do: unquote(__MODULE__).each(field)
 
       defoverridable unquote(__MODULE__)
     end
@@ -395,8 +413,113 @@ defmodule GuardedStruct.Messages do
     "The #{field} field is not a valid Erlang record (a tagged tuple)."
   end
 
-  # Helpers
-  def translated_message(fn_atom), do: apply(@message_backend, fn_atom, [])
+  def slug(field), do: "Invalid slug format in the #{field} field"
 
-  def translated_message(fn_atom, options), do: apply(@message_backend, fn_atom, [options])
+  def hostname(field), do: "Invalid hostname format in the #{field} field"
+
+  def port_number(field),
+    do: "The #{field} field must be a valid TCP/UDP port number between 1 and 65535"
+
+  def hex_color(field),
+    do: "Invalid hex color format in the #{field} field (expected #RRGGBB or #RGB)"
+
+  def semver(field),
+    do: "Invalid semantic version format in the #{field} field (expected MAJOR.MINOR.PATCH)"
+
+  def each(field), do: "One or more items in the #{field} field failed validation"
+
+  # Helpers
+  #
+  # Per-key direct-call clauses are generated from the callback list so the
+  # hot path never hits apply/3. Unknown keys fall through to the apply
+  # fallbacks at the bottom (defensive — keeps the public API unchanged).
+  @zero_arity_messages [
+    :required_fields,
+    :authorized_fields,
+    :message_exception,
+    :builder,
+    :register_struct,
+    :list_builder,
+    :list_builder_field_exception,
+    :list_builder_type
+  ]
+
+  @one_arity_messages [
+    :message_exception,
+    :field,
+    :field_type,
+    :check_dependent_keys,
+    :domain_field_status,
+    :force_domain_field_status,
+    :not_empty_binary,
+    :not_empty_list,
+    :not_empty_map,
+    :not_empty,
+    :not_flatten_empty,
+    :not_flatten_empty_item,
+    :queue,
+    :max_len_binary,
+    :max_len_integer,
+    :max_len_range,
+    :max_len_list,
+    :max_len,
+    :min_len_binary,
+    :min_len_integer,
+    :min_len_range,
+    :min_len_list,
+    :min_len,
+    :url_scheme,
+    :url_host,
+    :url_gethostbyname,
+    :url,
+    :tell,
+    :email,
+    :email_r,
+    :location,
+    :string_boolean,
+    :datetime,
+    :range,
+    :date_binary,
+    :regex,
+    :ipv4,
+    :not_empty_string,
+    :uuid,
+    :username,
+    :full_name,
+    :enum,
+    :custom,
+    :either,
+    :string_float,
+    :string_integer,
+    :some_string_float,
+    :some_string_integer,
+    :validate_unexpected,
+    :location_url,
+    :is_type,
+    :convert_enum_output,
+    :equal,
+    :record,
+    :slug,
+    :hostname,
+    :port_number,
+    :hex_color,
+    :semver,
+    :each
+  ]
+
+  for fun <- @zero_arity_messages do
+    def translated_message(unquote(fun)),
+      do: unquote(@message_backend).unquote(fun)()
+  end
+
+  for fun <- @one_arity_messages do
+    def translated_message(unquote(fun), options),
+      do: unquote(@message_backend).unquote(fun)(options)
+  end
+
+  def translated_message(fn_atom) when is_atom(fn_atom),
+    do: apply(@message_backend, fn_atom, [])
+
+  def translated_message(fn_atom, options) when is_atom(fn_atom),
+    do: apply(@message_backend, fn_atom, [options])
 end

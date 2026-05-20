@@ -6,7 +6,7 @@ defmodule GuardedStructFixtures.CustomDerives do
     * `use GuardedStruct.Derive.Extension`
     * `validator :name, fun` — declarative validator op
     * `sanitizer :name, fun` — declarative sanitizer op that transforms input
-    * Composing two custom ops on one field: `sanitize(slugify) validate(slug)`
+    * Composing two custom ops on one field: `sanitize(slugify) validate(my_slug)`
 
   Activated by `:derive_extensions` config; see `test/fixtures_test.exs`
   for the wiring.
@@ -16,7 +16,7 @@ defmodule GuardedStructFixtures.CustomDerives do
     use GuardedStruct.Derive.Extension
 
     derives do
-      validator :slug, fn input ->
+      validator :my_slug, fn input ->
         is_binary(input) and Regex.match?(~r/^[a-z0-9][a-z0-9-]*$/, input)
       end
 
@@ -38,9 +38,9 @@ defmodule GuardedStructFixtures.CustomDerives do
       field(:title, String.t(), enforce: true, derives: "validate(string, not_empty)")
 
       # Composed custom ops:
-      field(:slug, String.t(),
+      field(:my_slug, String.t(),
         enforce: true,
-        derives: "sanitize(slugify) validate(slug)"
+        derives: "sanitize(slugify) validate(my_slug)"
       )
 
       field(:views, integer(), default: 1, derives: "validate(positive_int)")

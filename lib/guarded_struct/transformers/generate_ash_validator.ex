@@ -68,11 +68,6 @@ defmodule GuardedStruct.Transformers.GenerateAshValidator do
       |> MapSet.new()
       |> Macro.escape()
 
-    field_meta_map =
-      fields_runtime
-      |> Map.new(fn m -> {m.name, m} end)
-      |> Macro.escape()
-
     body =
       quote do
         if Module.defines?(__MODULE__, {:__guarded_information__, 0}, :def),
@@ -94,7 +89,13 @@ defmodule GuardedStruct.Transformers.GenerateAshValidator do
           Map.put(unquote(info_map), :module, __MODULE__)
         end
 
-        def __guarded_fields__, do: unquote(Macro.escape(fields_runtime))
+        @__guarded_fields__ GuardedStruct.Transformers.Codegen.bake_child_modules(
+                              unquote(Macro.escape(fields_runtime)),
+                              __MODULE__
+                            )
+        def __guarded_fields__, do: @__guarded_fields__
+
+        def __guarded_atom_lookup__, do: unquote(Macro.escape(atom_lookup_for_ash(keys)))
 
         @doc """
         Compile-time-baked `MapSet` of every field name owned by the
@@ -104,11 +105,13 @@ defmodule GuardedStruct.Transformers.GenerateAshValidator do
         """
         def __guarded_field_name_set__, do: unquote(field_name_set)
 
+        @__guarded_field_meta_map__ Map.new(@__guarded_fields__, fn m -> {m.name, m} end)
+
         @doc """
         O(1) lookup of a field's compile-time metadata by name. Returns
         `nil` for unknown fields.
         """
-        def __guarded_field_meta__(name), do: Map.get(unquote(field_meta_map), name)
+        def __guarded_field_meta__(name), do: Map.get(@__guarded_field_meta_map__, name)
 
         def __field_meta__(name), do: __guarded_field_meta__(name)
 
@@ -140,5 +143,9 @@ defmodule GuardedStruct.Transformers.GenerateAshValidator do
       end
 
     {:ok, Transformer.eval(dsl_state, [], body)}
+  end
+
+  defp atom_lookup_for_ash(keys) when is_list(keys) do
+    for k <- keys, is_atom(k), into: %{}, do: {Atom.to_string(k), k}
   end
 end
