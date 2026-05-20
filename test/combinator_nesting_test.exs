@@ -140,13 +140,13 @@ defmodule GuardedStructTest.CombinatorNestingTest do
     test "each[either]: every element matches one of N types" do
       op = %{each: [%{either: [:string, :integer]}]}
       assert ["a", 2, "c"] == ValidationDerive.validate(op, ["a", 2, "c"], :xs)
-      assert {:error, _, :each, _} = ValidationDerive.validate(op, ["a", 2, :bad_atom], :xs)
+      assert {:error, _, :each, _, {:children, _}} = ValidationDerive.validate(op, ["a", 2, :bad_atom], :xs)
     end
 
     test "each[optional]: every element may be nil" do
       op = %{each: [%{optional: [:string]}]}
       assert ["a", nil, "c"] == ValidationDerive.validate(op, ["a", nil, "c"], :xs)
-      assert {:error, _, :each, _} = ValidationDerive.validate(op, ["a", 42, nil], :xs)
+      assert {:error, _, :each, _, {:children, _}} = ValidationDerive.validate(op, ["a", 42, nil], :xs)
     end
 
     test "optional[either]: nil or one of N" do
@@ -169,14 +169,14 @@ defmodule GuardedStructTest.CombinatorNestingTest do
     test "each[optional[either]]: list of (nil-or-one-of)" do
       op = %{each: [%{optional: [%{either: [:string, :integer]}]}]}
       assert ["a", nil, 2, "c"] == ValidationDerive.validate(op, ["a", nil, 2, "c"], :xs)
-      assert {:error, _, :each, _} = ValidationDerive.validate(op, ["a", :bad], :xs)
+      assert {:error, _, :each, _, {:children, _}} = ValidationDerive.validate(op, ["a", :bad], :xs)
     end
 
     test "optional[each[either]]: nil-or-(list-of-one-of)" do
       op = %{optional: [%{each: [%{either: [:string, :integer]}]}]}
       assert nil == ValidationDerive.validate(op, nil, :x)
       assert ["a", 2] == ValidationDerive.validate(op, ["a", 2], :x)
-      assert {:error, _, :each, _} = ValidationDerive.validate(op, ["a", :bad], :x)
+      assert {:error, _, :each, _, {:children, _}} = ValidationDerive.validate(op, ["a", :bad], :x)
     end
 
     test "either[each[optional]]: int OR list-of-(nil-or-string)" do
@@ -213,7 +213,7 @@ defmodule GuardedStructTest.CombinatorNestingTest do
 
       # Cell contains mixed types -> each-of-strings fails AND each-of-integers fails -> either fails.
       bad = [[["a", 1], nil]]
-      assert {:error, _, :each, _} = ValidationDerive.validate(op, bad, :grid)
+      assert {:error, _, :each, _, {:children, _}} = ValidationDerive.validate(op, bad, :grid)
     end
   end
 
@@ -255,7 +255,7 @@ defmodule GuardedStructTest.CombinatorNestingTest do
 
       # An inner list that contains a bad atom: every either arm fails.
       bad = [["ok", :nope]]
-      assert {:error, _, :each, _} = ValidationDerive.validate(op, bad, :deep)
+      assert {:error, _, :each, _, {:children, _}} = ValidationDerive.validate(op, bad, :deep)
     end
   end
 
@@ -386,11 +386,17 @@ defmodule GuardedStructTest.CombinatorNestingTest do
       assert {:ok, %EachFlat{items: ["a", "b"]}} = EachFlat.builder(%{items: ["a", "b"]})
     end
 
-    test "one bad element → error with index info" do
+    test "one bad element → error map carries the failing index" do
       assert {:error, errors} = EachFlat.builder(%{items: ["a", 2, "c"]})
-      err = Enum.find(errors, &(&1.action == :each))
-      assert err
-      assert err.message =~ "failed indices"
+
+      assert [
+               %{
+                 field: :items,
+                 action: :string,
+                 __index__: 1,
+                 message: _
+               }
+             ] = errors
     end
   end
 
@@ -435,7 +441,7 @@ defmodule GuardedStructTest.CombinatorNestingTest do
                EachEither.builder(%{cells: ["a", 2, "c"]})
 
       assert {:error, errors} = EachEither.builder(%{cells: ["a", 2, :atom_bad]})
-      assert Enum.any?(errors, &(&1.action == :each))
+      assert Enum.any?(errors, &Map.has_key?(&1, :__index__))
     end
 
     test "optional[each]: nil-or-(list-of-strings)" do
@@ -464,7 +470,7 @@ defmodule GuardedStructTest.CombinatorNestingTest do
       # Mixed types inside an inner list → both either arms fail → :each error bubbles up
       bad_grid = [["a", 1]]
       assert {:error, errors} = DeepNest.builder(%{grid: bad_grid})
-      assert Enum.any?(errors, &(&1.action == :each))
+      assert Enum.any?(errors, &Map.has_key?(&1, :__index__))
     end
   end
 
@@ -558,7 +564,7 @@ defmodule GuardedStructTest.CombinatorNestingTest do
 
       # Bad leaf bubbles up.
       assert {:error, errors} = Depth8.builder(%{x: [[[:not_string]]]})
-      assert Enum.any?(errors, &(&1.action == :each))
+      assert Enum.any?(errors, &Map.has_key?(&1, :__index__))
     end
 
     test "depth 10: builder roundtrips a value that drills all the way down" do
@@ -569,7 +575,7 @@ defmodule GuardedStructTest.CombinatorNestingTest do
 
       # Bad leaf bubbles up
       assert {:error, errors} = Depth10.builder(%{x: [[[[:not_string]]]]})
-      assert Enum.any?(errors, &(&1.action == :each))
+      assert Enum.any?(errors, &Map.has_key?(&1, :__index__))
     end
 
     test "depth 12: builder roundtrips a value that drills all the way down" do
@@ -580,7 +586,7 @@ defmodule GuardedStructTest.CombinatorNestingTest do
 
       # Bad leaf
       assert {:error, errors} = Depth12.builder(%{x: [[[[:not_string]]]]})
-      assert Enum.any?(errors, &(&1.action == :each))
+      assert Enum.any?(errors, &Map.has_key?(&1, :__index__))
     end
   end
 
@@ -599,10 +605,11 @@ defmodule GuardedStructTest.CombinatorNestingTest do
       assert [nil, nil] == ValidationDerive.validate(op, [nil, nil], :xs)
 
       # One non-string non-nil element fails the inner string check; either has
-      # only one arm so it surfaces as :either; the outer each surfaces as :each.
-      result = ValidationDerive.validate(op, ["a", 2, "c"], :xs)
-      assert {:error, :xs, :each, msg} = result
-      assert msg =~ "failed indices"
+      # only one arm so it surfaces as :either; the outer each pins the index.
+      assert {:error, :xs, :each, _msg, {:children, [child]}} =
+               ValidationDerive.validate(op, ["a", 2, "c"], :xs)
+
+      assert %{field: :xs, action: :either, __index__: 1, message: _} = child
     end
 
     test "depth 5 — each[optional[either[each[string], each[integer]]]]" do
@@ -622,7 +629,11 @@ defmodule GuardedStructTest.CombinatorNestingTest do
 
       # Mixed strings-and-ints in ONE cell → both either arms fail
       bad = [["a", 1]]
-      assert {:error, :grid, :each, _} = ValidationDerive.validate(op, bad, :grid)
+
+      assert {:error, :grid, :each, _msg, {:children, [child]}} =
+               ValidationDerive.validate(op, bad, :grid)
+
+      assert %{field: :grid, action: :either, __index__: 0, message: _} = child
     end
 
     test "nil at intermediate optional layer short-circuits (proves optional is real, not passthrough)" do
@@ -634,7 +645,10 @@ defmodule GuardedStructTest.CombinatorNestingTest do
       assert ["a", nil, "b"] == ValidationDerive.validate(op, ["a", nil, "b"], :x)
       assert [] == ValidationDerive.validate(op, [], :x)
 
-      assert {:error, :x, :each, _} = ValidationDerive.validate(op, ["a", 2], :x)
+      assert {:error, :x, :each, _msg, {:children, [child]}} =
+               ValidationDerive.validate(op, ["a", 2], :x)
+
+      assert %{field: :x, action: :string, __index__: 1, message: _} = child
     end
 
     test "either with two arms picks whichever passes — value unchanged either way" do

@@ -37,15 +37,71 @@ defmodule GuardedStruct.Derive.Parser do
     Code.string_to_quoted(wrapped, emit_warnings: false)
   end
 
-  defp quote_regex_values(input) do
-    Regex.replace(~r/(\bregex\s*=\s*)(?!["'])([^,)]+)/u, input, fn _, prefix, pattern ->
-      cleaned =
-        pattern
-        |> String.trim_trailing()
-        |> String.replace(~S("), ~S(\"))
+  defp quote_regex_values(input), do: rewrite_regex(input, "")
 
-      prefix <> ~s("#{cleaned}")
-    end)
+  defp rewrite_regex("", acc), do: acc
+
+  defp rewrite_regex(<<"regex", rest::binary>>, acc) do
+    {ws, after_ws} = take_ws(rest)
+
+    case after_ws do
+      <<?=, after_eq::binary>> ->
+        case after_eq do
+          <<q, _::binary>> when q in [?", ?'] ->
+            rewrite_regex(after_eq, acc <> "regex" <> ws <> "=")
+
+          _ ->
+            {pattern, remaining} = read_unquoted(after_eq, 0, "")
+            cleaned = pattern |> String.trim_trailing() |> escape_for_string_literal()
+            rewrite_regex(remaining, acc <> "regex" <> ws <> ~s(=") <> cleaned <> ~s("))
+        end
+
+      _ ->
+        rewrite_regex(rest, acc <> "regex")
+    end
+  end
+
+  defp rewrite_regex(<<c, rest::binary>>, acc), do: rewrite_regex(rest, <<acc::binary, c>>)
+
+  defp take_ws(input), do: take_ws(input, "")
+  defp take_ws(<<c, rest::binary>>, acc) when c in [?\s, ?\t], do: take_ws(rest, <<acc::binary, c>>)
+  defp take_ws(input, acc), do: {acc, input}
+
+  defp read_unquoted(input, 0, ""), do: read_balanced(input, 0, 0, 0, "")
+
+  defp read_balanced("", _b, _p, _q, acc), do: {acc, ""}
+
+  defp read_balanced(<<?\\, c, rest::binary>>, b, p, q, acc),
+    do: read_balanced(rest, b, p, q, <<acc::binary, ?\\, c>>)
+
+  defp read_balanced(<<?[, rest::binary>>, b, p, q, acc),
+    do: read_balanced(rest, b + 1, p, q, <<acc::binary, ?[>>)
+
+  defp read_balanced(<<?], rest::binary>>, b, p, q, acc) when b > 0,
+    do: read_balanced(rest, b - 1, p, q, <<acc::binary, ?]>>)
+
+  defp read_balanced(<<?(, rest::binary>>, b, p, q, acc),
+    do: read_balanced(rest, b, p + 1, q, <<acc::binary, ?(>>)
+
+  defp read_balanced(<<?), rest::binary>>, b, p, q, acc) when p > 0,
+    do: read_balanced(rest, b, p - 1, q, <<acc::binary, ?)>>)
+
+  defp read_balanced(<<?{, rest::binary>>, b, p, q, acc),
+    do: read_balanced(rest, b, p, q + 1, <<acc::binary, ?{>>)
+
+  defp read_balanced(<<?}, rest::binary>>, b, p, q, acc) when q > 0,
+    do: read_balanced(rest, b, p, q - 1, <<acc::binary, ?}>>)
+
+  defp read_balanced(<<c, _::binary>> = input, 0, 0, 0, acc) when c in [?], ?,, ?)],
+    do: {acc, input}
+
+  defp read_balanced(<<c, rest::binary>>, b, p, q, acc),
+    do: read_balanced(rest, b, p, q, <<acc::binary, c>>)
+
+  defp escape_for_string_literal(pattern) do
+    pattern
+    |> String.replace("\\", "\\\\")
+    |> String.replace(~S("), ~S(\"))
   end
 
   defp balance_parens(input) do
@@ -111,6 +167,9 @@ defmodule GuardedStruct.Derive.Parser do
   defp parse_arg({:=, _, [{key, _, nil}, value]})
        when is_atom(key) and is_integer(value),
        do: {key, value}
+
+  defp parse_arg({:=, _, [{key, _, nil}, nil]}) when is_atom(key),
+    do: {key, nil}
 
   defp parse_arg({:=, _, [{:regex, _, nil}, value]}) when is_binary(value),
     do: precompile_regex(value)

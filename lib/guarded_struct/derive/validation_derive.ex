@@ -18,21 +18,19 @@ defmodule GuardedStruct.Derive.ValidationDerive do
     validated_errors =
       Enum.reduce(validated, [], fn map, acc ->
         if is_tuple(map) and elem(map, 0) == :error do
-          converted_map = %{field: field, action: elem(map, 2), message: elem(map, 3)}
-
-          converted_map =
-            if(!is_nil(hint) and hint != [],
-              do: Map.merge(converted_map, %{__hint__: hint}),
-              else: converted_map
-            )
-
           map_list =
             case map do
-              {:error, _, _, _} ->
-                [converted_map]
+              {:error, _, :each, _, {:children, child_errs}} when is_list(child_errs) ->
+                Enum.map(child_errs, &maybe_add_hint(&1, hint))
 
               {:error, _, _, _, :halt} ->
-                [Map.merge(converted_map, %{status: :halt})]
+                [Map.put(build_error_map(field, map, hint), :status, :halt)]
+
+              {:error, _, _, _} ->
+                [build_error_map(field, map, hint)]
+
+              _ ->
+                []
             end
 
           map_list ++ acc
@@ -43,6 +41,16 @@ defmodule GuardedStruct.Derive.ValidationDerive do
 
     {List.first(validated), validated_errors}
   end
+
+  defp build_error_map(field, error_tuple, hint) do
+    %{field: field, action: elem(error_tuple, 2), message: elem(error_tuple, 3)}
+    |> maybe_add_hint(hint)
+  end
+
+  defp maybe_add_hint(map, hint) when is_binary(hint) and hint != "",
+    do: Map.put(map, :__hint__, hint)
+
+  defp maybe_add_hint(map, _hint), do: map
 
   @spec validate(atom() | tuple(), any(), atom()) :: any()
 
@@ -711,32 +719,31 @@ defmodule GuardedStruct.Derive.ValidationDerive do
   end
 
   defp run_each(input, inner_ops, field) do
-    bad_indices =
+    child_errs =
       input
       |> Enum.with_index()
-      |> Enum.reduce([], fn {elem, idx}, acc ->
-        if each_element_ok?(elem, inner_ops, field), do: acc, else: [idx | acc]
-      end)
-      |> Enum.reverse()
+      |> Enum.flat_map(fn {elem, idx} -> element_errors(elem, inner_ops, field, idx) end)
 
-    case bad_indices do
-      [] ->
-        input
-
-      _ ->
-        {:error, field, :each,
-         translated_message(:each, field) <> " (failed indices: #{inspect(bad_indices)})"}
+    case child_errs do
+      [] -> input
+      _ -> {:error, field, :each, translated_message(:each, field), {:children, child_errs}}
     end
   end
 
-  defp each_element_ok?(elem, inner_ops, field) do
-    Enum.all?(inner_ops, fn op ->
+  defp element_errors(elem, inner_ops, field, idx) do
+    Enum.reduce(inner_ops, [], fn op, acc ->
       case validate(op, elem, field) do
-        {:error, _, _, _} -> false
-        {:error, _, _, _, _} -> false
-        _ -> true
+        {:error, _, action, msg} ->
+          [%{field: field, action: action, message: msg, __index__: idx} | acc]
+
+        {:error, _, action, msg, _} ->
+          [%{field: field, action: action, message: msg, __index__: idx} | acc]
+
+        _ ->
+          acc
       end
     end)
+    |> Enum.reverse()
   end
 
   defp fallback_dispatch(action, input, field) do

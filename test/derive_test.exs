@@ -1057,11 +1057,34 @@ defmodule GuardedStructTest.DeriveTest do
       assert ["a", "b"] == ValidationDerive.validate(%{each: [:string]}, ["a", "b"], :tags)
     end
 
-    test "any failing element makes the whole op error with indices" do
-      assert {:error, :tags, :each, msg} =
-               ValidationDerive.validate(%{each: [:string]}, ["a", 2, "c", 4], :tags)
+    test "any failing element returns 5-tuple with structured per-index children" do
+      result = ValidationDerive.validate(%{each: [:string]}, ["a", 2, "c", 4], :tags)
 
-      assert msg =~ "failed indices: [1, 3]"
+      assert {:error, :tags, :each, "One or more items in the tags field failed validation",
+              {:children,
+               [
+                 %{
+                   field: :tags,
+                   action: :string,
+                   __index__: 1,
+                   message: "The tags field must be string"
+                 },
+                 %{
+                   field: :tags,
+                   action: :string,
+                   __index__: 3,
+                   message: "The tags field must be string"
+                 }
+               ]}} = result
+    end
+
+    test "multiple failing ops per element produce one child per (index, op)" do
+      assert {:error, :tags, :each, _, {:children, children}} =
+               ValidationDerive.validate(%{each: [:string, :not_empty]}, ["", 2], :tags)
+
+      actions_by_index = Enum.group_by(children, & &1.__index__, & &1.action)
+      assert :not_empty in actions_by_index[0]
+      assert :string in actions_by_index[1]
     end
 
     test "non-list input gets the generic :each error" do
@@ -1071,6 +1094,33 @@ defmodule GuardedStructTest.DeriveTest do
 
     test "tuple form (atoms-only inner list) also works" do
       assert ["a"] == ValidationDerive.validate({:each, [:string]}, ["a"], :tags)
+    end
+
+    test "call/3 flattens the children into the returned errors list" do
+      {_first, errors} =
+        ValidationDerive.call({:tags, ["a", 2, "c", 4]}, [%{each: [:string]}], [])
+
+      assert [
+               %{
+                 field: :tags,
+                 action: :string,
+                 __index__: 1,
+                 message: "The tags field must be string"
+               },
+               %{
+                 field: :tags,
+                 action: :string,
+                 __index__: 3,
+                 message: "The tags field must be string"
+               }
+             ] = errors
+    end
+
+    test "call/3 propagates hint onto every child error" do
+      {_first, errors} =
+        ValidationDerive.call({:tags, ["a", 2]}, [%{each: [:string]}], "form-row")
+
+      assert Enum.all?(errors, &(Map.get(&1, :__hint__) == "form-row"))
     end
   end
 end

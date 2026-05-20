@@ -117,3 +117,92 @@ conversion. Implemented via a process-local flag set at the top of `validate/3`.
 Errors from `__guarded_change__/1` follow the canonical
 `%{field, action, message}` shape. `Change` converts each into an
 `Ash.Error.Changes.InvalidAttribute` exception via `add_error/2`.
+
+## `each=[<type-op>]` is dead on typed array attributes
+
+`Ash.create/1` runs **attribute casting before changes**. When an attribute
+is typed (e.g. `{:array, :string}`, `{:array, :integer}`), Ash casts every
+element through the inner type at the attribute layer. Elements that fail
+cast surface as `Ash.Error.Changes.InvalidAttribute` with `path: [<index>]`,
+and the bad value is stripped from `changeset.attributes` before
+`GuardedStruct.AshResource.Change` runs.
+
+So a derive like
+
+```elixir
+field :allowed_origins, {:array, :string},
+  derives: "validate(each=[string])"
+```
+
+never produces a GS-level error — Ash has already rejected (or removed)
+anything non-string before our pipeline sees it. The op compiles, looks
+meaningful, but contributes zero safety.
+
+Use `each=[…]` for content checks Ash can't express:
+
+```elixir
+derives: "validate(each=[hostname])"          # ✓ runs through Ash
+derives: "validate(each=[regex=^[a-z]+$])"    # ✓ runs through Ash
+derives: "validate(each=[slug])"              # ✓ runs through Ash
+derives: "validate(each=[custom=[Mod, :ok?]])" # ✓ runs through Ash
+```
+
+Not for type checks Ash already does at the attribute layer. The same
+applies to other Ash typed scalars — `validate(string)` on a `:string`
+attribute, `validate(integer)` on an `:integer` attribute, etc. — they're
+redundant under Ash because the cast catches type mismatches first.
+
+## Action validate-before-change order
+
+Ash's action lifecycle runs the directives declared inside the action
+in this order:
+
+1. attribute cast
+2. attribute constraint validations (`min_length`, `min`, `one_of`, …)
+3. action-level `validate` directives (`validate present([…])`, custom
+   `Ash.Resource.Validation` modules)
+4. action-level + global `change` directives (this is where
+   `GuardedStruct.AshResource.Change` lives)
+
+That means a custom `Ash.Resource.Validation` you've added on the same
+field **sees the raw user input, not the sanitized version**:
+
+```elixir
+create :create do
+  validate {MyApp.DomainValidator, []}       # runs FIRST — sees "  HTTPS://X.COM  "
+  # ...
+end
+
+guardedstruct auto_wire: true do
+  field :host, :string,
+    derives: "sanitize(trim, downcase) validate(hostname)"  # runs AFTER
+end
+```
+
+`DomainValidator` will reject `"  HTTPS://X.COM  "` for the leading space
+even though our sanitize would have cleaned it up. There is no opt-in
+setting on `guardedstruct` to flip this — Ash treats validates as guards
+that decide whether to run the action, by design.
+
+Two ways to get sanitize-before-validate semantics:
+
+**Option A — fold the format check into GS (single layer).** Drop the
+custom `Ash.Resource.Validation` and re-express the rule as a GS validate
+op so it runs in the same pass as the sanitize:
+
+```elixir
+create :create do
+  # validate {MyApp.DomainValidator, []}   ← removed
+end
+
+guardedstruct auto_wire: true do
+  field :host, :string,
+    derives: "sanitize(trim, downcase) validate(hostname)"
+end
+```
+
+**Option B — keep both, accept the order.** Useful when the Ash-level
+validation produces a helpful error message you want to keep and the
+field is normally clean by the time it reaches the action. In that case
+the GS sanitize layer mainly helps on edges the validator allows through
+(e.g. de-duplication of valid items inside an array).

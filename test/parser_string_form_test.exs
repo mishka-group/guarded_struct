@@ -53,6 +53,32 @@ defmodule GuardedStructTest.ParserStringFormTest do
       assert %{validate: [{:regex, %Regex{} = regex}]} = Parser.parser(input)
       assert Regex.source(regex) =~ "mishka"
     end
+
+    test "unquoted regex nested inside each=[...] balances brackets correctly" do
+      assert %{
+               validate: [
+                 %{
+                   each: [
+                     {:regex, %Regex{source: "^https?://[-a-z0-9./:]+$"}}
+                   ]
+                 }
+               ]
+             } = Parser.parser("validate(each=[regex=^https?://[-a-z0-9./:]+$])")
+    end
+
+    test "regex nested in each= alongside other ops keeps every op" do
+      input =
+        "sanitize(each=[trim, downcase]) validate(list, max_len=20, each=[regex=^https?://[-a-z0-9./:]+$])"
+
+      assert %{
+               sanitize: [%{each: [:trim, :downcase]}],
+               validate: [
+                 :list,
+                 {:max_len, 20},
+                 %{each: [{:regex, %Regex{source: "^https?://[-a-z0-9./:]+$"}}]}
+               ]
+             } = Parser.parser(input)
+    end
   end
 
   describe "ValidationDerive end-to-end after parser fix" do
@@ -98,6 +124,16 @@ defmodule GuardedStructTest.ParserStringFormTest do
     test "default_when_nil=0 parses to tuple form" do
       assert %{sanitize: [{:default_when_nil, 0}]} =
                Parser.parser("sanitize(default_when_nil=0)")
+    end
+
+    test "default_when_empty=nil parses to {key, nil} (was silently dropped before)" do
+      assert %{sanitize: [{:default_when_empty, nil}]} =
+               Parser.parser("sanitize(default_when_empty=nil)")
+    end
+
+    test "default_when_nil=nil parses (no-op semantically, but no longer silently dropped)" do
+      assert %{sanitize: [{:default_when_nil, nil}]} =
+               Parser.parser("sanitize(default_when_nil=nil)")
     end
   end
 
