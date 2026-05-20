@@ -6,6 +6,7 @@ defmodule GuardedStructTest.RegistryTest do
   describe "validate_ops/0 + known_validate?/1" do
     test "includes the core type guards" do
       ops = Registry.validate_ops()
+
       for name <- [:string, :integer, :atom, :map, :list, :boolean, :float],
           do: assert(MapSet.member?(ops, name), "missing core: #{name}")
     end

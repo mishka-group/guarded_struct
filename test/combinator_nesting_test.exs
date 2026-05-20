@@ -74,9 +74,7 @@ defmodule GuardedStructTest.CombinatorNestingTest do
     use GuardedStruct
 
     guardedstruct do
-      field(:int_or_list, any(),
-        derives: "validate(either=[integer, each=[string]])"
-      )
+      field(:int_or_list, any(), derives: "validate(either=[integer, each=[string]])")
     end
   end
 
@@ -87,8 +85,7 @@ defmodule GuardedStructTest.CombinatorNestingTest do
 
     guardedstruct do
       field(:grid, list(),
-        derives:
-          "validate(each=[optional=[either=[each=[string], each=[integer]]]])"
+        derives: "validate(each=[optional=[either=[each=[string], each=[integer]]]])"
       )
     end
   end
@@ -519,7 +516,10 @@ defmodule GuardedStructTest.CombinatorNestingTest do
         value = deep_value(@depth, :wrong_type)
 
         result = ValidationDerive.validate(op, value, :deep)
-        assert is_tuple(result), "expected error tuple at depth #{@depth}, got: #{inspect(result)}"
+
+        assert is_tuple(result),
+               "expected error tuple at depth #{@depth}, got: #{inspect(result)}"
+
         # Outermost is :each at depth 1, 4, 7, 10, 13... (rem == 1)
         # So depths 8, 10 outermost is :each or other — assert error of SOME action
         action = elem(result, 2)
@@ -549,7 +549,7 @@ defmodule GuardedStructTest.CombinatorNestingTest do
       # so the value path needs :each wrappers (4 of them: at depths 8, 5, 2... wait
       # only :each wraps in a list). Depth 8 with cycle each/opt/either/each/opt/either/each/opt:
       # eaches at outer indices 8, 5, 2 → 3 list wrappings. Leaf = "ok".
-      value = [[[ "ok" ]]]
+      value = [[["ok"]]]
       assert {:ok, %Depth8{x: ^value}} = Depth8.builder(%{x: value})
 
       # Nil at any 'optional' layer also passes.

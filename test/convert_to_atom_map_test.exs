@@ -49,6 +49,7 @@ defmodule GuardedStructTest.ConvertToAtomMapTest do
   describe "convert_to_atom_map/3 — with atom_lookup (the #6 compile-time fast path)" do
     test "uses lookup hit and bypasses String.to_existing_atom" do
       lookup = %{"name" => :name, "age" => :age}
+
       assert %{name: "Alice", age: 30} =
                Parser.convert_to_atom_map(%{"name" => "Alice", "age" => 30}, [], lookup)
     end

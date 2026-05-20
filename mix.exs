@@ -1,7 +1,7 @@
 defmodule GuardedStruct.MixProject do
   use Mix.Project
 
-  @version "0.1.0-beta.1"
+  @version "0.1.0-beta.2"
   @source_url "https://github.com/mishka-group/guarded_struct"
 
   def project do
@@ -59,9 +59,10 @@ defmodule GuardedStruct.MixProject do
       links: %{
         "Mishka" => "https://mishka.tools",
         "GitHub" => @source_url,
-        "Changelog" => "#{@source_url}/blob/master/CHANGELOG.md",
+        "LiveBook document" => "#{@source_url}/blob/master/guidance/guarded-struct.livemd",
+        "Sponsor" => "https://github.com/sponsors/mishka-group",
         "Security policy" => "#{@source_url}/blob/master/SECURITY.md",
-        "LiveBook document" => "#{@source_url}/blob/master/guidance/guarded-struct.livemd"
+        "Changelog" => "#{@source_url}/blob/master/CHANGELOG.md"
       }
     ]
   end
@@ -148,16 +149,6 @@ defmodule GuardedStruct.MixProject do
       {:sweet_xml,
        github: "kbrw/sweet_xml", branch: "master", override: true, optional: true, only: :test},
       {:igniter, "~> 0.8.0", only: [:dev, :test]},
-
-      # Real Ash for integration tests. We're a compile-time DSL extension
-      # so we don't dep on Ash at runtime; this is only for verifying that
-      # our extension actually works end-to-end with real Ash + the ETS
-      # data layer (no DB needed). Existing FakeFramework tests still cover
-      # the no-Ash path.
-      #
-      # `:dev, :test` (not just `:test`) so `mix format` in dev can pick up
-      # Ash's `.formatter.exs` via `import_deps: [..., :ash]` and keep Ash
-      # DSL calls paren-free.
       {:ash, "~> 3.0", only: [:dev, :test]}
     ]
   end
