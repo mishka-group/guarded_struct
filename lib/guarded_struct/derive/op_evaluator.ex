@@ -84,6 +84,27 @@ defmodule GuardedStruct.Derive.OpEvaluator do
     end
   end
 
+  defp rewrite({:record, tag}) when is_binary(tag), do: {:record, String.to_atom(tag)}
+
+  defp rewrite({:custom, {mods, fun}}) when is_list(mods) and is_atom(fun),
+    do: {:custom, {Module.concat(mods), fun}}
+
+  defp rewrite({:custom, value}) when is_binary(value) do
+    parts =
+      value
+      |> String.replace(["[", "]"], "")
+      |> String.split(",", trim: true)
+      |> Enum.map(&String.trim/1)
+
+    case parts do
+      [module_str, fun_str] ->
+        {:custom, {Module.concat([module_str]), String.to_atom(fun_str)}}
+
+      _ ->
+        {:custom, value}
+    end
+  end
+
   defp rewrite(other), do: other
 
   defp strip_close(s) do

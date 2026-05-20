@@ -112,6 +112,12 @@ defmodule GuardedStruct.Derive.Parser do
        when is_atom(key) and is_integer(value),
        do: {key, value}
 
+  defp parse_arg({:=, _, [{:regex, _, nil}, value]}) when is_binary(value),
+    do: precompile_regex(value)
+
+  defp parse_arg({:=, _, [{:regex, _, nil}, value]}) when is_list(value),
+    do: precompile_regex(to_string(value))
+
   defp parse_arg({:=, _, [{key, _, nil}, value]})
        when is_atom(key) and is_binary(value),
        do: {key, value}
@@ -132,6 +138,13 @@ defmodule GuardedStruct.Derive.Parser do
   end
 
   defp parse_arg(_other), do: nil
+
+  defp precompile_regex(source) do
+    case Regex.compile(source) do
+      {:ok, regex} -> {:regex, regex}
+      {:error, _} -> {:regex, source}
+    end
+  end
 
   defp ast_to_string(ast) do
     ast |> Macro.update_meta(fn _ -> [] end) |> Macro.to_string()
@@ -160,42 +173,49 @@ defmodule GuardedStruct.Derive.Parser do
   """
   @spec convert_to_atom_map(
           {:ok, map()} | {:error, any(), any()} | map(),
-          [atom()]
+          [atom()],
+          map() | nil
         ) :: {:error, any(), any()} | map()
-  def convert_to_atom_map(map_or_result, passthrough_keys \\ [])
+  def convert_to_atom_map(map_or_result, passthrough_keys \\ [], atom_lookup \\ nil)
 
-  def convert_to_atom_map({:error, _, _} = error, _), do: error
+  def convert_to_atom_map({:error, _, _} = error, _, _), do: error
 
-  def convert_to_atom_map({:ok, map}, pt) when is_map(map),
-    do: convert_to_atom_map(map, pt)
+  def convert_to_atom_map({:ok, map}, pt, lookup) when is_map(map),
+    do: convert_to_atom_map(map, pt, lookup)
 
-  def convert_to_atom_map(map, pt) when is_struct(map) do
-    do_convert(Map.from_struct(map), pt)
+  def convert_to_atom_map(map, pt, lookup) when is_struct(map) do
+    do_convert(Map.from_struct(map), pt, lookup)
   end
 
-  def convert_to_atom_map(map, pt) when is_map(map) do
-    do_convert(map, pt)
+  def convert_to_atom_map(map, pt, lookup) when is_map(map) do
+    do_convert(map, pt, lookup)
   end
 
-  defp do_convert(map, passthrough_keys) do
+  defp do_convert(map, passthrough_keys, atom_lookup) do
     passthrough = MapSet.new(passthrough_keys)
 
     for {k, v} <- map, into: %{} do
-      atom_key = convert_key(k)
+      atom_key = convert_key(k, atom_lookup)
       new_value = if MapSet.member?(passthrough, atom_key), do: v, else: convert_value(v)
       {atom_key, new_value}
     end
   end
 
-  # Convert binary keys to atoms ONLY if the atom already exists in the
-  # atom table. Unknown / attacker-controlled keys stay as strings.
-  defp convert_key(key) when is_binary(key) do
+  defp convert_key(key, lookup) when is_binary(key) and is_map(lookup) do
+    case Map.fetch(lookup, key) do
+      {:ok, atom} -> atom
+      :error -> safe_to_existing_atom(key)
+    end
+  end
+
+  defp convert_key(key, _lookup) when is_binary(key), do: safe_to_existing_atom(key)
+  defp convert_key(key, _lookup), do: key
+
+  defp safe_to_existing_atom(key) do
     String.to_existing_atom(key)
   rescue
     ArgumentError -> key
   end
-
-  defp convert_key(key), do: key
 
   defp convert_value(%{__struct__: s} = m) when s in [NaiveDateTime, DateTime, Date], do: m
   defp convert_value(%{} = m), do: convert_to_atom_map(m)

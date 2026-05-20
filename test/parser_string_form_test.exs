@@ -11,18 +11,18 @@ defmodule GuardedStructTest.ParserStringFormTest do
   alias GuardedStruct.Derive.Parser
 
   describe "parser/1 with regex= op" do
-    test "simple pattern parses to {:regex, binary}" do
-      assert %{validate: [{:regex, "^[a-z]+$"}]} =
+    test "simple pattern parses to pre-compiled %Regex{}" do
+      assert %{validate: [{:regex, %Regex{source: "^[a-z]+$"}}]} =
                Parser.parser("validate(regex=^[a-z]+$)")
     end
 
     test "pattern with hyphen-range and dot inside character class" do
-      assert %{validate: [{:regex, "^[a-z0-9.-]+$"}]} =
+      assert %{validate: [{:regex, %Regex{source: "^[a-z0-9.-]+$"}}]} =
                Parser.parser("validate(regex=^[a-z0-9.-]+$)")
     end
 
     test "pattern with uppercase, digits, dot, and hyphen" do
-      assert %{validate: [{:regex, "^[a-zA-Z0-9.-]+$"}]} =
+      assert %{validate: [{:regex, %Regex{source: "^[a-zA-Z0-9.-]+$"}}]} =
                Parser.parser("validate(regex=^[a-zA-Z0-9.-]+$)")
     end
 
@@ -37,22 +37,21 @@ defmodule GuardedStructTest.ParserStringFormTest do
                  :not_empty,
                  {:min_len, 3},
                  {:max_len, 200},
-                 {:regex, "^[a-z0-9.-]+$"}
+                 {:regex, %Regex{source: "^[a-z0-9.-]+$"}}
                ]
              } = Parser.parser(derive_str)
     end
 
     test "literal-quoted regex pattern still works" do
-      assert %{validate: [{:regex, "^foo$"}]} =
+      assert %{validate: [{:regex, %Regex{source: "^foo$"}}]} =
                Parser.parser(~S{validate(regex="^foo$")})
     end
 
     test "escaped-dot pattern from the global_test.exs fixture parses" do
       input = "validate(regex=#{~c"^[a-zA-Z]+@mishka\\.group$"})"
 
-      assert %{validate: [{:regex, pattern}]} = Parser.parser(input)
-      assert is_binary(pattern)
-      assert pattern =~ "mishka"
+      assert %{validate: [{:regex, %Regex{} = regex}]} = Parser.parser(input)
+      assert Regex.source(regex) =~ "mishka"
     end
   end
 

@@ -211,8 +211,8 @@ defmodule GuardedStruct.Info do
       #=> MyApp.User.Address
   """
   def sub_module(module, name) when is_atom(name) do
-    case field_kind(module, name) do
-      :sub_field -> Module.concat(module, Codegen.atom_to_module(name))
+    case module.__field_meta__(name) do
+      %{kind: :sub_field, child_module: child} -> child
       _ -> nil
     end
   end
@@ -316,11 +316,8 @@ defmodule GuardedStruct.Info do
 
     case meta.kind do
       :sub_field ->
-        Map.put(
-          base,
-          :sub_module,
-          Module.concat(parent_module, Codegen.atom_to_module(meta.name))
-        )
+        (meta[:child_module] || Module.concat(parent_module, Codegen.atom_to_module(meta.name)))
+        |> then(&Map.put(base, :sub_module, &1))
 
       _ ->
         base

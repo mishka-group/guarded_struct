@@ -102,7 +102,7 @@ defmodule GuardedStructTest.OpParamValidatorTest do
     end
 
     test "regex with integer raises" do
-      assert_raise Spark.Error.DslError, ~r/charlist or string/, fn ->
+      assert_raise Spark.Error.DslError, ~r/charlist, string, or compiled Regex/, fn ->
         OpParamValidator.validate!(%{validate: [{:regex, 42}]}, :name, FakeMod)
       end
     end

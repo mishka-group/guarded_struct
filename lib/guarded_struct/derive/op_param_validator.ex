@@ -46,12 +46,14 @@ defmodule GuardedStruct.Derive.OpParamValidator do
   defp check_validate({:tell, other}, field_name, module),
     do: bad_param!(:tell, "integer (country code)", other, field_name, module)
 
+  defp check_validate({:regex, %Regex{}}, _f, _m), do: :ok
+
   defp check_validate({:regex, value}, _f, _m)
        when is_list(value) or is_binary(value),
        do: :ok
 
   defp check_validate({:regex, other}, field_name, module),
-    do: bad_param!(:regex, "charlist or string", other, field_name, module)
+    do: bad_param!(:regex, "charlist, string, or compiled Regex", other, field_name, module)
 
   defp check_validate({:enum, list}, _f, _m) when is_list(list), do: :ok
   defp check_validate({:enum, "String[" <> _}, _f, _m), do: :ok
@@ -97,6 +99,10 @@ defmodule GuardedStruct.Derive.OpParamValidator do
 
   defp check_validate({:custom, {mods, fun}}, _f, _m)
        when is_list(mods) and is_atom(fun),
+       do: :ok
+
+  defp check_validate({:custom, {module, fun}}, _f, _m)
+       when is_atom(module) and is_atom(fun),
        do: :ok
 
   defp check_validate({:custom, value}, _f, _m) when is_binary(value), do: :ok

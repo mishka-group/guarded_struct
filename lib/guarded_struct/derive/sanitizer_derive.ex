@@ -11,6 +11,8 @@ defmodule GuardedStruct.Derive.SanitizerDerive do
   @control_chars ~r/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/
   @zero_width_chars ~r/[\x{200B}-\x{200D}\x{FEFF}\x{2060}]/u
 
+  @cache_key {__MODULE__, :fallback_module}
+
   @spec call({atom(), any()}, list(any())) :: {any(), any()}
   def call({field, input}, nil), do: {field, input}
 
@@ -177,7 +179,7 @@ defmodule GuardedStruct.Derive.SanitizerDerive do
     do: Enum.reduce(inner_ops, value, fn op, acc -> sanitize(acc, op) end)
 
   defp fallback_dispatch(input, action) do
-    case Application.get_env(:guarded_struct, :sanitize_derive) do
+    case fallback_module() do
       nil ->
         input
 
@@ -188,6 +190,22 @@ defmodule GuardedStruct.Derive.SanitizerDerive do
         derive_module.sanitize(input, action)
     end
   end
+
+  defp fallback_module do
+    raw = Application.get_env(:guarded_struct, :sanitize_derive)
+
+    case :persistent_term.get(@cache_key, :__miss__) do
+      {^raw, cached} ->
+        cached
+
+      _ ->
+        :persistent_term.put(@cache_key, {raw, raw})
+        raw
+    end
+  end
+
+  @doc false
+  def clear_fallback_cache, do: :persistent_term.erase(@cache_key)
 
   defp custom_derive(derive_list, input, action) do
     Enum.reduce_while(derive_list, nil, fn item, _acc ->

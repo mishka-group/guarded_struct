@@ -429,7 +429,97 @@ defmodule GuardedStruct.Messages do
   def each(field), do: "One or more items in the #{field} field failed validation"
 
   # Helpers
-  def translated_message(fn_atom), do: apply(@message_backend, fn_atom, [])
+  #
+  # Per-key direct-call clauses are generated from the callback list so the
+  # hot path never hits apply/3. Unknown keys fall through to the apply
+  # fallbacks at the bottom (defensive — keeps the public API unchanged).
+  @zero_arity_messages [
+    :required_fields,
+    :authorized_fields,
+    :message_exception,
+    :builder,
+    :register_struct,
+    :list_builder,
+    :list_builder_field_exception,
+    :list_builder_type
+  ]
 
-  def translated_message(fn_atom, options), do: apply(@message_backend, fn_atom, [options])
+  @one_arity_messages [
+    :message_exception,
+    :field,
+    :field_type,
+    :check_dependent_keys,
+    :domain_field_status,
+    :force_domain_field_status,
+    :not_empty_binary,
+    :not_empty_list,
+    :not_empty_map,
+    :not_empty,
+    :not_flatten_empty,
+    :not_flatten_empty_item,
+    :queue,
+    :max_len_binary,
+    :max_len_integer,
+    :max_len_range,
+    :max_len_list,
+    :max_len,
+    :min_len_binary,
+    :min_len_integer,
+    :min_len_range,
+    :min_len_list,
+    :min_len,
+    :url_scheme,
+    :url_host,
+    :url_gethostbyname,
+    :url,
+    :tell,
+    :email,
+    :email_r,
+    :location,
+    :string_boolean,
+    :datetime,
+    :range,
+    :date_binary,
+    :regex,
+    :ipv4,
+    :not_empty_string,
+    :uuid,
+    :username,
+    :full_name,
+    :enum,
+    :custom,
+    :either,
+    :string_float,
+    :string_integer,
+    :some_string_float,
+    :some_string_integer,
+    :validate_unexpected,
+    :location_url,
+    :is_type,
+    :convert_enum_output,
+    :equal,
+    :record,
+    :slug,
+    :hostname,
+    :port_number,
+    :hex_color,
+    :semver,
+    :each
+  ]
+
+  for fun <- @zero_arity_messages do
+    def translated_message(unquote(fun)),
+      do: unquote(@message_backend).unquote(fun)()
+  end
+
+  for fun <- @one_arity_messages do
+    def translated_message(unquote(fun), options),
+      do: unquote(@message_backend).unquote(fun)(options)
+  end
+
+  def translated_message(fn_atom) when is_atom(fn_atom),
+    do: apply(@message_backend, fn_atom, [])
+
+  def translated_message(fn_atom, options) when is_atom(fn_atom),
+    do: apply(@message_backend, fn_atom, [options])
 end

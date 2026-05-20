@@ -491,8 +491,8 @@ defmodule GuardedStructFixtures.RecordsTest do
 
       user_meta = Enum.find(fields, &(&1.name == :user))
       assert user_meta.derive == "validate(record=user)"
-      # Parsed op is the tuple form {:record, "user"}.
-      assert %{validate: [{:record, "user"}]} = user_meta.__derive_ops__
+      # Tag atomized at compile time by OpEvaluator.
+      assert %{validate: [{:record, :user}]} = user_meta.__derive_ops__
 
       trace_meta = Enum.find(fields, &(&1.name == :trace))
       assert trace_meta.derive == "validate(record)"
