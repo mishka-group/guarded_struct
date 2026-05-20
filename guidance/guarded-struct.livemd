@@ -1464,6 +1464,122 @@ As you can see in the code above, you only need to give the macro the `structs: 
 
 The sections below are new in `v0.1.0`. They show features added on top of the existing API; everything above this point continues to work unchanged.
 
+## Combinators, named formats, list/string hygiene
+
+The `derives:` mini-language has three orthogonal composable pieces:
+
+1. **Combinators** — `optional=[ops]`, `each=[ops]`. Both nest arbitrarily and compose with each other.
+2. **Named-format validators** — `slug`, `hostname`, `port_number`, `hex_color`, `semver`. Bounded checks, no runtime compilation.
+3. **List & string hygiene sanitizers** — `uniq`, `compact`, `reject_empty`, `sort`, `squish`, `no_control`, `no_zero_width`, `clamp=[min,max]`, `default_when_nil=v`, `default_when_empty=v`.
+
+### Combinators — `optional` and `each`
+
+```elixir
+defmodule TagsForm do
+  use GuardedStruct
+
+  guardedstruct do
+    # Every element trimmed + downcased; duplicates dropped; each element must be a string hostname.
+    field :allowed_hosts, {:array, :string},
+      derives:
+        "sanitize(each=[trim, downcase], reject_empty, uniq) validate(list, max_len=20, each=[string, hostname])"
+
+    # nil OR a short string.
+    field :nickname, :string,
+      derives: "sanitize(trim) validate(optional=[string, max_len=24])"
+  end
+end
+
+{:ok, _} =
+  TagsForm.builder(%{
+    allowed_hosts: ["  Example.com  ", "EXAMPLE.com", "ok.io", ""],
+    nickname: nil
+  })
+
+# duplicates collapsed, hostnames validated
+{:error, errs} = TagsForm.builder(%{allowed_hosts: ["bad host"], nickname: nil})
+errs
+```
+
+### Nested combinators
+
+Combinators compose without limit; the parser and runtime are both recursive.
+
+```elixir
+defmodule Grid do
+  use GuardedStruct
+
+  guardedstruct do
+    # Each cell: nil OR (list-of-strings OR list-of-integers)
+    field :grid, list(),
+      derives: "validate(each=[optional=[either=[each=[string], each=[integer]]]])"
+  end
+end
+
+{:ok, %Grid{grid: [["a", "b"], nil, [1, 2]]}} =
+  Grid.builder(%{grid: [["a", "b"], nil, [1, 2]]})
+
+# Mixed strings/ints in one inner list fails both either arms
+{:error, _} = Grid.builder(%{grid: [["a", 1]]})
+```
+
+### Named-format validators
+
+Each pattern is compiled once into a module attribute and reused per call — no per-validate `Regex.compile`.
+
+```elixir
+defmodule SiteConfig do
+  use GuardedStruct
+
+  guardedstruct do
+    field :slug,         :string,  derives: "validate(string, slug)"
+    field :primary_host, :string,  derives: "validate(string, hostname)"
+    field :api_port,     :integer, derives: "validate(port_number)"
+    field :brand_color,  :string,  derives: "sanitize(trim) validate(string, hex_color)"
+    field :version,      :string,  derives: "validate(string, semver)"
+  end
+end
+
+{:ok, _} =
+  SiteConfig.builder(%{
+    slug: "my-cool-site",
+    primary_host: "api.example.com",
+    api_port: 8443,
+    brand_color: "#3366FF",
+    version: "1.2.3-rc.1"
+  })
+
+{:error, errs} = SiteConfig.builder(%{slug: "Bad Slug!", primary_host: "no_underscore.x", api_port: 0, brand_color: "blue", version: "1.2"})
+errs
+```
+
+### List & string hygiene sanitizers
+
+```elixir
+defmodule Hygiene do
+  use GuardedStruct
+
+  guardedstruct do
+    field :tags,          {:array, :string}, derives: "sanitize(each=[trim], reject_empty, sort, uniq)"
+    field :title,         :string,           derives: "sanitize(squish, no_control, no_zero_width)"
+    field :priority,      :integer,          derives: "sanitize(default_when_nil=0, clamp=[0, 100])"
+    field :display_name,  :string,           derives: "sanitize(default_when_empty=\"anonymous\")"
+  end
+end
+
+{:ok, sample} =
+  Hygiene.builder(%{
+    tags: ["  apple", "Apple", "", "banana"],
+    title: "  hello​   world  ",
+    priority: nil,
+    display_name: ""
+  })
+
+sample
+# tags collapsed/sorted/uniq'd, title scrubbed, priority defaulted+clamped,
+# display_name filled from the default.
+```
+
 ## Pattern-keyed maps
 
 A `field` whose name is a regex declares a free-form map shape. The struct's `builder/1` returns a plain validated map. Useful for translations, headers, sharded data — anything where keys are runtime-unknown but values share a uniform shape.

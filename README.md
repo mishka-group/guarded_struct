@@ -109,11 +109,44 @@ field :slug, :string,
 field :slug, :string  
 ```
 
-- 🧼 **Sanitize ops** — `trim`, `upcase`, `downcase`, `capitalize`, `strip_tags`, `basic_html`, `html5`, `tag`, `squish`, `no_control`, `no_zero_width`, `uniq`, `compact`, `reject_empty`, `sort`, `clamp=[min,max]`, `default_when_nil=v`, `default_when_empty=v`, `each=[ops]`, plus user-defined custom ops.
-- ✅ **Validate ops** — `string`, `integer`, `float`, `boolean`, `atom`, `list`, `map`, `tuple`, `record`, `not_empty`, `not_empty_string`, `max_len`, `min_len`, `max`, `min`, `equal`, `uuid`, `email`, `email_r`, `url`, `ipv4`, `ipv6`, `regex`, `enum`, `datetime`, `date`, `range`, `geo_url`, `location`, `slug`, `hostname`, `port_number`, `hex_color`, `semver`, `optional=[ops]`, `each=[ops]`, plus user-defined.
-- 🧩 **Combinators** — `optional=` wraps any inner ops, passing `nil` through; `each=` runs inner ops over every element of a list.
+- 🧩 **Combinators** — `optional=` wraps any inner ops, passing `nil` through; `each=` runs inner ops over every element of a list; both nest arbitrarily.
 - 🎯 **All ops parsed at compile time** — runtime reads pre-built op-maps from `__fields__/0`; zero `Code.eval_string` on the hot path.
 - 🧰 **`@derives` decorator** — alternative to inline `derives:` for keeping fields short.
+
+```elixir
+# Combinators in real fields:
+field :tags, {:array, :string},
+  derives: "sanitize(each=[trim, downcase], reject_empty, uniq) validate(each=[string, hostname])"
+
+field :nickname, :string,
+  derives: "sanitize(trim) validate(optional=[string, max_len=24])"
+```
+
+<details>
+<summary>🧼 <strong>All built-in sanitize ops</strong> (click to expand)</summary>
+
+`trim`, `upcase`, `downcase`, `capitalize`, `strip_tags`, `basic_html`, `html5`, `markdown_html`, `tag`,
+`string_float`, `string_integer`, `squish`, `no_control`, `no_zero_width`,
+`uniq`, `compact`, `reject_empty`, `sort`,
+`clamp=[min,max]`, `default_when_nil=v`, `default_when_empty=v`, `each=[ops]`,
+plus user-defined custom ops via `GuardedStruct.Derive.Extension`.
+
+</details>
+
+<details>
+<summary>✅ <strong>All built-in validate ops</strong> (click to expand)</summary>
+
+**Types:** `string`, `integer`, `float`, `boolean`, `atom`, `list`, `map`, `tuple`, `record`, `bitstring`, `function`, `pid`, `port`, `reference`, `struct`, `exception`, `nil_value`, `not_nil_value`, `number`, `queue`.
+
+**Emptiness / size:** `not_empty`, `not_empty_string`, `not_flatten_empty`, `not_flatten_empty_item`, `max_len`, `min_len`.
+
+**Format:** `uuid`, `email`, `email_r`, `url`, `tell`, `geo_url`, `location`, `ipv4`, `regex`, `datetime`, `date`, `range`, `enum`, `equal`, `string_float`, `string_integer`, `some_string_float`, `some_string_integer`, `string_boolean`, `username`, `full_name`.
+
+**Named formats:** `slug`, `hostname`, `port_number`, `hex_color`, `semver`.
+
+**Composition:** `either=[ops]`, `optional=[ops]`, `each=[ops]`, `custom=[Mod, fn]`, plus user-defined.
+
+</details>
 
 ### 🪝 Custom validators / sanitizers (`Derive.Extension`)
 
@@ -195,7 +228,8 @@ GuardedStruct.Info.sub_module(User, :address)       #=> User.Address
 GuardedStruct.Info.conditional_children(User, :billing)
 ```
 
-### 🛡️ Errors as Splode exceptions (opt-in)
+<details>
+<summary>🛡️ <strong>Errors as Splode exceptions</strong> (opt-in)</summary>
 
 ```elixir
 case User.builder(input) do
@@ -206,7 +240,10 @@ end
 
 Gives `Splode.traverse_errors/2`, `to_class/1`, JSON-serializable errors.
 
-### 📤 JSON encoding (opt-in)
+</details>
+
+<details>
+<summary>📤 <strong>JSON encoding</strong> (opt-in)</summary>
 
 ```elixir
 guardedstruct json: true do
@@ -215,6 +252,8 @@ end
 ```
 
 Auto-derives `Jason.Encoder` when `:jason` is in deps, falling back to the built-in `JSON.Encoder` on Elixir 1.18+. No-op if neither is present.
+
+</details>
 
 ### 🌍 Cross-cutting
 
