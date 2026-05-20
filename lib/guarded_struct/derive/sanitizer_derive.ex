@@ -7,7 +7,6 @@ defmodule GuardedStruct.Derive.SanitizerDerive do
       # => "hello"
   """
 
-  @squish_runs ~r/\s+/u
   @control_chars ~r/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/
   @zero_width_chars ~r/[\x{200B}-\x{200D}\x{FEFF}\x{2060}]/u
 
@@ -121,9 +120,8 @@ defmodule GuardedStruct.Derive.SanitizerDerive do
   def sanitize(input, :sort) when is_list(input), do: Enum.sort(input)
   def sanitize(input, :sort), do: input
 
-  def sanitize(input, :squish) when is_binary(input) do
-    input |> String.replace(@squish_runs, " ") |> String.trim()
-  end
+  def sanitize(input, :squish) when is_binary(input),
+    do: input |> String.split() |> Enum.join(" ")
 
   def sanitize(input, :squish), do: input
 

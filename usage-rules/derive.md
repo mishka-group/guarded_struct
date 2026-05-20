@@ -63,10 +63,10 @@ Content / format:
 | `:uuid`, `:ipv4`, `:datetime`, `:date`, `:range`, `:regex` | Format checks. |
 | `:username`, `:full_name`, `:location`, `:queue`, `:string_boolean` | Domain checks (see `lib/guarded_struct/helper/extra.ex`). |
 | `:slug` | `^[a-z0-9]+(-[a-z0-9]+)*$` — kebab-case URL slug. |
-| `:hostname` | RFC-style hostname (no scheme, ≤ 253 chars). |
+| `:hostname` | RFC 1123 hostname via Erlang's `:inet_parse.domain/1` (case-insensitive, ≤ 253 chars, no underscores, no scheme). |
 | `:port_number` | Integer in `1..65535`. |
 | `:hex_color` | `#RGB` or `#RRGGBB` form. |
-| `:semver` | `MAJOR.MINOR.PATCH[-prerelease][+build]`. |
+| `:semver` | SemVer 2.0 via `Version.parse/1` — rejects leading zeros and other spec-violating shapes. |
 | `{:enum, "String[a::b::c]"}` etc. | Membership against compile-evaluated list. |
 | `{:equal, _}` | Equality. |
 | `{:either, _}`, `{:custom, _}` | Composition / user-supplied predicate. |

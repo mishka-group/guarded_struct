@@ -5,9 +5,7 @@ defmodule GuardedStruct.Derive.ValidationDerive do
   @family_alphabet Enum.concat([?a..?z, ~c" "])
 
   @slug_regex ~r/^[a-z0-9]+(?:-[a-z0-9]+)*$/
-  @hostname_regex ~r/^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)*[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/
   @hex_color_regex ~r/^#(?:[0-9a-fA-F]{6}|[0-9a-fA-F]{3})$/
-  @semver_regex ~r/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/
 
   @cache_key {__MODULE__, :fallback_module}
 
@@ -618,9 +616,22 @@ defmodule GuardedStruct.Derive.ValidationDerive do
     do: {:error, field, :slug, translated_message(:slug, field)}
 
   def validate(:hostname, input, field) when is_binary(input) do
-    if byte_size(input) <= 253 and Regex.match?(@hostname_regex, input),
-      do: input,
-      else: {:error, field, :hostname, translated_message(:hostname, field)}
+    cond do
+      byte_size(input) == 0 ->
+        {:error, field, :hostname, translated_message(:hostname, field)}
+
+      byte_size(input) > 253 ->
+        {:error, field, :hostname, translated_message(:hostname, field)}
+
+      String.contains?(input, "_") ->
+        {:error, field, :hostname, translated_message(:hostname, field)}
+
+      :inet_parse.domain(String.to_charlist(input)) ->
+        input
+
+      true ->
+        {:error, field, :hostname, translated_message(:hostname, field)}
+    end
   end
 
   def validate(:hostname, _input, field),
@@ -643,9 +654,10 @@ defmodule GuardedStruct.Derive.ValidationDerive do
     do: {:error, field, :hex_color, translated_message(:hex_color, field)}
 
   def validate(:semver, input, field) when is_binary(input) do
-    if Regex.match?(@semver_regex, input),
-      do: input,
-      else: {:error, field, :semver, translated_message(:semver, field)}
+    case Version.parse(input) do
+      {:ok, _} -> input
+      :error -> {:error, field, :semver, translated_message(:semver, field)}
+    end
   end
 
   def validate(:semver, _input, field),
