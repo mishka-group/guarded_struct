@@ -64,7 +64,10 @@ defmodule GuardedStruct.Derive.Parser do
   defp rewrite_regex(<<c, rest::binary>>, acc), do: rewrite_regex(rest, <<acc::binary, c>>)
 
   defp take_ws(input), do: take_ws(input, "")
-  defp take_ws(<<c, rest::binary>>, acc) when c in [?\s, ?\t], do: take_ws(rest, <<acc::binary, c>>)
+
+  defp take_ws(<<c, rest::binary>>, acc) when c in [?\s, ?\t],
+    do: take_ws(rest, <<acc::binary, c>>)
+
   defp take_ws(input, acc), do: {acc, input}
 
   defp read_unquoted(input, 0, ""), do: read_balanced(input, 0, 0, 0, "")

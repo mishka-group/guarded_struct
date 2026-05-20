@@ -68,9 +68,7 @@ defmodule GuardedStructTest.RegexThroughPipelineTest do
     use GuardedStruct
 
     guardedstruct do
-      field(:value, String.t(),
-        derives: "validate(regex=^https?://[a-z0-9.-]+(:[0-9]+)?(/.*)?$)"
-      )
+      field(:value, String.t(), derives: "validate(regex=^https?://[a-z0-9.-]+(:[0-9]+)?(/.*)?$)")
     end
   end
 
@@ -86,9 +84,7 @@ defmodule GuardedStructTest.RegexThroughPipelineTest do
     use GuardedStruct
 
     guardedstruct do
-      field(:value, String.t(),
-        derives: "validate(regex=^(?=.*[A-Z])(?=.*\\d)[A-Za-z\\d]{8,}$)"
-      )
+      field(:value, String.t(), derives: "validate(regex=^(?=.*[A-Z])(?=.*\\d)[A-Za-z\\d]{8,}$)")
     end
   end
 
@@ -107,9 +103,7 @@ defmodule GuardedStructTest.RegexThroughPipelineTest do
     use GuardedStruct
 
     guardedstruct do
-      field(:slug, any(),
-        derives: "validate(optional=[regex=^[a-z]+(-[a-z]+)*$])"
-      )
+      field(:slug, any(), derives: "validate(optional=[regex=^[a-z]+(-[a-z]+)*$])")
     end
   end
 
@@ -118,6 +112,22 @@ defmodule GuardedStructTest.RegexThroughPipelineTest do
 
     guardedstruct do
       field(:value, any(), derives: "validate(either=[integer, regex=^[A-Z]{2,}$])")
+    end
+  end
+
+  defmodule LiteralCommaQuoted do
+    use GuardedStruct
+
+    guardedstruct do
+      field(:value, String.t(), derives: ~S|validate(regex="^a,b$")|)
+    end
+  end
+
+  defmodule LiteralBracketQuoted do
+    use GuardedStruct
+
+    guardedstruct do
+      field(:value, String.t(), derives: ~S|validate(regex="^a]b$")|)
     end
   end
 
@@ -149,9 +159,7 @@ defmodule GuardedStructTest.RegexThroughPipelineTest do
                  {:regex, %Regex{source: "^[a-z0-9._%+-]+@[a-z0-9.-]+\\.[a-z]{2,}$"}}
                ]
              } =
-               Parser.parser(
-                 "validate(regex=^[a-z0-9._%+-]+@[a-z0-9.-]+\\.[a-z]{2,}$)"
-               )
+               Parser.parser("validate(regex=^[a-z0-9._%+-]+@[a-z0-9.-]+\\.[a-z]{2,}$)")
     end
 
     test "hex color — fixed-length quantifier {6}" do
@@ -162,8 +170,7 @@ defmodule GuardedStructTest.RegexThroughPipelineTest do
     test "ipv4 — four bracket-balanced groups via escapes" do
       assert %{
                validate: [
-                 {:regex,
-                  %Regex{source: "^[0-9]{1,3}\\.[0-9]{1,3}\\.[0-9]{1,3}\\.[0-9]{1,3}$"}}
+                 {:regex, %Regex{source: "^[0-9]{1,3}\\.[0-9]{1,3}\\.[0-9]{1,3}\\.[0-9]{1,3}$"}}
                ]
              } =
                Parser.parser(
@@ -177,9 +184,7 @@ defmodule GuardedStructTest.RegexThroughPipelineTest do
                  {:regex, %Regex{source: "^https?://[a-z0-9.-]+(:[0-9]+)?(/.*)?$"}}
                ]
              } =
-               Parser.parser(
-                 "validate(regex=^https?://[a-z0-9.-]+(:[0-9]+)?(/.*)?$)"
-               )
+               Parser.parser("validate(regex=^https?://[a-z0-9.-]+(:[0-9]+)?(/.*)?$)")
     end
 
     test "negated character class [^,] — comma inside the pattern" do
@@ -193,9 +198,7 @@ defmodule GuardedStructTest.RegexThroughPipelineTest do
                  {:regex, %Regex{source: "^(?=.*[A-Z])(?=.*\\d)[A-Za-z\\d]{8,}$"}}
                ]
              } =
-               Parser.parser(
-                 "validate(regex=^(?=.*[A-Z])(?=.*\\d)[A-Za-z\\d]{8,}$)"
-               )
+               Parser.parser("validate(regex=^(?=.*[A-Z])(?=.*\\d)[A-Za-z\\d]{8,}$)")
     end
 
     test "alternation — (foo|bar|baz)" do
@@ -251,8 +254,7 @@ defmodule GuardedStructTest.RegexThroughPipelineTest do
                  {:max_len, 120},
                  {:regex,
                   %Regex{
-                    source:
-                      "^https?://[a-z0-9.-]+(:[0-9]+)?(/[a-z0-9._~%/?#@!$&'()*+,;=:-]*)?$"
+                    source: "^https?://[a-z0-9.-]+(:[0-9]+)?(/[a-z0-9._~%/?#@!$&'()*+,;=:-]*)?$"
                   }}
                ]
              } = Parser.parser(derive)
@@ -268,6 +270,7 @@ defmodule GuardedStructTest.RegexThroughPipelineTest do
     test "[a-z]+ accepts/rejects" do
       %{validate: [op]} = Parser.parser("validate(regex=^[a-z]+$)")
       assert "abc" == ValidationDerive.validate(op, "abc", :v)
+
       assert {:error, :v, :regex, "Invalid format in the v field"} =
                ValidationDerive.validate(op, "ABC", :v)
     end
@@ -306,9 +309,7 @@ defmodule GuardedStructTest.RegexThroughPipelineTest do
 
     test "ipv4-like accepts dotted quad, rejects non-numeric segments" do
       %{validate: [op]} =
-        Parser.parser(
-          "validate(regex=^[0-9]{1,3}\\.[0-9]{1,3}\\.[0-9]{1,3}\\.[0-9]{1,3}$)"
-        )
+        Parser.parser("validate(regex=^[0-9]{1,3}\\.[0-9]{1,3}\\.[0-9]{1,3}\\.[0-9]{1,3}$)")
 
       assert "192.168.0.1" == ValidationDerive.validate(op, "192.168.0.1", :ip)
 
@@ -474,6 +475,28 @@ defmodule GuardedStructTest.RegexThroughPipelineTest do
               [
                 %{field: :value, action: :regex, message: "Invalid format in the value field"}
               ]} = LongRealistic.builder(%{value: "ftp://nope.com"})
+    end
+  end
+
+  describe "escape hatches — patterns the state machine can't disambiguate unquoted" do
+    test "LiteralCommaQuoted — quoted form accepts a literal comma at top level" do
+      assert {:ok, %LiteralCommaQuoted{value: "a,b"}} =
+               LiteralCommaQuoted.builder(%{value: "a,b"})
+
+      assert {:error,
+              [
+                %{field: :value, action: :regex, message: "Invalid format in the value field"}
+              ]} = LiteralCommaQuoted.builder(%{value: "ab"})
+    end
+
+    test "LiteralBracketQuoted — quoted form accepts a literal ] (outside any [...] class)" do
+      assert {:ok, %LiteralBracketQuoted{value: "a]b"}} =
+               LiteralBracketQuoted.builder(%{value: "a]b"})
+
+      assert {:error,
+              [
+                %{field: :value, action: :regex, message: "Invalid format in the value field"}
+              ]} = LiteralBracketQuoted.builder(%{value: "ab"})
     end
   end
 end

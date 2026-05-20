@@ -111,6 +111,30 @@ field :api_port, :integer, derives: "validate(port_number)"
 
 When combining `each=[...]` with `max_len=N` on the same list, declare `max_len` **before** `each` so the size check runs first and bounds the work `each` does.
 
+## Regex — three ways, ranked by "do anything weird"
+
+`regex=…` in the canonical string form is convenient but has to be **scanned out of the surrounding derive grammar**. The parser tracks balanced `[]`, `()`, `{}` and skips escaped chars, so the vast majority of real-world patterns "just work" unquoted:
+
+```elixir
+# all of these parse cleanly unquoted
+derives: "validate(regex=^[a-z0-9-]+$)"
+derives: "validate(regex=^[A-Z]{2,5}$)"                # comma inside {n,m} is balanced
+derives: "validate(regex=^https?://[a-z.-]+(:[0-9]+)?(/.*)?$)"  # nested ()s balanced
+derives: "validate(regex=^(?=.*[A-Z])(?=.*\\d).{8,}$)"          # lookaheads + escapes
+derives: "validate(each=[regex=^[a-z0-9.-]+$])"                 # nested in each=
+```
+
+For the **edge cases** the scanner can't disambiguate — a literal `,`, `)`, or `]` outside any balanced group inside the pattern — quote the pattern:
+
+```elixir
+derives: ~S|validate(regex="^a,b$")|         # literal comma at top level
+derives: ~S|validate(regex="^a]b$")|         # literal ] at top level
+```
+
+`Code.string_to_quoted` treats the inside of `"…"` as opaque. The scanner sees the `"` and skips entirely, so anything between the quotes survives as-is. Use the `~S|…|` sigil so you don't have to escape the internal `"`.
+
+If you'd rather keep regex out of the derive string altogether, pre-compile and validate with `GuardedStruct.Validate.run/2` from your `validator: {Mod, :fn}` MFA — the parser is bypassed entirely.
+
 ## Direct API
 
 ```elixir

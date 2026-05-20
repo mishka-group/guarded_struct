@@ -140,13 +140,17 @@ defmodule GuardedStructTest.CombinatorNestingTest do
     test "each[either]: every element matches one of N types" do
       op = %{each: [%{either: [:string, :integer]}]}
       assert ["a", 2, "c"] == ValidationDerive.validate(op, ["a", 2, "c"], :xs)
-      assert {:error, _, :each, _, {:children, _}} = ValidationDerive.validate(op, ["a", 2, :bad_atom], :xs)
+
+      assert {:error, _, :each, _, {:children, _}} =
+               ValidationDerive.validate(op, ["a", 2, :bad_atom], :xs)
     end
 
     test "each[optional]: every element may be nil" do
       op = %{each: [%{optional: [:string]}]}
       assert ["a", nil, "c"] == ValidationDerive.validate(op, ["a", nil, "c"], :xs)
-      assert {:error, _, :each, _, {:children, _}} = ValidationDerive.validate(op, ["a", 42, nil], :xs)
+
+      assert {:error, _, :each, _, {:children, _}} =
+               ValidationDerive.validate(op, ["a", 42, nil], :xs)
     end
 
     test "optional[either]: nil or one of N" do
@@ -169,14 +173,18 @@ defmodule GuardedStructTest.CombinatorNestingTest do
     test "each[optional[either]]: list of (nil-or-one-of)" do
       op = %{each: [%{optional: [%{either: [:string, :integer]}]}]}
       assert ["a", nil, 2, "c"] == ValidationDerive.validate(op, ["a", nil, 2, "c"], :xs)
-      assert {:error, _, :each, _, {:children, _}} = ValidationDerive.validate(op, ["a", :bad], :xs)
+
+      assert {:error, _, :each, _, {:children, _}} =
+               ValidationDerive.validate(op, ["a", :bad], :xs)
     end
 
     test "optional[each[either]]: nil-or-(list-of-one-of)" do
       op = %{optional: [%{each: [%{either: [:string, :integer]}]}]}
       assert nil == ValidationDerive.validate(op, nil, :x)
       assert ["a", 2] == ValidationDerive.validate(op, ["a", 2], :x)
-      assert {:error, _, :each, _, {:children, _}} = ValidationDerive.validate(op, ["a", :bad], :x)
+
+      assert {:error, _, :each, _, {:children, _}} =
+               ValidationDerive.validate(op, ["a", :bad], :x)
     end
 
     test "either[each[optional]]: int OR list-of-(nil-or-string)" do
