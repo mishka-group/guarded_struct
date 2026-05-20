@@ -129,4 +129,35 @@ defmodule GuardedStructTest.ParserStringFormTest do
                Parser.parser("validate(optional=[string, max_len=3])")
     end
   end
+
+  # The bare-atom form (no brackets) is the one that used to materialise
+  # a binary inner op and force a String.to_existing_atom rescue at validate
+  # time. The parser now wraps it in a 1-element atom list so the runtime
+  # never has to atomize.
+  describe "optional / each — bare-atom value normalization" do
+    test "optional=string produces {:optional, [:string]} (atom, not binary)" do
+      assert %{validate: [{:optional, [:string]}]} =
+               Parser.parser("validate(optional=string)")
+    end
+
+    test "each=trim produces {:each, [:trim]} on sanitize side" do
+      assert %{sanitize: [{:each, [:trim]}]} =
+               Parser.parser("sanitize(each=trim)")
+    end
+
+    test "each=string produces {:each, [:string]} on validate side" do
+      assert %{validate: [{:each, [:string]}]} =
+               Parser.parser("validate(each=string)")
+    end
+
+    test "bracketed form produces map shape (all atoms)" do
+      assert %{validate: [%{each: [:string, :not_empty]}]} =
+               Parser.parser("validate(each=[string, not_empty])")
+    end
+
+    test "bracketed form with parameterised inner also produces map shape" do
+      assert %{validate: [%{each: [:string, {:max_len, 20}]}]} =
+               Parser.parser("validate(each=[string, max_len=20])")
+    end
+  end
 end
