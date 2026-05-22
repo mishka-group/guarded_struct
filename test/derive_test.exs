@@ -885,6 +885,58 @@ defmodule GuardedStructTest.DeriveTest do
     end
   end
 
+  describe ":rich_text_safe — composed string hygiene" do
+    test "strips zero-width unicode characters" do
+      assert SanitizerDerive.sanitize("hi​there‌!", :rich_text_safe) == "hithere!"
+    end
+
+    test "strips ASCII control bytes" do
+      assert SanitizerDerive.sanitize("hi\x00there\x1F!", :rich_text_safe) == "hithere!"
+    end
+
+    test "strips both zero-width and control characters in a single pass" do
+      mixed = "a​b\x00c‌d\x1Fe"
+      assert SanitizerDerive.sanitize(mixed, :rich_text_safe) == "abcde"
+    end
+
+    test "preserves regular whitespace (tab, newline, carriage return, space)" do
+      assert SanitizerDerive.sanitize("line1\nline2\tcol\r\nend", :rich_text_safe) ==
+               "line1\nline2\tcol\r\nend"
+    end
+
+    test "is equivalent to chaining :no_zero_width and :no_control" do
+      input = "x​y\x00z‌w\x1F"
+
+      chained =
+        input
+        |> SanitizerDerive.sanitize(:no_zero_width)
+        |> SanitizerDerive.sanitize(:no_control)
+
+      assert SanitizerDerive.sanitize(input, :rich_text_safe) == chained
+    end
+
+    test "leaves clean text unchanged" do
+      assert SanitizerDerive.sanitize("hello world", :rich_text_safe) == "hello world"
+    end
+
+    test "returns empty string unchanged" do
+      assert SanitizerDerive.sanitize("", :rich_text_safe) == ""
+    end
+
+    test "passes through non-binary inputs untouched" do
+      assert SanitizerDerive.sanitize(nil, :rich_text_safe) == nil
+      assert SanitizerDerive.sanitize(123, :rich_text_safe) == 123
+      assert SanitizerDerive.sanitize(:atom, :rich_text_safe) == :atom
+      assert SanitizerDerive.sanitize([1, 2], :rich_text_safe) == [1, 2]
+      assert SanitizerDerive.sanitize(%{a: 1}, :rich_text_safe) == %{a: 1}
+    end
+
+    test "call/2 reduces a single :rich_text_safe action over a field" do
+      assert {:bio, "clean"} =
+               SanitizerDerive.call({:bio, "cl​e\x00an"}, [:rich_text_safe])
+    end
+  end
+
   describe "clamp sanitizer" do
     test "clamps below min" do
       assert SanitizerDerive.sanitize(-5, {:clamp, [0, 100]}) == 0
@@ -1275,6 +1327,7 @@ defmodule GuardedStructTest.DeriveTest do
         {:ipv4, "999.999.999.999"},
         {:ipv6, "not-an-ipv6"},
         {:ip, "not-an-ip"},
+        {:language_code, "english"},
         {:datetime, "not-iso"},
         {:date, "not-iso"},
         {:range, "x"},
@@ -1353,6 +1406,309 @@ defmodule GuardedStructTest.DeriveTest do
       # The catchall delegates to Extension.dispatch_validate which falls
       # through to fallback_dispatch returning the generic :type error.
       assert {:error, :probe, :type, _} = result
+    end
+  end
+
+  describe "comprehensive edge cases — sanitize ops" do
+    test "clamp on negative floats, identical-bound, and exact boundaries" do
+      # Exact-equal bound passes (inclusive)
+      assert 0 == SanitizerDerive.sanitize(0, {:clamp, [0, 100]})
+      assert 100 == SanitizerDerive.sanitize(100, {:clamp, [0, 100]})
+
+      # Negative range, negative input
+      assert -10 == SanitizerDerive.sanitize(-20, {:clamp, [-10, -1]})
+      assert -1 == SanitizerDerive.sanitize(0, {:clamp, [-10, -1]})
+
+      # Single-point range
+      assert 5 == SanitizerDerive.sanitize(0, {:clamp, [5, 5]})
+      assert 5 == SanitizerDerive.sanitize(10, {:clamp, [5, 5]})
+      assert 5 == SanitizerDerive.sanitize(5, {:clamp, [5, 5]})
+
+      # Float boundaries
+      assert -1.5 == SanitizerDerive.sanitize(-2.0, {:clamp, [-1.5, 1.5]})
+      assert 1.5 == SanitizerDerive.sanitize(2.0, {:clamp, [-1.5, 1.5]})
+    end
+
+    test "default_when_empty does NOT replace whitespace-only string (only literal \"\")" do
+      # Important: "   " (spaces) is NOT empty. The user must `trim` first
+      # if they want spaces collapsed to nil.
+      assert "   " == SanitizerDerive.sanitize("   ", {:default_when_empty, "fallback"})
+
+      # Order matters — trim first, then default_when_empty
+      "   "
+      |> SanitizerDerive.sanitize(:trim)
+      |> SanitizerDerive.sanitize({:default_when_empty, "fallback"})
+      |> Kernel.==("fallback")
+      |> assert()
+    end
+
+    test "uniq + sort + reject_empty compose in declared order" do
+      input = ["b", "a", nil, "b", "", "a"]
+
+      assert ["a", "b"] ==
+               input
+               |> SanitizerDerive.sanitize(:reject_empty)
+               |> SanitizerDerive.sanitize(:uniq)
+               |> SanitizerDerive.sanitize(:sort)
+    end
+
+    test "each sanitize composes with subsequent list-level ops" do
+      input = ["  HELLO  ", "  hello  ", "  WORLD  "]
+
+      assert ["hello", "world"] ==
+               input
+               |> SanitizerDerive.sanitize(%{each: [:trim, :downcase]})
+               |> SanitizerDerive.sanitize(:uniq)
+    end
+  end
+
+  describe "comprehensive edge cases — validate ops" do
+    test ":each on empty list passes (vacuously true)" do
+      assert [] == ValidationDerive.validate(%{each: [:string]}, [], :tags)
+    end
+
+    test ":each on single-element list with mixed inner ops" do
+      assert ["ok"] ==
+               ValidationDerive.validate(%{each: [:string, :not_empty]}, ["ok"], :tags)
+    end
+
+    test "optional wraps a parameterised inner op (max_len) end-to-end" do
+      # nil short-circuits
+      assert nil == ValidationDerive.validate({:optional, [:string, {:max_len, 5}]}, nil, :f)
+
+      # Within bounds
+      assert "abc" ==
+               ValidationDerive.validate({:optional, [:string, {:max_len, 5}]}, "abc", :f)
+
+      # Over bounds — surfaces the inner op's action, not :optional
+      assert {:error, :f, :max_len, _} =
+               ValidationDerive.validate(
+                 {:optional, [:string, {:max_len, 5}]},
+                 "way-too-long",
+                 :f
+               )
+    end
+
+    test ":past_datetime — DateTime.utc_now() at exact instant passes (inclusive eq)" do
+      # Construct an instant slightly in the past so that even on the fastest
+      # machine `utc_now()` is strictly >= it. Verifies the [:lt, :eq] branch.
+      now = DateTime.utc_now()
+      :timer.sleep(2)
+      assert ^now = ValidationDerive.validate(:past_datetime, now, :ts)
+    end
+
+    test ":future_datetime — DateTime.utc_now() at exact instant passes (inclusive eq)" do
+      future = DateTime.add(DateTime.utc_now(), 10, :second)
+      assert ^future = ValidationDerive.validate(:future_datetime, future, :ts)
+    end
+
+    test ":past_datetime accepts ISO-8601 strings (both past and rejects future)" do
+      past_iso = DateTime.add(DateTime.utc_now(), -3600, :second) |> DateTime.to_iso8601()
+      future_iso = DateTime.add(DateTime.utc_now(), 3600, :second) |> DateTime.to_iso8601()
+
+      assert ^past_iso = ValidationDerive.validate(:past_datetime, past_iso, :ts)
+
+      assert {:error, :ts, :past_datetime, _} =
+               ValidationDerive.validate(:past_datetime, future_iso, :ts)
+    end
+
+    test ":ip accepts boundary v4/v6 values" do
+      for ip <- [
+            # IPv4 boundaries
+            "0.0.0.0",
+            "255.255.255.255",
+            # IPv6 special forms
+            "::",
+            "::1",
+            "fe80::1",
+            "2001:db8::ff",
+            # Full IPv6 form
+            "2001:0db8:85a3:0000:0000:8a2e:0370:7334"
+          ] do
+        assert ^ip = ValidationDerive.validate(:ip, ip, :addr)
+      end
+    end
+
+    test ":ipv6 rejects v4 strings, integers, and empty strings" do
+      assert {:error, :addr, :ipv6, _} = ValidationDerive.validate(:ipv6, "192.168.0.1", :addr)
+      assert {:error, :addr, :ipv6, _} = ValidationDerive.validate(:ipv6, "127.0.0.1", :addr)
+      assert {:error, :addr, :ipv6, _} = ValidationDerive.validate(:ipv6, "", :addr)
+      assert {:error, :addr, :ipv6, _} = ValidationDerive.validate(:ipv6, "::g", :addr)
+      assert {:error, :addr, :ipv6, _} = ValidationDerive.validate(:ipv6, 12345, :addr)
+      assert {:error, :addr, :ipv6, _} = ValidationDerive.validate(:ipv6, nil, :addr)
+    end
+
+    test ":utc_datetime accepts both struct and binary, rejects atoms" do
+      now = DateTime.utc_now()
+      assert ^now = ValidationDerive.validate(:utc_datetime, now, :ts)
+
+      iso = "2026-01-01T12:00:00Z"
+      assert ^iso = ValidationDerive.validate(:utc_datetime, iso, :ts)
+
+      assert {:error, :ts, :utc_datetime, _} =
+               ValidationDerive.validate(:utc_datetime, :not_a_date, :ts)
+    end
+
+    test ":semver accepts canonical, prerelease, and build forms; rejects v-prefix" do
+      for ok <- [
+            "0.0.0",
+            "1.0.0",
+            "1.2.3",
+            "1.0.0-alpha",
+            "1.0.0-alpha.1",
+            "1.0.0-0.3.7",
+            "1.0.0-x.7.z.92",
+            "1.0.0+20130313144700",
+            "1.0.0-beta+exp.sha.5114f85"
+          ] do
+        assert ^ok = ValidationDerive.validate(:semver, ok, :v)
+      end
+
+      for bad <- ["v1.0.0", "1", "1.2", "01.0.0", "1.0.0-", "1.0.0+"] do
+        assert {:error, :v, :semver, _} = ValidationDerive.validate(:semver, bad, :v),
+               "expected :semver rejection for #{inspect(bad)}"
+      end
+    end
+  end
+
+  describe ":not_empty_string (already existed — pinned contract)" do
+    # This op was already in the lib before this PR. Pinning behavior so
+    # nobody accidentally tightens or loosens it.
+
+    test "accepts any non-empty binary, regardless of contents" do
+      for ok <- ["a", "hello world", "  ", "\n", "0", "false", "​"] do
+        assert ^ok = ValidationDerive.validate(:not_empty_string, ok, :s)
+      end
+    end
+
+    test "rejects empty binary, nil, non-binary, and non-string types" do
+      for bad <- ["", nil, 0, :atom, [], %{}, 123, true] do
+        assert {:error, :s, :not_empty_string, _} =
+                 ValidationDerive.validate(:not_empty_string, bad, :s),
+               "expected :not_empty_string rejection for #{inspect(bad)}"
+      end
+    end
+
+    test "is purely a length check — does NOT trim whitespace-only input" do
+      # Whitespace-only strings are NOT considered empty (they are non-empty
+      # binaries). To reject them, callers should compose `sanitize(trim)`
+      # first. This test guards against a well-meaning future contributor
+      # adding a trim inside the validator.
+      assert "   " = ValidationDerive.validate(:not_empty_string, "   ", :s)
+      assert "\t" = ValidationDerive.validate(:not_empty_string, "\t", :s)
+    end
+  end
+
+  describe ":language_code — BCP-47 / ISO 639-1 shape" do
+    test "accepts 2-letter primary language codes" do
+      for ok <- ["en", "fa", "ar", "ru", "de", "fr", "ja", "zh", "ko", "es", "pt"] do
+        assert ^ok = ValidationDerive.validate(:language_code, ok, :lang)
+      end
+    end
+
+    test "accepts 3-letter primary language codes" do
+      # ISO 639-2/3 three-letter codes (e.g. yue Cantonese, cmn Mandarin)
+      for ok <- ["yue", "cmn", "wuu", "fil", "haw"] do
+        assert ^ok = ValidationDerive.validate(:language_code, ok, :lang)
+      end
+    end
+
+    test "accepts language-region forms (e.g. en-US, pt-BR)" do
+      for ok <- ["en-US", "en-GB", "pt-BR", "es-MX", "fr-CA", "zh-CN", "zh-TW"] do
+        assert ^ok = ValidationDerive.validate(:language_code, ok, :lang)
+      end
+    end
+
+    test "accepts language-script forms (e.g. zh-Hant, sr-Cyrl)" do
+      for ok <- ["zh-Hant", "zh-Hans", "sr-Cyrl", "sr-Latn", "ja-Hira", "az-Arab"] do
+        assert ^ok = ValidationDerive.validate(:language_code, ok, :lang)
+      end
+    end
+
+    test "accepts language-script-region forms (e.g. zh-Hant-HK)" do
+      for ok <- ["zh-Hant-HK", "zh-Hans-CN", "sr-Cyrl-RS", "az-Arab-IR"] do
+        assert ^ok = ValidationDerive.validate(:language_code, ok, :lang)
+      end
+    end
+
+    test "accepts UN M.49 region codes (3 digits)" do
+      # 419 = Latin America, 029 = Caribbean, 005 = South America
+      for ok <- ["es-419", "en-029", "es-005"] do
+        assert ^ok = ValidationDerive.validate(:language_code, ok, :lang)
+      end
+    end
+
+    test "accepts variant subtags" do
+      # BCP-47 variant subtags are 5–8 alphanumeric (e.g. `1996` German
+      # orthography reform, `valencia` Catalan variant)
+      for ok <- ["de-1996", "ca-valencia", "sl-rozaj", "en-fonipa"] do
+        assert ^ok = ValidationDerive.validate(:language_code, ok, :lang)
+      end
+    end
+
+    test "case is informative only — accepts any case (per RFC 5646 §2.1.1)" do
+      # BCP-47 recommends lowercase language / titlecase script / uppercase
+      # region, but parsers MUST accept any case. We mirror that.
+      assert "EN" = ValidationDerive.validate(:language_code, "EN", :lang)
+      assert "en-us" = ValidationDerive.validate(:language_code, "en-us", :lang)
+      assert "ZH-hant" = ValidationDerive.validate(:language_code, "ZH-hant", :lang)
+    end
+
+    test "rejects obvious non-shapes: full names, single letters, digits-only" do
+      for bad <- ["english", "e", "1", "12", "123", "fr_FR", "fr/FR", " en", "en "] do
+        assert {:error, :lang, :language_code, _} =
+                 ValidationDerive.validate(:language_code, bad, :lang),
+               "expected :language_code rejection for #{inspect(bad)}"
+      end
+    end
+
+    test "rejects primary subtag outside 2–3 chars" do
+      # 1-char and 4+-char primary subtags are invalid per BCP-47
+      for bad <- ["a", "frgh", "abcde"] do
+        assert {:error, :lang, :language_code, _} =
+                 ValidationDerive.validate(:language_code, bad, :lang),
+               "expected :language_code rejection for #{inspect(bad)}"
+      end
+    end
+
+    test "rejects secondary subtags outside 2–8 chars" do
+      # Region/script/variant subtags must be 2–8 alphanumeric
+      for bad <- ["en-x", "en-USA1234567890", "en-"] do
+        assert {:error, :lang, :language_code, _} =
+                 ValidationDerive.validate(:language_code, bad, :lang),
+               "expected :language_code rejection for #{inspect(bad)}"
+      end
+    end
+
+    test "rejects non-binary inputs with explicit error" do
+      for bad <- [nil, :en, 123, [], %{}, true] do
+        assert {:error, :lang, :language_code, _} =
+                 ValidationDerive.validate(:language_code, bad, :lang),
+               "expected :language_code rejection for #{inspect(bad)}"
+      end
+    end
+
+    test "rejects empty string" do
+      assert {:error, :lang, :language_code, _} =
+               ValidationDerive.validate(:language_code, "", :lang)
+    end
+
+    test "compose with sanitize: trim + downcase normalises any user input" do
+      sanitized =
+        "  EN-US  "
+        |> SanitizerDerive.sanitize(:trim)
+        |> SanitizerDerive.sanitize(:downcase)
+
+      assert "en-us" = sanitized
+      assert "en-us" = ValidationDerive.validate(:language_code, sanitized, :lang)
+    end
+
+    test "error message includes the field name and a hint about expected shape" do
+      assert {:error, :preferred_language, :language_code, msg} =
+               ValidationDerive.validate(:language_code, "english", :preferred_language)
+
+      assert msg =~ "preferred_language"
+      assert msg =~ "BCP-47"
     end
   end
 end

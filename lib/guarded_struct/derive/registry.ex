@@ -65,7 +65,8 @@ defmodule GuardedStruct.Derive.Registry do
                   :date_struct,
                   :time_struct,
                   :ipv6,
-                  :ip
+                  :ip,
+                  :language_code
                 ])
 
   @sanitize_ops MapSet.new([
@@ -87,6 +88,7 @@ defmodule GuardedStruct.Derive.Registry do
                   :squish,
                   :no_control,
                   :no_zero_width,
+                  :rich_text_safe,
                   :clamp,
                   :default_when_nil,
                   :default_when_empty,

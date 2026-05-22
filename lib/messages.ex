@@ -104,6 +104,7 @@ defmodule GuardedStruct.Messages do
   @callback time_struct(any()) :: message()
   @callback ipv6(any()) :: message()
   @callback ip(any()) :: message()
+  @callback language_code(any()) :: message()
 
   @optional_callbacks required_fields: 0,
                       authorized_fields: 0,
@@ -180,7 +181,8 @@ defmodule GuardedStruct.Messages do
                       date_struct: 1,
                       time_struct: 1,
                       ipv6: 1,
-                      ip: 1
+                      ip: 1,
+                      language_code: 1
 
   @doc false
   # Get idea from https://github.com/pow-auth/pow/blob/main/lib/pow/phoenix/messages.ex
@@ -265,6 +267,7 @@ defmodule GuardedStruct.Messages do
       def time_struct(field), do: unquote(__MODULE__).time_struct(field)
       def ipv6(field), do: unquote(__MODULE__).ipv6(field)
       def ip(field), do: unquote(__MODULE__).ip(field)
+      def language_code(field), do: unquote(__MODULE__).language_code(field)
 
       defoverridable unquote(__MODULE__)
     end
@@ -469,6 +472,10 @@ defmodule GuardedStruct.Messages do
   def ipv6(field), do: "Invalid IPv6 address in the #{field} field"
 
   def ip(field), do: "Invalid IP address (IPv4 or IPv6) in the #{field} field"
+
+  def language_code(field),
+    do:
+      "Invalid language code in the #{field} field — expected a BCP-47 / ISO 639-1 shape (e.g. en, en-US, zh-Hant)"
 
   # Helpers
   #

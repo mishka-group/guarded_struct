@@ -113,6 +113,15 @@ defmodule GuardedStructTest.ParserStringFormTest do
       assert %{sanitize: [:squish, :no_control, :no_zero_width]} =
                Parser.parser("sanitize(squish, no_control, no_zero_width)")
     end
+
+    test ":rich_text_safe parses as a bare atom" do
+      assert %{sanitize: [:rich_text_safe]} = Parser.parser("sanitize(rich_text_safe)")
+    end
+
+    test ":rich_text_safe composes with other sanitize ops in one block" do
+      assert %{sanitize: [:trim, :rich_text_safe, :squish]} =
+               Parser.parser("sanitize(trim, rich_text_safe, squish)")
+    end
   end
 
   describe "parameterised sanitizer ops" do

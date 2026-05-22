@@ -6,6 +6,10 @@ defmodule GuardedStruct.Derive.ValidationDerive do
 
   @slug_regex ~r/^[a-z0-9]+(?:-[a-z0-9]+)*$/
   @hex_color_regex ~r/^#(?:[0-9a-fA-F]{6}|[0-9a-fA-F]{3})$/
+  # BCP-47 / RFC 5646 simplified: 2–3 alpha primary subtag, optional
+  # secondary subtags of 2–8 alphanumeric (covers script `Hant`, region
+  # `US`/`419`, variant `1996`, etc.). Anchored + bounded — ReDoS-safe.
+  @language_code_regex ~r/^[a-zA-Z]{2,3}(?:-[a-zA-Z0-9]{2,8})*$/
 
   @cache_key {__MODULE__, :fallback_module}
 
@@ -695,6 +699,15 @@ defmodule GuardedStruct.Derive.ValidationDerive do
 
   def validate(:semver, _input, field),
     do: {:error, field, :semver, translated_message(:semver, field)}
+
+  def validate(:language_code, input, field) when is_binary(input) do
+    if Regex.match?(@language_code_regex, input),
+      do: input,
+      else: {:error, field, :language_code, translated_message(:language_code, field)}
+  end
+
+  def validate(:language_code, _input, field),
+    do: {:error, field, :language_code, translated_message(:language_code, field)}
 
   def validate(:utc_datetime, %DateTime{} = input, _field), do: input
 

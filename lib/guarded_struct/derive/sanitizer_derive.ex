@@ -135,6 +135,14 @@ defmodule GuardedStruct.Derive.SanitizerDerive do
 
   def sanitize(input, :no_zero_width), do: input
 
+  def sanitize(input, :rich_text_safe) when is_binary(input) do
+    input
+    |> sanitize(:no_zero_width)
+    |> sanitize(:no_control)
+  end
+
+  def sanitize(input, :rich_text_safe), do: input
+
   def sanitize(input, {:clamp, [min, max]})
       when is_number(input) and is_number(min) and is_number(max) do
     cond do
