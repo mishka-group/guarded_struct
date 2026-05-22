@@ -63,7 +63,9 @@ defmodule GuardedStruct.Derive.Registry do
                   :utc_datetime,
                   :naive_datetime,
                   :date_struct,
-                  :time_struct
+                  :time_struct,
+                  :ipv6,
+                  :ip
                 ])
 
   @sanitize_ops MapSet.new([

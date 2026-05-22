@@ -1273,6 +1273,8 @@ defmodule GuardedStructTest.DeriveTest do
         {:not_empty_string, ""},
         {:uuid, "not-a-uuid"},
         {:ipv4, "999.999.999.999"},
+        {:ipv6, "not-an-ipv6"},
+        {:ip, "not-an-ip"},
         {:datetime, "not-iso"},
         {:date, "not-iso"},
         {:range, "x"},
@@ -1309,6 +1311,34 @@ defmodule GuardedStructTest.DeriveTest do
                  "Its dedicated clause may have been deleted, shadowed, or placed " <>
                  "after `def validate(action, input, field)`."
       end
+    end
+
+    test "ipv6 + ip — accept/reject contract is pure (no network)" do
+      # IPv6 happy path — full and abbreviated forms
+      assert "2001:db8::1" = ValidationDerive.validate(:ipv6, "2001:db8::1", :ip)
+      assert "::1" = ValidationDerive.validate(:ipv6, "::1", :ip)
+
+      assert "2001:0db8:85a3:0000:0000:8a2e:0370:7334" =
+               ValidationDerive.validate(
+                 :ipv6,
+                 "2001:0db8:85a3:0000:0000:8a2e:0370:7334",
+                 :ip
+               )
+
+      # IPv6 rejects v4 + garbage
+      assert {:error, :ip, :ipv6, _} = ValidationDerive.validate(:ipv6, "192.168.0.1", :ip)
+      assert {:error, :ip, :ipv6, _} = ValidationDerive.validate(:ipv6, "gibberish", :ip)
+      assert {:error, :ip, :ipv6, _} = ValidationDerive.validate(:ipv6, "", :ip)
+      assert {:error, :ip, :ipv6, _} = ValidationDerive.validate(:ipv6, 42, :ip)
+
+      # :ip — either v4 or v6
+      assert "127.0.0.1" = ValidationDerive.validate(:ip, "127.0.0.1", :ip)
+      assert "::1" = ValidationDerive.validate(:ip, "::1", :ip)
+      assert "2001:db8::1" = ValidationDerive.validate(:ip, "2001:db8::1", :ip)
+
+      assert {:error, :ip, :ip, _} = ValidationDerive.validate(:ip, "not-an-ip", :ip)
+      assert {:error, :ip, :ip, _} = ValidationDerive.validate(:ip, "999.999.999.999", :ip)
+      assert {:error, :ip, :ip, _} = ValidationDerive.validate(:ip, nil, :ip)
     end
 
     test "no clause was placed AFTER the catchall (would be dead code)" do

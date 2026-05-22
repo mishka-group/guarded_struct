@@ -102,6 +102,8 @@ defmodule GuardedStruct.Messages do
   @callback naive_datetime(any()) :: message()
   @callback date_struct(any()) :: message()
   @callback time_struct(any()) :: message()
+  @callback ipv6(any()) :: message()
+  @callback ip(any()) :: message()
 
   @optional_callbacks required_fields: 0,
                       authorized_fields: 0,
@@ -176,7 +178,9 @@ defmodule GuardedStruct.Messages do
                       utc_datetime: 1,
                       naive_datetime: 1,
                       date_struct: 1,
-                      time_struct: 1
+                      time_struct: 1,
+                      ipv6: 1,
+                      ip: 1
 
   @doc false
   # Get idea from https://github.com/pow-auth/pow/blob/main/lib/pow/phoenix/messages.ex
@@ -259,6 +263,8 @@ defmodule GuardedStruct.Messages do
       def naive_datetime(field), do: unquote(__MODULE__).naive_datetime(field)
       def date_struct(field), do: unquote(__MODULE__).date_struct(field)
       def time_struct(field), do: unquote(__MODULE__).time_struct(field)
+      def ipv6(field), do: unquote(__MODULE__).ipv6(field)
+      def ip(field), do: unquote(__MODULE__).ip(field)
 
       defoverridable unquote(__MODULE__)
     end
@@ -459,6 +465,10 @@ defmodule GuardedStruct.Messages do
   def date_struct(field), do: "The #{field} field must be a %Date{} or an ISO-8601 date string"
 
   def time_struct(field), do: "The #{field} field must be a %Time{} or an ISO-8601 time string"
+
+  def ipv6(field), do: "Invalid IPv6 address in the #{field} field"
+
+  def ip(field), do: "Invalid IP address (IPv4 or IPv6) in the #{field} field"
 
   # Helpers
   #

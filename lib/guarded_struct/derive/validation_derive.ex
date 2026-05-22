@@ -382,6 +382,31 @@ defmodule GuardedStruct.Derive.ValidationDerive do
     {:error, field, :ipv4, translated_message(:ipv4, field)}
   end
 
+  # `:inet.parse_ipv6_address` is lenient — it accepts plain IPv4 strings
+  # by parsing them to IPv4-mapped IPv6. Require a literal ":" so a v4
+  # string like "192.168.0.1" is rejected as not-v6.
+  def validate(:ipv6, input, field) when is_binary(input) do
+    with true <- String.contains?(input, ":"),
+         {:ok, _tuple} <- :inet.parse_ipv6_address(String.to_charlist(input)) do
+      input
+    else
+      _ -> {:error, field, :ipv6, translated_message(:ipv6, field)}
+    end
+  end
+
+  def validate(:ipv6, _input, field),
+    do: {:error, field, :ipv6, translated_message(:ipv6, field)}
+
+  def validate(:ip, input, field) when is_binary(input) do
+    case :inet.parse_address(String.to_charlist(input)) do
+      {:ok, _tuple} -> input
+      {:error, _reason} -> {:error, field, :ip, translated_message(:ip, field)}
+    end
+  end
+
+  def validate(:ip, _input, field),
+    do: {:error, field, :ip, translated_message(:ip, field)}
+
   def validate(:not_empty_string, input, field) do
     if is_binary(input) and input != "" do
       input
