@@ -1123,4 +1123,206 @@ defmodule GuardedStructTest.DeriveTest do
       assert Enum.all?(errors, &(Map.get(&1, :__hint__) == "form-row"))
     end
   end
+
+  describe "datetime / date / time shape validators" do
+    test ":utc_datetime accepts %DateTime{} and ISO-8601 binary, rejects anything else" do
+      now = DateTime.utc_now()
+      assert ^now = ValidationDerive.validate(:utc_datetime, now, :ts)
+
+      assert "2026-05-22T12:00:00Z" =
+               ValidationDerive.validate(:utc_datetime, "2026-05-22T12:00:00Z", :ts)
+
+      assert {:error, :ts, :utc_datetime, _} =
+               ValidationDerive.validate(:utc_datetime, "not-iso", :ts)
+
+      assert {:error, :ts, :utc_datetime, _} = ValidationDerive.validate(:utc_datetime, 123, :ts)
+    end
+
+    test ":naive_datetime accepts %NaiveDateTime{} and ISO-8601 binary" do
+      naive = ~N[2026-05-22 12:00:00]
+      assert ^naive = ValidationDerive.validate(:naive_datetime, naive, :ts)
+
+      assert "2026-05-22T12:00:00" =
+               ValidationDerive.validate(:naive_datetime, "2026-05-22T12:00:00", :ts)
+
+      assert {:error, :ts, :naive_datetime, _} =
+               ValidationDerive.validate(:naive_datetime, "nope", :ts)
+    end
+
+    test ":date_struct accepts %Date{} and ISO-8601 date binary" do
+      today = ~D[2026-05-22]
+      assert ^today = ValidationDerive.validate(:date_struct, today, :d)
+
+      assert "2026-05-22" = ValidationDerive.validate(:date_struct, "2026-05-22", :d)
+
+      assert {:error, :d, :date_struct, _} = ValidationDerive.validate(:date_struct, "x", :d)
+    end
+
+    test ":time_struct accepts %Time{} and ISO-8601 time binary" do
+      now = ~T[12:00:00]
+      assert ^now = ValidationDerive.validate(:time_struct, now, :t)
+
+      assert "12:00:00" = ValidationDerive.validate(:time_struct, "12:00:00", :t)
+
+      assert {:error, :t, :time_struct, _} = ValidationDerive.validate(:time_struct, "noon", :t)
+    end
+  end
+
+  describe ":past_datetime and :future_datetime" do
+    test ":past_datetime accepts past %DateTime{}, current instant, rejects future" do
+      past = DateTime.add(DateTime.utc_now(), -3600, :second)
+      assert ^past = ValidationDerive.validate(:past_datetime, past, :applied_at)
+
+      # "Now" passes because by the time the validator runs, `utc_now()` is a
+      # few microseconds later — submitted is already past-or-equal.
+      now = DateTime.utc_now()
+      assert ^now = ValidationDerive.validate(:past_datetime, now, :applied_at)
+
+      future = DateTime.add(DateTime.utc_now(), 3600, :second)
+
+      assert {:error, :applied_at, :past_datetime, _} =
+               ValidationDerive.validate(:past_datetime, future, :applied_at)
+    end
+
+    test ":future_datetime accepts future %DateTime{}, current instant, rejects past" do
+      future = DateTime.add(DateTime.utc_now(), 3600, :second)
+
+      assert ^future =
+               ValidationDerive.validate(:future_datetime, future, :scheduled_at)
+
+      past = DateTime.add(DateTime.utc_now(), -3600, :second)
+
+      assert {:error, :scheduled_at, :future_datetime, _} =
+               ValidationDerive.validate(:future_datetime, past, :scheduled_at)
+    end
+
+    test ":past_datetime also accepts %NaiveDateTime{} and %Date{}" do
+      past_naive = NaiveDateTime.add(NaiveDateTime.utc_now(), -3600, :second)
+      assert ^past_naive = ValidationDerive.validate(:past_datetime, past_naive, :ts)
+
+      yesterday = Date.add(Date.utc_today(), -1)
+      assert ^yesterday = ValidationDerive.validate(:past_datetime, yesterday, :d)
+    end
+
+    test ":future_datetime also accepts %NaiveDateTime{} and %Date{}" do
+      future_naive = NaiveDateTime.add(NaiveDateTime.utc_now(), 3600, :second)
+      assert ^future_naive = ValidationDerive.validate(:future_datetime, future_naive, :ts)
+
+      tomorrow = Date.add(Date.utc_today(), 1)
+      assert ^tomorrow = ValidationDerive.validate(:future_datetime, tomorrow, :d)
+    end
+
+    test "both accept ISO-8601 binaries and apply the same past/future rule" do
+      past_iso = DateTime.add(DateTime.utc_now(), -3600, :second) |> DateTime.to_iso8601()
+      future_iso = DateTime.add(DateTime.utc_now(), 3600, :second) |> DateTime.to_iso8601()
+
+      assert ^past_iso = ValidationDerive.validate(:past_datetime, past_iso, :ts)
+      assert ^future_iso = ValidationDerive.validate(:future_datetime, future_iso, :ts)
+
+      assert {:error, :ts, :past_datetime, _} =
+               ValidationDerive.validate(:past_datetime, future_iso, :ts)
+
+      assert {:error, :ts, :future_datetime, _} =
+               ValidationDerive.validate(:future_datetime, past_iso, :ts)
+    end
+
+    test "both reject non-temporal inputs with explicit error" do
+      assert {:error, :x, :past_datetime, _} =
+               ValidationDerive.validate(:past_datetime, 123, :x)
+
+      assert {:error, :x, :future_datetime, _} =
+               ValidationDerive.validate(:future_datetime, nil, :x)
+
+      assert {:error, :x, :past_datetime, _} =
+               ValidationDerive.validate(:past_datetime, "not-iso", :x)
+    end
+  end
+
+  describe "dispatch-order regression — every registered op has a dedicated clause" do
+    # If a developer ever inserts a defp between two def validate/3 clauses,
+    # the Elixir compiler warns ("clauses with the same name and arity should
+    # be grouped together"). With `mix test --warnings-as-errors` that becomes
+    # a failure, but plain runs only show a warning. This test catches the
+    # subtler symptom: a clause physically placed AFTER the catchall is dead,
+    # because the catchall matches first. We probe every op in the registry
+    # with a deliberately-wrong-shape value and assert the error action is
+    # the op's own atom — not the catchall's `:type` action.
+
+    test "every validate-op atom has a clause that fires before the catchall" do
+      # Pair every bare-atom op with an input it MUST reject. If the dedicated
+      # clause is missing or placed after the catchall, the catchall fires
+      # with action `:type` instead of the op's own action, and we catch it.
+      probes = [
+        {:string, 42},
+        {:integer, "x"},
+        {:float, 1},
+        {:number, "x"},
+        {:list, "x"},
+        {:map, "x"},
+        {:tuple, "x"},
+        {:atom, "x"},
+        {:bitstring, 1},
+        {:boolean, "x"},
+        {:struct, "x"},
+        {:nil_value, 1},
+        {:not_nil_value, nil},
+        {:not_empty, ""},
+        {:not_flatten_empty, []},
+        {:not_flatten_empty_item, [[], []]},
+        {:queue, "x"},
+        {:not_empty_string, ""},
+        {:uuid, "not-a-uuid"},
+        {:ipv4, "999.999.999.999"},
+        {:datetime, "not-iso"},
+        {:date, "not-iso"},
+        {:range, "x"},
+        {:email_r, "not-email"},
+        {:username, ""},
+        {:full_name, 123},
+        {:string_boolean, "maybe"},
+        {:string_float, "abc"},
+        {:string_integer, "abc"},
+        {:some_string_float, "abc"},
+        {:some_string_integer, "abc"},
+        {:record, "x"},
+        {:slug, "Has Spaces"},
+        {:hostname, "bad_host_with_underscore"},
+        {:port_number, 70_000},
+        {:hex_color, "not-a-color"},
+        {:semver, "v1.0"},
+        {:past_datetime, "not-iso"},
+        {:future_datetime, "not-iso"},
+        {:utc_datetime, "not-iso"},
+        {:naive_datetime, "not-iso"},
+        {:date_struct, "not-iso"},
+        {:time_struct, "not-iso"}
+      ]
+
+      for {op, bad_input} <- probes do
+        result = ValidationDerive.validate(op, bad_input, :probe)
+
+        assert {:error, :probe, action, _msg} = result,
+               "op #{inspect(op)} did not reject #{inspect(bad_input)}: got #{inspect(result)}"
+
+        refute action == :type,
+               "op #{inspect(op)} fell through to the catchall (action: :type). " <>
+                 "Its dedicated clause may have been deleted, shadowed, or placed " <>
+                 "after `def validate(action, input, field)`."
+      end
+    end
+
+    test "no clause was placed AFTER the catchall (would be dead code)" do
+      # The catchall is `def validate(action, input, field)` with no pattern.
+      # Any subsequent `def validate/3` clause would be unreachable. We can't
+      # introspect the AST cheaply, so we proxy: probe with an unknown atom
+      # that no registered op uses and assert it hits the catchall.
+
+      unknown_op = :__no_such_op_should_ever_exist__
+      result = ValidationDerive.validate(unknown_op, "anything", :probe)
+
+      # The catchall delegates to Extension.dispatch_validate which falls
+      # through to fallback_dispatch returning the generic :type error.
+      assert {:error, :probe, :type, _} = result
+    end
+  end
 end

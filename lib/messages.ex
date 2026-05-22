@@ -96,6 +96,12 @@ defmodule GuardedStruct.Messages do
   @callback hex_color(any()) :: message()
   @callback semver(any()) :: message()
   @callback each(any()) :: message()
+  @callback past_datetime(any()) :: message()
+  @callback future_datetime(any()) :: message()
+  @callback utc_datetime(any()) :: message()
+  @callback naive_datetime(any()) :: message()
+  @callback date_struct(any()) :: message()
+  @callback time_struct(any()) :: message()
 
   @optional_callbacks required_fields: 0,
                       authorized_fields: 0,
@@ -164,7 +170,13 @@ defmodule GuardedStruct.Messages do
                       port_number: 1,
                       hex_color: 1,
                       semver: 1,
-                      each: 1
+                      each: 1,
+                      past_datetime: 1,
+                      future_datetime: 1,
+                      utc_datetime: 1,
+                      naive_datetime: 1,
+                      date_struct: 1,
+                      time_struct: 1
 
   @doc false
   # Get idea from https://github.com/pow-auth/pow/blob/main/lib/pow/phoenix/messages.ex
@@ -241,6 +253,12 @@ defmodule GuardedStruct.Messages do
       def hex_color(field), do: unquote(__MODULE__).hex_color(field)
       def semver(field), do: unquote(__MODULE__).semver(field)
       def each(field), do: unquote(__MODULE__).each(field)
+      def past_datetime(field), do: unquote(__MODULE__).past_datetime(field)
+      def future_datetime(field), do: unquote(__MODULE__).future_datetime(field)
+      def utc_datetime(field), do: unquote(__MODULE__).utc_datetime(field)
+      def naive_datetime(field), do: unquote(__MODULE__).naive_datetime(field)
+      def date_struct(field), do: unquote(__MODULE__).date_struct(field)
+      def time_struct(field), do: unquote(__MODULE__).time_struct(field)
 
       defoverridable unquote(__MODULE__)
     end
@@ -427,6 +445,20 @@ defmodule GuardedStruct.Messages do
     do: "Invalid semantic version format in the #{field} field (expected MAJOR.MINOR.PATCH)"
 
   def each(field), do: "One or more items in the #{field} field failed validation"
+
+  def past_datetime(field), do: "The #{field} field must be in the past (or now)"
+
+  def future_datetime(field), do: "The #{field} field must be in the future (or now)"
+
+  def utc_datetime(field),
+    do: "The #{field} field must be a %DateTime{} or an ISO-8601 UTC datetime string"
+
+  def naive_datetime(field),
+    do: "The #{field} field must be a %NaiveDateTime{} or an ISO-8601 naive datetime string"
+
+  def date_struct(field), do: "The #{field} field must be a %Date{} or an ISO-8601 date string"
+
+  def time_struct(field), do: "The #{field} field must be a %Time{} or an ISO-8601 time string"
 
   # Helpers
   #

@@ -671,6 +671,96 @@ defmodule GuardedStruct.Derive.ValidationDerive do
   def validate(:semver, _input, field),
     do: {:error, field, :semver, translated_message(:semver, field)}
 
+  def validate(:utc_datetime, %DateTime{} = input, _field), do: input
+
+  def validate(:utc_datetime, input, field) when is_binary(input) do
+    case DateTime.from_iso8601(input) do
+      {:ok, _, _} -> input
+      _ -> {:error, field, :utc_datetime, translated_message(:utc_datetime, field)}
+    end
+  end
+
+  def validate(:utc_datetime, _input, field),
+    do: {:error, field, :utc_datetime, translated_message(:utc_datetime, field)}
+
+  def validate(:naive_datetime, %NaiveDateTime{} = input, _field), do: input
+
+  def validate(:naive_datetime, input, field) when is_binary(input) do
+    case NaiveDateTime.from_iso8601(input) do
+      {:ok, _} -> input
+      _ -> {:error, field, :naive_datetime, translated_message(:naive_datetime, field)}
+    end
+  end
+
+  def validate(:naive_datetime, _input, field),
+    do: {:error, field, :naive_datetime, translated_message(:naive_datetime, field)}
+
+  def validate(:date_struct, %Date{} = input, _field), do: input
+
+  def validate(:date_struct, input, field) when is_binary(input) do
+    case Date.from_iso8601(input) do
+      {:ok, _} -> input
+      _ -> {:error, field, :date_struct, translated_message(:date_struct, field)}
+    end
+  end
+
+  def validate(:date_struct, _input, field),
+    do: {:error, field, :date_struct, translated_message(:date_struct, field)}
+
+  def validate(:time_struct, %Time{} = input, _field), do: input
+
+  def validate(:time_struct, input, field) when is_binary(input) do
+    case Time.from_iso8601(input) do
+      {:ok, _} -> input
+      _ -> {:error, field, :time_struct, translated_message(:time_struct, field)}
+    end
+  end
+
+  def validate(:time_struct, _input, field),
+    do: {:error, field, :time_struct, translated_message(:time_struct, field)}
+
+  def validate(:past_datetime, %DateTime{} = input, field),
+    do: compare_past(input, field, &DateTime.compare/2, &DateTime.utc_now/0)
+
+  def validate(:past_datetime, %NaiveDateTime{} = input, field),
+    do: compare_past(input, field, &NaiveDateTime.compare/2, &NaiveDateTime.utc_now/0)
+
+  def validate(:past_datetime, %Date{} = input, field),
+    do: compare_past(input, field, &Date.compare/2, &Date.utc_today/0)
+
+  def validate(:past_datetime, input, field) when is_binary(input) do
+    with {:ok, parsed} <- parse_temporal(input),
+         result when not is_tuple(result) <- validate(:past_datetime, parsed, field) do
+      input
+    else
+      {:error, _, _, _} = err -> err
+      _ -> temporal_error(field, :past_datetime)
+    end
+  end
+
+  def validate(:past_datetime, _input, field), do: temporal_error(field, :past_datetime)
+
+  def validate(:future_datetime, %DateTime{} = input, field),
+    do: compare_future(input, field, &DateTime.compare/2, &DateTime.utc_now/0)
+
+  def validate(:future_datetime, %NaiveDateTime{} = input, field),
+    do: compare_future(input, field, &NaiveDateTime.compare/2, &NaiveDateTime.utc_now/0)
+
+  def validate(:future_datetime, %Date{} = input, field),
+    do: compare_future(input, field, &Date.compare/2, &Date.utc_today/0)
+
+  def validate(:future_datetime, input, field) when is_binary(input) do
+    with {:ok, parsed} <- parse_temporal(input),
+         result when not is_tuple(result) <- validate(:future_datetime, parsed, field) do
+      input
+    else
+      {:error, _, _, _} = err -> err
+      _ -> temporal_error(field, :future_datetime)
+    end
+  end
+
+  def validate(:future_datetime, _input, field), do: temporal_error(field, :future_datetime)
+
   def validate({:optional, _inner}, nil, _field), do: nil
   def validate(%{optional: _inner}, nil, _field), do: nil
 
@@ -861,4 +951,34 @@ defmodule GuardedStruct.Derive.ValidationDerive do
       do: input,
       else: {:error, field, :equal, translated_message(:equal, field)}
   end
+
+  defp compare_past(input, field, cmp, now_fn) do
+    if cmp.(input, now_fn.()) in [:lt, :eq],
+      do: input,
+      else: temporal_error(field, :past_datetime)
+  end
+
+  defp compare_future(input, field, cmp, now_fn) do
+    if cmp.(input, now_fn.()) in [:gt, :eq],
+      do: input,
+      else: temporal_error(field, :future_datetime)
+  end
+
+  defp parse_temporal(bin) do
+    parsers = [
+      fn b -> with {:ok, dt, _} <- DateTime.from_iso8601(b), do: {:ok, dt} end,
+      fn b -> NaiveDateTime.from_iso8601(b) end,
+      fn b -> Date.from_iso8601(b) end
+    ]
+
+    Enum.find_value(parsers, :error, fn parser ->
+      case parser.(bin) do
+        {:ok, _} = ok -> ok
+        _ -> nil
+      end
+    end)
+  end
+
+  defp temporal_error(field, action),
+    do: {:error, field, action, translated_message(action, field)}
 end

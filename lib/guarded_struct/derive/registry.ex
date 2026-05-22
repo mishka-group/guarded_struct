@@ -57,7 +57,13 @@ defmodule GuardedStruct.Derive.Registry do
                   :hex_color,
                   :semver,
                   :optional,
-                  :each
+                  :each,
+                  :past_datetime,
+                  :future_datetime,
+                  :utc_datetime,
+                  :naive_datetime,
+                  :date_struct,
+                  :time_struct
                 ])
 
   @sanitize_ops MapSet.new([
