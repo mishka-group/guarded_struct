@@ -69,7 +69,7 @@ defmodule GuardedStruct.Dsl do
       name: [type: :any, required: true],
       type: [type: :quoted, default: quote(do: map())],
       enforce: [type: :boolean],
-      default: [type: :quoted, default: Macro.escape(%{})],
+      default: [type: :quoted, default: %{}],
       derives: [type: :string, default: "validate(map)"],
       derive: [type: :string],
       validator: [type: {:tuple, [:atom, :atom]}],

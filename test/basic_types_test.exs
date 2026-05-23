@@ -66,6 +66,22 @@ defmodule GuardedStructTest.BasicTypesTest do
     refute :with_default in EnforcedGuardedStruct.enforce_keys()
   end
 
+  test "non-AST-literal defaults (maps, 3-tuples) survive defstruct codegen" do
+    # Regression: `defstruct unquote(defstruct_kw)` requires the keyword
+    # list to be valid AST. Map and 3+-tuple defaults are NOT valid AST
+    # literals on their own — codegen must escape them. Covers both the
+    # top-level builder and the sub_field submodule path.
+    alias GuardedStructTest.Fixtures.BasicTypes.NonAstDefaults
+
+    assert %NonAstDefaults{helpers: %{}, coords: {:x, :y, :z}, inner: %{}} =
+             NonAstDefaults.__struct__()
+
+    inner = NonAstDefaults.Inner.__struct__()
+    assert inner.tags == []
+    assert inner.meta == %{}
+    assert inner.triple == {1, 2, 3}
+  end
+
   test "generates a type for the struct" do
     # Define a second struct with the type expected for TestStruct.
     {_module_name, bytecode2, _file_path} = :code.get_object_code(TestStruct2)

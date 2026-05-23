@@ -113,7 +113,7 @@ defmodule GuardedStruct.Transformers.Codegen do
     quote do
       unquote(derive_json_ast)
       @enforce_keys unquote(enforce_keys)
-      defstruct unquote(defstruct_kw)
+      defstruct unquote(Macro.escape(defstruct_kw))
 
       if unquote(opaque?) do
         @opaque t() :: %__MODULE__{unquote_splicing(types)}
@@ -612,7 +612,8 @@ defmodule GuardedStruct.Transformers.Codegen do
     field_atom |> Atom.to_string() |> Macro.camelize() |> String.to_atom()
   end
 
-  defp example_value_ast(%Field{default: default}, _path) when not is_nil(default), do: default
+  defp example_value_ast(%Field{default: default}, _path) when not is_nil(default),
+    do: Macro.escape(default)
 
   defp example_value_ast(%Field{struct: mod}, _path) when is_atom(mod) and not is_nil(mod) do
     quote do: unquote(mod).example()
@@ -623,10 +624,10 @@ defmodule GuardedStruct.Transformers.Codegen do
     quote do: [unquote(mod).example()]
   end
 
-  defp example_value_ast(%Field{type: type}, _path), do: type_default_ast(type)
+  defp example_value_ast(%Field{type: type}, _path), do: Macro.escape(type_default_ast(type))
 
   defp example_value_ast(%SubField{default: default}, _path) when not is_nil(default),
-    do: default
+    do: Macro.escape(default)
 
   defp example_value_ast(%SubField{name: name}, _path) do
     component = atom_to_module(name)
@@ -634,7 +635,7 @@ defmodule GuardedStruct.Transformers.Codegen do
   end
 
   defp example_value_ast(%ConditionalField{default: default}, _path) when not is_nil(default),
-    do: default
+    do: Macro.escape(default)
 
   defp example_value_ast(%ConditionalField{}, _path), do: nil
 
@@ -652,7 +653,7 @@ defmodule GuardedStruct.Transformers.Codegen do
   defp type_default_ast({:boolean, _, _}), do: false
   defp type_default_ast({:atom, _, _}), do: :placeholder
   defp type_default_ast({:list, _, _}), do: []
-  defp type_default_ast({:map, _, _}), do: Macro.escape(%{})
+  defp type_default_ast({:map, _, _}), do: %{}
   defp type_default_ast({:any, _, _}), do: nil
   defp type_default_ast({:term, _, _}), do: nil
   defp type_default_ast(_other), do: nil

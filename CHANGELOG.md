@@ -34,11 +34,17 @@
 - Add `optional=[ops]` validator wrapper — passes `nil` through, runs inner ops on non-nil values.
 - Add list hygiene sanitizers — `:uniq`, `:compact`, `:reject_empty`, `:sort`.
 - Add string hygiene sanitizers — `:squish` (collapse runs of whitespace + trim), `:no_control` (strip ASCII control chars), `:no_zero_width` (strip zero-width unicode).
+- Add `:rich_text_safe` sanitizer — sugar that composes `:no_zero_width` + `:no_control` in one named op for template/content/bio fields; non-binary inputs pass through untouched.
 - Add named regex validators — `:slug`, `:hostname`, `:port_number`, `:hex_color`, `:semver`. Patterns are anchored, bounded, and ReDoS-safe; compiled once at module load.
+- Add `:language_code` validator — BCP-47 / ISO 639-1 shape (e.g. `en`, `en-US`, `zh-Hant`, `pt-BR`). Anchored regex, case-insensitive, primary 2–3 letters + optional `-subtag` segments (2–8 alnum each).
+- Add datetime shape validators — `:utc_datetime`, `:naive_datetime`, `:date_struct`, `:time_struct`. Each accepts both the matching Elixir struct **and** the ISO-8601 binary form, so the same op covers Ash struct inputs and raw string inputs from JSON/form bodies.
+- Add datetime comparison validators — `:past_datetime`, `:future_datetime`. Inclusive semantics: "now" passes both, so callers never trip on clock skew between submit and validate.
+- Add `:ipv6` validator — accepts only literal v6 addresses; rejects v4-as-v6 by requiring at least one `:` character before handing off to `:inet.parse_ipv6_address/1`.
+- Add `:ip` validator — accepts either v4 or v6 form; thin wrapper that tries v4 first, falls back to v6.
 - Add `{:clamp, [min, max]}` sanitizer — snap out-of-range numbers to the nearest bound.
 - Add `{:default_when_nil, value}` / `{:default_when_empty, value}` sanitizers — fill missing values in the pipeline.
 - Compile-time param shape validation extended to every new parameterised op via `OpParamValidator`.
-- Localised error messages added through the `Messages` callbacks for `slug`, `hostname`, `port_number`, `hex_color`, `semver`, and `each`.
+- Localised error messages added through the `Messages` callbacks for `slug`, `hostname`, `port_number`, `hex_color`, `semver`, `each`, `language_code`, `utc_datetime`, `naive_datetime`, `date_struct`, `time_struct`, `past_datetime`, `future_datetime`, `ipv6`, and `ip`.
 
 
 ### Refactors:
@@ -67,6 +73,8 @@
 - Fix re-entrancy in the auto-map cascade — process-dict flag is saved+restored across nested `validate/3` calls so a validator callback can recursively validate without clobbering outer state [#13](https://github.com/mishka-group/guarded_struct/pull/13)
 - Fix `Logger.configure(level: :warning)` global side-effect in `test_helper.exs` — replaced with `@moduletag capture_log: true` on Ash test modules [#13](https://github.com/mishka-group/guarded_struct/pull/13)
 - Parser silently dropped the entire derive string when a `regex=<pattern>` op contained unquoted special characters (`^`, `[`, `+`, `$`, …). Fixed via `quote_regex_values/1` pre-processor that wraps the pattern in `"…"` before AST conversion.
+- `def validate/3` clauses in `ValidationDerive` were interrupted by four `defp` helpers wedged between them, triggering the compiler's "clauses of the same name should be grouped together" warning and risking mis-dispatch of later clauses. All helpers moved below the catchall; added a dispatch-regression test that probes 43 op atoms with deliberately-bad inputs and asserts none fall through to the catchall.
+- Per-element `:each` errors now carry an `__index__:` key after flattening. Previously errors from list-element validation came back as a nested `{:children, [...]}` 5-tuple with no way to tell which element failed; `call/3` now flattens children into the top-level errors list with the originating index attached, so callers can pinpoint which list position broke.
 
 
 ### Tests:
