@@ -175,10 +175,10 @@ defmodule GuardedStruct.Derive.Parser do
     do: {key, nil}
 
   defp parse_arg({:=, _, [{:regex, _, nil}, value]}) when is_binary(value),
-    do: precompile_regex(value)
+    do: regex_op(value)
 
   defp parse_arg({:=, _, [{:regex, _, nil}, value]}) when is_list(value),
-    do: precompile_regex(to_string(value))
+    do: regex_op(to_string(value))
 
   defp parse_arg({:=, _, [{key, _, nil}, value]})
        when is_atom(key) and is_binary(value),
@@ -201,11 +201,19 @@ defmodule GuardedStruct.Derive.Parser do
 
   defp parse_arg(_other), do: nil
 
-  defp precompile_regex(source) do
-    case Regex.compile(source) do
-      {:ok, regex} -> {:regex, regex}
-      {:error, _} -> {:regex, source}
+  # On OTP 28 a compiled regex holds a `#Reference`, which only survives
+  # `Macro.escape/1` (codegen bakes ops into the module) on Elixir >= 1.19.
+  @escape_safe_regex? Version.match?(System.version(), ">= 1.19.0")
+
+  if @escape_safe_regex? do
+    defp regex_op(source) do
+      case Regex.compile(source) do
+        {:ok, regex} -> {:regex, regex}
+        {:error, _} -> {:regex, source}
+      end
     end
+  else
+    defp regex_op(source), do: {:regex, source}
   end
 
   defp ast_to_string(ast) do
