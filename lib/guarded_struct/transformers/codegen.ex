@@ -113,7 +113,7 @@ defmodule GuardedStruct.Transformers.Codegen do
     quote do
       unquote(derive_json_ast)
       @enforce_keys unquote(enforce_keys)
-      defstruct unquote(Macro.escape(defstruct_kw))
+      defstruct unquote(escape_runtime(defstruct_kw))
 
       if unquote(opaque?) do
         @opaque t() :: %__MODULE__{unquote_splicing(types)}
@@ -158,7 +158,7 @@ defmodule GuardedStruct.Transformers.Codegen do
       end
 
       @__guarded_fields__ GuardedStruct.Transformers.Codegen.bake_child_modules(
-                            unquote(Macro.escape(fields_runtime)),
+                            unquote(escape_runtime(fields_runtime)),
                             __MODULE__
                           )
       def __fields__, do: @__guarded_fields__
@@ -258,7 +258,7 @@ defmodule GuardedStruct.Transformers.Codegen do
         Map.put(unquote(info_map), :module, __MODULE__)
       end
 
-      def __fields__, do: unquote(Macro.escape(fields_runtime))
+      def __fields__, do: unquote(escape_runtime(fields_runtime))
 
       def __field_meta__(_), do: nil
 
@@ -612,8 +612,33 @@ defmodule GuardedStruct.Transformers.Codegen do
     field_atom |> Atom.to_string() |> Macro.camelize() |> String.to_atom()
   end
 
+  # Like `Macro.escape/1`, but reconstructs any `%Regex{}` from its source at
+  # load time. A compiled regex holds a `#Reference` on OTP 27+ (PCRE2),
+  # which `Macro.escape/1` can only bake into a module on Elixir >= 1.19.
+  # Recompiling from source keeps the baked value a real `%Regex{}` on every
+  # supported Elixir/OTP combo.
+  def escape_runtime(%Regex{source: source, opts: opts}) do
+    quote do: Regex.compile!(unquote(source), unquote(Macro.escape(opts)))
+  end
+
+  def escape_runtime(list) when is_list(list), do: Enum.map(list, &escape_runtime/1)
+
+  def escape_runtime({a, b}), do: {escape_runtime(a), escape_runtime(b)}
+
+  def escape_runtime(tuple) when is_tuple(tuple) do
+    {:{}, [], tuple |> Tuple.to_list() |> Enum.map(&escape_runtime/1)}
+  end
+
+  def escape_runtime(%{__struct__: _} = struct), do: Macro.escape(struct)
+
+  def escape_runtime(map) when is_map(map) do
+    {:%{}, [], Enum.map(map, fn {k, v} -> {escape_runtime(k), escape_runtime(v)} end)}
+  end
+
+  def escape_runtime(other), do: Macro.escape(other)
+
   defp example_value_ast(%Field{default: default}, _path) when not is_nil(default),
-    do: Macro.escape(default)
+    do: escape_runtime(default)
 
   defp example_value_ast(%Field{struct: mod}, _path) when is_atom(mod) and not is_nil(mod) do
     quote do: unquote(mod).example()
@@ -624,10 +649,10 @@ defmodule GuardedStruct.Transformers.Codegen do
     quote do: [unquote(mod).example()]
   end
 
-  defp example_value_ast(%Field{type: type}, _path), do: Macro.escape(type_default_ast(type))
+  defp example_value_ast(%Field{type: type}, _path), do: escape_runtime(type_default_ast(type))
 
   defp example_value_ast(%SubField{default: default}, _path) when not is_nil(default),
-    do: Macro.escape(default)
+    do: escape_runtime(default)
 
   defp example_value_ast(%SubField{name: name}, _path) do
     component = atom_to_module(name)
@@ -635,7 +660,7 @@ defmodule GuardedStruct.Transformers.Codegen do
   end
 
   defp example_value_ast(%ConditionalField{default: default}, _path) when not is_nil(default),
-    do: Macro.escape(default)
+    do: escape_runtime(default)
 
   defp example_value_ast(%ConditionalField{}, _path), do: nil
 
