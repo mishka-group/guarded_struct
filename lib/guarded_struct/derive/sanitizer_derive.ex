@@ -217,7 +217,7 @@ defmodule GuardedStruct.Derive.SanitizerDerive do
     Enum.reduce_while(derive_list, nil, fn item, _acc ->
       case validate_pattern(item, input, action) do
         nil -> {:cont, input}
-        ouput -> {:halt, if(is_nil(ouput), do: input, else: ouput)}
+        ouput -> {:halt, ouput}
       end
     end)
   end

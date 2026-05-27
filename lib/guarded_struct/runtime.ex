@@ -350,11 +350,8 @@ defmodule GuardedStruct.Runtime do
               {:error, errs} -> {virtual_errs ++ errs, sv}
             end
 
-          {:error, errs} when is_list(errs) ->
+          {:error, errs} ->
             {errs, wrap.(Map.merge(validator_attrs, sub_field_data))}
-
-          {:error, err} ->
-            {[err], wrap.(Map.merge(validator_attrs, sub_field_data))}
         end
 
       final_errors = derive_errors ++ all_errors

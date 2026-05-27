@@ -34,7 +34,7 @@ defmodule GuardedStruct.Transformers.Codegen do
               "guardedstruct.\n" <>
               "Atom fields create fixed slots on a struct (#{inspect(atom_names)}); " <>
               "regex fields create entries in a free-form map " <>
-              "(#{inspect(Enum.map(regex_names, &Regex.source/1))}).\n" <>
+              "(#{inspect(Enum.map(regex_names, &pattern_source/1))}).\n" <>
               "These shapes can't both fit in one Elixir struct. Either keep just one " <>
               "shape, or extract the regex part into a separate module and reference it " <>
               "via `struct:`.",
@@ -47,6 +47,7 @@ defmodule GuardedStruct.Transformers.Codegen do
       Enum.reduce(entities, {[], []}, fn entity, {a, r} ->
         case entity_name(entity) do
           name when is_atom(name) and not is_nil(name) -> {[name | a], r}
+          {:regex_pattern, _} = pattern -> {a, [pattern | r]}
           %Regex{} = pattern -> {a, [pattern | r]}
           _ -> {a, r}
         end
@@ -58,6 +59,14 @@ defmodule GuardedStruct.Transformers.Codegen do
       true -> :struct
     end
   end
+
+  # Pattern-map field names are stored tagged (see ParseDerive). Rebuild the
+  # `%Regex{}` for codegen/runtime use.
+  defp pattern_regex({:regex_pattern, source}), do: Regex.compile!(source)
+  defp pattern_regex(%Regex{} = regex), do: regex
+
+  defp pattern_source({:regex_pattern, source}), do: source
+  defp pattern_source(%Regex{source: source}), do: source
 
   defp build_struct_body(entities, block_enforce, opaque?, error?, path, options) do
     {keys, defstruct_kw, types, enforce_keys, fields_runtime} =
@@ -99,7 +108,7 @@ defmodule GuardedStruct.Transformers.Codegen do
       fields_runtime |> Enum.filter(&(&1.kind == :dynamic_field)) |> Enum.map(& &1.name)
 
     info_map =
-      Macro.escape(%{
+      escape_runtime(%{
         path: path,
         key: if(path == [], do: :root, else: List.last(path)),
         keys: keys,
@@ -109,6 +118,33 @@ defmodule GuardedStruct.Transformers.Codegen do
         dynamic_keys: dynamic_keys,
         options: options
       })
+
+    # Regex-bearing fields can't be cached in a module attribute (escaping a
+    # compiled regex fails before Elixir 1.19); build them in a def body instead.
+    fields_meta_ast =
+      if contains_regex?(fields_runtime) do
+        quote do
+          def __fields__ do
+            GuardedStruct.Transformers.Codegen.bake_child_modules(
+              unquote(escape_runtime(fields_runtime)),
+              __MODULE__
+            )
+          end
+
+          def __field_meta__(name), do: Enum.find(__fields__(), &(&1.name == name))
+        end
+      else
+        quote do
+          @__guarded_fields__ GuardedStruct.Transformers.Codegen.bake_child_modules(
+                                unquote(Macro.escape(fields_runtime)),
+                                __MODULE__
+                              )
+          def __fields__, do: @__guarded_fields__
+
+          @__guarded_field_meta_map__ Map.new(@__guarded_fields__, fn m -> {m.name, m} end)
+          def __field_meta__(name), do: Map.get(@__guarded_field_meta_map__, name)
+        end
+      end
 
     quote do
       unquote(derive_json_ast)
@@ -157,14 +193,7 @@ defmodule GuardedStruct.Transformers.Codegen do
         Map.put(unquote(info_map), :module, __MODULE__)
       end
 
-      @__guarded_fields__ GuardedStruct.Transformers.Codegen.bake_child_modules(
-                            unquote(escape_runtime(fields_runtime)),
-                            __MODULE__
-                          )
-      def __fields__, do: @__guarded_fields__
-
-      @__guarded_field_meta_map__ Map.new(@__guarded_fields__, fn m -> {m.name, m} end)
-      def __field_meta__(name), do: Map.get(@__guarded_field_meta_map__, name)
+      unquote(fields_meta_ast)
 
       def __guarded_information__, do: __information__()
       def __guarded_fields__, do: __fields__()
@@ -217,13 +246,13 @@ defmodule GuardedStruct.Transformers.Codegen do
   end
 
   defp build_pattern_map_body(entities, error?, _path, options) do
-    patterns = Enum.map(entities, & &1.name)
+    patterns = Enum.map(entities, &pattern_regex(&1.name))
 
     fields_runtime =
       Enum.map(entities, fn %Field{} = f ->
         %{
           kind: :pattern_field,
-          pattern: f.name,
+          pattern: pattern_regex(f.name),
           type: Macro.to_string(f.type),
           enforce: f.enforce,
           derive: f.derives || f.derive,
@@ -237,7 +266,7 @@ defmodule GuardedStruct.Transformers.Codegen do
       end)
 
     info_map =
-      Macro.escape(%{
+      escape_runtime(%{
         path: [],
         key: :pattern,
         keys: [],
@@ -329,7 +358,7 @@ defmodule GuardedStruct.Transformers.Codegen do
 
           [name | seen]
 
-        is_struct(name, Regex) ->
+        is_struct(name, Regex) or match?({:regex_pattern, _}, name) ->
           [name | seen]
 
         is_number(name) or is_binary(name) ->
@@ -612,11 +641,8 @@ defmodule GuardedStruct.Transformers.Codegen do
     field_atom |> Atom.to_string() |> Macro.camelize() |> String.to_atom()
   end
 
-  # Like `Macro.escape/1`, but reconstructs any `%Regex{}` from its source at
-  # load time. A compiled regex holds a `#Reference` on OTP 27+ (PCRE2),
-  # which `Macro.escape/1` can only bake into a module on Elixir >= 1.19.
-  # Recompiling from source keeps the baked value a real `%Regex{}` on every
-  # supported Elixir/OTP combo.
+  # `Macro.escape/1` that rebuilds a `%Regex{}` from source (a compiled regex
+  # can't be escaped before Elixir 1.19 on OTP 27+).
   def escape_runtime(%Regex{source: source, opts: opts}) do
     quote do: Regex.compile!(unquote(source), unquote(Macro.escape(opts)))
   end
@@ -636,6 +662,18 @@ defmodule GuardedStruct.Transformers.Codegen do
   end
 
   def escape_runtime(other), do: Macro.escape(other)
+
+  # Deep scan for a compiled `%Regex{}` anywhere in the runtime data.
+  defp contains_regex?(%Regex{}), do: true
+  defp contains_regex?(list) when is_list(list), do: Enum.any?(list, &contains_regex?/1)
+
+  defp contains_regex?(map) when is_map(map),
+    do: Enum.any?(map, fn {k, v} -> contains_regex?(k) or contains_regex?(v) end)
+
+  defp contains_regex?(tuple) when is_tuple(tuple),
+    do: tuple |> Tuple.to_list() |> Enum.any?(&contains_regex?/1)
+
+  defp contains_regex?(_), do: false
 
   defp example_value_ast(%Field{default: default}, _path) when not is_nil(default),
     do: escape_runtime(default)

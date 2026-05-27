@@ -366,6 +366,9 @@ defmodule GuardedStructTest.AshIntegrationTest do
     end
 
     test "Change exports atomic/3" do
+      # `function_exported?/3` only inspects already-loaded modules; ensure it
+      # is loaded first so the check doesn't depend on test order/seed.
+      Code.ensure_loaded!(GuardedStruct.AshResource.Change)
       assert function_exported?(GuardedStruct.AshResource.Change, :atomic, 3)
     end
 

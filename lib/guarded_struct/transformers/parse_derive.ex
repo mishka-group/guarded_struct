@@ -26,7 +26,8 @@ defmodule GuardedStruct.Transformers.ParseDerive do
     new_dsl_state =
       Enum.reduce(new_entities, dsl_state, fn new_entity, acc ->
         Transformer.replace_entity(acc, [:guardedstruct], new_entity, fn old ->
-          old.name == new_entity.name and old.__struct__ == new_entity.__struct__
+          name_key(old.name) == name_key(new_entity.name) and
+            old.__struct__ == new_entity.__struct__
         end)
       end)
 
@@ -38,7 +39,14 @@ defmodule GuardedStruct.Transformers.ParseDerive do
 
   defp parse_entity(%Field{} = f, module) do
     {derive, warnings} = resolve(f, module)
-    {%{f | __derive_ops__: parse_or_raise(derive, f.name, module)}, warnings}
+
+    parsed = %{
+      f
+      | name: escapable_name(f.name),
+        __derive_ops__: parse_or_raise(derive, f.name, module)
+    }
+
+    {parsed, warnings}
   end
 
   defp parse_entity(%VirtualField{} = vf, module) do
@@ -82,6 +90,16 @@ defmodule GuardedStruct.Transformers.ParseDerive do
 
   defp parse_entity(other, _module), do: {other, []}
 
+  # Spark escapes entities to persist them; a compiled regex name can't be
+  # escaped before Elixir 1.19 (OTP 27+), so store its source tagged and let
+  # codegen rebuild the `%Regex{}`.
+  defp escapable_name(%Regex{source: source}), do: {:regex_pattern, source}
+  defp escapable_name(other), do: other
+
+  # Pair a re-parsed entity (tagged name) with the stored one (raw `%Regex{}`).
+  defp name_key(%Regex{source: source}), do: {:regex_pattern, source}
+  defp name_key(other), do: other
+
   defp walk_children(entities, module) do
     Enum.map_reduce(entities, [], fn entity, acc ->
       {parsed, w} = parse_entity(entity, module)
@@ -113,6 +131,7 @@ defmodule GuardedStruct.Transformers.ParseDerive do
     |> Parser.parser()
     |> OpEvaluator.preevaluate()
     |> OpParamValidator.validate!(field_name, module)
+    |> stringify_regexes()
   end
 
   defp parse_or_raise(other, field_name, module) do
@@ -122,4 +141,17 @@ defmodule GuardedStruct.Transformers.ParseDerive do
       path: [:guardedstruct, :field, field_name, :derives],
       module: module
   end
+
+  # Store regex source, not a compiled `%Regex{}`: Spark escapes derive ops to
+  # persist them, and a compiled regex can't be escaped before Elixir 1.19
+  # (OTP 27+). The runtime validator accepts a source string identically.
+  defp stringify_regexes({:regex, %Regex{source: source}}), do: {:regex, source}
+  defp stringify_regexes(%Regex{source: source}), do: source
+  defp stringify_regexes(list) when is_list(list), do: Enum.map(list, &stringify_regexes/1)
+  defp stringify_regexes({k, v}), do: {stringify_regexes(k), stringify_regexes(v)}
+
+  defp stringify_regexes(%{} = map) when not is_struct(map),
+    do: Map.new(map, fn {k, v} -> {stringify_regexes(k), stringify_regexes(v)} end)
+
+  defp stringify_regexes(other), do: other
 end

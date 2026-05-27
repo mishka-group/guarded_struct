@@ -39,7 +39,6 @@ defmodule GuardedStruct.Transformers.GenerateSubFieldModules do
   end
 
   defp resolve_module_ast(parent, name) when is_atom(name), do: Module.concat(parent, name)
-  defp resolve_module_ast(_parent, mod) when is_atom(mod), do: mod
 
   defp generate_for_entities(entities, parent_path, json?, dsl_state) do
     Enum.reduce(entities, dsl_state, fn

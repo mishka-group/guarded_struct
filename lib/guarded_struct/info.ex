@@ -191,12 +191,7 @@ defmodule GuardedStruct.Info do
   def json?(module), do: guardedstruct_json!(module) == true
 
   @doc "True if the section was declared with `error: true`."
-  def error?(module) do
-    case guardedstruct_error(module) do
-      {:ok, value} -> value == true
-      _ -> false
-    end
-  end
+  def error?(module), do: guardedstruct_error!(module) == true
 
   # ────────────────────────────────────────────────────────────────────────
   # Navigation

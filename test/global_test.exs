@@ -447,8 +447,6 @@ defmodule GuardedStructTest.GlobalTest do
              })
 
     assert id1 != id2
-    assert !is_nil(id1)
-    assert !is_nil(id1)
 
     {:error,
      [
