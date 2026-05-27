@@ -20,6 +20,15 @@ jobs:
           - pair:
               elixir: "1.17.3"
               otp: "27.1.2"
+          - pair:
+              elixir: "1.18.4"
+              otp: "27.1.2"
+          - pair:
+              elixir: "1.18.4"
+              otp: "28.1.1"
+          - pair:
+              elixir: "1.19.5"
+              otp: "28.1.1"
 
     runs-on: ubuntu-latest
 
