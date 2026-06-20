@@ -1,7 +1,7 @@
 defmodule GuardedStruct.MixProject do
   use Mix.Project
 
-  @version "0.1.0-beta.8"
+  @version "0.1.0"
   @source_url "https://github.com/mishka-group/guarded_struct"
 
   def project do
