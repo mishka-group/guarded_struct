@@ -43,6 +43,7 @@ defmodule GuardedStruct.Transformers.ParseDerive do
     parsed = %{
       f
       | name: escapable_name(f.name),
+        default: literal_default(f.default),
         __derive_ops__: parse_or_raise(derive, f.name, module)
     }
 
@@ -51,7 +52,14 @@ defmodule GuardedStruct.Transformers.ParseDerive do
 
   defp parse_entity(%VirtualField{} = vf, module) do
     {derive, warnings} = resolve(vf, module)
-    {%{vf | __derive_ops__: parse_or_raise(derive, vf.name, module)}, warnings}
+
+    parsed = %{
+      vf
+      | default: literal_default(vf.default),
+        __derive_ops__: parse_or_raise(derive, vf.name, module)
+    }
+
+    {parsed, warnings}
   end
 
   defp parse_entity(%SubField{} = sf, module) do
@@ -63,6 +71,7 @@ defmodule GuardedStruct.Transformers.ParseDerive do
     parsed = %{
       sf
       | __derive_ops__: parse_or_raise(derive, sf.name, module),
+        default: literal_default(sf.default),
         fields: fields,
         sub_fields: sub_fields,
         conditional_fields: conditional_fields
@@ -80,6 +89,7 @@ defmodule GuardedStruct.Transformers.ParseDerive do
     parsed = %{
       cf
       | __derive_ops__: parse_or_raise(derive, cf.name, module),
+        default: literal_default(cf.default),
         fields: fields,
         sub_fields: sub_fields,
         conditional_fields: conditional_fields
@@ -89,6 +99,17 @@ defmodule GuardedStruct.Transformers.ParseDerive do
   end
 
   defp parse_entity(other, _module), do: {other, []}
+
+  defp literal_default(nil), do: nil
+
+  defp literal_default(default) do
+    if Macro.quoted_literal?(default) do
+      {value, _binding} = Code.eval_quoted(default)
+      value
+    else
+      default
+    end
+  end
 
   # Spark escapes entities to persist them; a compiled regex name can't be
   # escaped before Elixir 1.19 (OTP 27+), so store its source tagged and let
