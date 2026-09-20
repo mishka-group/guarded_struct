@@ -1,5 +1,8 @@
 import Config
 
+# >=Ash 3.33
+config :ash, default_string_length_count: :codepoints
+
 config :spark,
   formatter: [
     remove_parens?: true,
