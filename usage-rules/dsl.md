@@ -26,8 +26,8 @@ field :email, :string,
 | `derive` | string | Legacy singular alias for `derives`. Honored for 0.0.x compat; prefer `derives`. |
 | `validator` | `{Mod, :fn}` | Per-field validator MFA, called as `Mod.fn(name, value)`. |
 | `auto` | `{Mod, :fn}` or `{Mod, :fn, arg}` | Auto-fill the field. |
-| `from` | string | Pull value from another path. |
-| `on` | string | Conditional rule referring to a path. |
+| `from` | string | Copy the value of another path into the field when that path has one. |
+| `on` | string | The field is only allowed when another path is present. |
 | `domain` | string | Cross-field constraint expression. |
 | `struct` | atom | Build value via `Mod.builder/1` (external GuardedStruct). |
 | `structs` | atom or boolean | List-of items via `Mod.builder/1`, or `true` for list-of-self. |

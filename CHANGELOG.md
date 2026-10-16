@@ -23,6 +23,8 @@
 ### Docs:
 
 - Fix `auto` being documented as filling only missing values — in `:add` mode it replaces a value the caller sent; `:edit` keeps it. The Livebook's example labels were inverted
+- Fix `from` being documented as filling a field only when it is unset — a source that holds a value replaces the field's own value, a missing or `nil` source keeps it
+- Fix `on` being documented as comparing a value (`on: "role=admin"`) and as emitting a `:domain_parameters` error — it only checks that the path is present and emits `:dependent_keys`; `domain` compares the value
 - Fix `priority: true` being documented on a child — it works on the `conditional_field` and keeps only the first child's error when none match
 - Fix the README example that wrote a `sanitize(...)` group after `validate(...)`; every `sanitize` group runs before every `validate` group
 - Fix the verifiers being documented as rejecting the module — they only warn at compile time and the module still compiles
@@ -35,7 +37,7 @@
 
 ### Tests:
 
-- Add the tests for each of the fixes above: `derive_operands_test.exs`, `derive_section_options_test.exs` and new cases in the parser, op-param, registry, derive, extension, validator, Ash, dynamic, Info and pattern-map suites
+- Add the tests for each of the fixes above: `derive_operands_test.exs`, `derive_section_options_test.exs` and new cases in the parser, op-param, registry, derive, extension, validator, Ash, dynamic, Info and pattern-map suites, and `core_keys_test.exs` for `from`, `on` and `domain`
 
 ### Dependencies:
 

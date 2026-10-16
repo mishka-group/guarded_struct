@@ -1128,7 +1128,7 @@ OnCoreKeyStruct.builder(%{
 
 ## From core key
 
-You can select this alternative if you require any data that was delivered in another key to be incorporated into the key that you are looking for. If the key is present, the data associated with it will be copied; however, if the key is not there, the data in and of itself will be retained.
+You can select this alternative if you require any data that was delivered in another key to be incorporated into the key that you are looking for. If the key is present, the data associated with it will be copied, and it replaces a value that was sent for the field; however, if the key is not there, the data in and of itself will be retained.
 
 If you pay attention to the routing method, the routing will start from the sent map itself if `:root` is specified, but if it is not used, the routing will start from the received map in the child if it is not used.
 
