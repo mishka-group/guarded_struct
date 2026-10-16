@@ -131,7 +131,7 @@ defmodule GuardedStruct.MixProject do
       {:telemetry, "~> 1.0"},
       {:html_sanitize_ex, "~> 1.5"},
       # required by Spark.Formatter for `mix format` and `mix spark.formatter`
-      {:sourceror, "~> 1.7", only: [:dev, :test]},
+      {:sourceror, "~> 1.12", only: [:dev, :test]},
       # document
       {:ex_doc, "~> 0.40.1", only: :dev, runtime: false},
 
@@ -149,7 +149,7 @@ defmodule GuardedStruct.MixProject do
       {:sweet_xml,
        github: "kbrw/sweet_xml", branch: "master", override: true, optional: true, only: :test},
       {:igniter, "~> 0.8.0", only: [:dev, :test]},
-      {:ash, "~> 3.0", only: [:dev, :test]}
+      {:ash, "~> 3.36", only: [:dev, :test]}
     ]
   end
 end
