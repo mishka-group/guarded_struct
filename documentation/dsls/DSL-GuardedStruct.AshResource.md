@@ -17,7 +17,8 @@ A Spark DSL extension that adds the GuardedStruct DSL to an Ash resource.
         attribute :email, :string, allow_nil?: false, public?: true
       end
 
-      # GuardedStruct DSL — identical syntax to standalone `use GuardedStruct`.
+      # GuardedStruct DSL — the syntax of standalone `use GuardedStruct`, without
+      # the `@derives` decorator (write `derives:` on the field).
       guardedstruct do
         field :email, :string,
           derives: "sanitize(trim, downcase) validate(string, not_empty, email_r)"
