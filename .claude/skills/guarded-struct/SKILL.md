@@ -51,14 +51,17 @@ the Ash integration — all runnable in a fresh BEAM.
 
 ## Compile-time guarantees
 
-The Spark layer rejects the module at compile time when:
+The derive parser raises `Spark.Error.DslError` (with `path:` and source line), so the
+module does not compile, when:
+
+* a `derives:` string is malformed or has an operand that can't be parsed;
+* a parameterised op has a bad parameter (`max_len=foo`, `min_len=-2`);
+* `each=[...]` / `optional=[...]` holds an unknown op (no built-in, no registered extension).
+
+The Spark verifiers only **warn** — the module still compiles — when:
 
 * `validator: {Mod, :fn}` or `auto: {Mod, :fn}` MFAs don't export the function;
-* a `struct:` / `structs:` target creates a cycle;
-* a `derives:` string contains an unknown op (and no registered extension declares it);
-* a `derives:` string is malformed.
-
-Errors come back as `Spark.Error.DslError` with `path:` and source line.
+* a `struct:` / `structs:` target creates a cycle.
 
 ## What this library does NOT do
 

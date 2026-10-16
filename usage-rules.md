@@ -59,11 +59,16 @@ and `Run all` to verify the contract claims below match the installed version.
 
 ## Compile-time guarantees
 
-The Spark layer runs verifiers that reject the module at compile time when:
+The Spark layer runs verifiers that **warn** at compile time when:
 
 * a `validator: {Mod, :fn}` MFA doesn't export the function (`VerifyValidatorMFA`),
 * an `auto: {Mod, :fn}` MFA doesn't exist (`VerifyAutoMFA`),
 * a `struct:` or `structs:` target creates a cycle (`VerifyNoStructCycles`).
 
+A verifier only warns: the module still compiles, and the missing function or
+the cycle fails when `builder/1` reaches it.
+
 Malformed `derives:` strings fail compilation with `Spark.Error.DslError` pointing
-at the offending field's source line.
+at the offending field's source line: a string the Elixir parser refuses, an
+operand that can't be parsed, a bad parameter such as `max_len=foo` or
+`min_len=-2`, and an unknown op inside `each=[...]` / `optional=[...]`.

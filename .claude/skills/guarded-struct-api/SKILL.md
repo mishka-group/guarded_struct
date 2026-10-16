@@ -39,7 +39,7 @@ Compile-time-baked introspection. All functions take the module atom.
 
 ```elixir
 GuardedStruct.Info.describe(MyApp.User)         # one-shot summary map
-GuardedStruct.Info.fields(MyApp.User)           # list of field metadata
+GuardedStruct.Info.fields(MyApp.User)           # list of field names
 GuardedStruct.Info.field(MyApp.User, :email)    # O(1) by name
 GuardedStruct.Info.field_kind(MyApp.User, :email)   # :field | :sub_field | ...
 GuardedStruct.Info.enforce?(MyApp.User, :email)
@@ -54,7 +54,7 @@ For Ash resources, use `GuardedStruct.AshResource.Info` — same surface.
 ## `GuardedStruct.Diff`
 
 ```elixir
-GuardedStruct.Diff.diff(a, b)         # %{key => {old, new}} | :not_comparable
+GuardedStruct.Diff.diff(a, b)         # %{key => {:changed, old, new}} | :not_comparable
 GuardedStruct.Diff.apply(a, diff)     # → b
 GuardedStruct.Diff.equal?(a, b)       # boolean
 ```

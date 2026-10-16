@@ -144,7 +144,7 @@ Use `each=[…]` for content checks Ash can't express:
 derives: "validate(each=[hostname])"          # ✓ runs through Ash
 derives: "validate(each=[regex=^[a-z]+$])"    # ✓ runs through Ash
 derives: "validate(each=[slug])"              # ✓ runs through Ash
-derives: "validate(each=[custom=[Mod, :ok?]])" # ✓ runs through Ash
+derives: "validate(each=[custom=[Mod, ok?]])"  # ✓ runs through Ash
 ```
 
 Not for type checks Ash already does at the attribute layer. The same

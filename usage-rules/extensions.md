@@ -57,6 +57,11 @@ Resolution rules:
 | `[A, :config]` | `[A]` ++ global (A wins). |
 | `[A, :config, B]` | `[A]` ++ global ++ `[B]`. |
 
+Extension ops work wherever a built-in op does, including inside the op lists
+of `either=[...]`, `each=[...]` and `optional=[...]`. The compile-time check of
+those lists knows the ops of the extensions the module resolves to; an op that
+no extension (and no built-in) declares is a `Spark.Error.DslError`.
+
 ## Validator return contract
 
 The function passed to `validator/2` may return:

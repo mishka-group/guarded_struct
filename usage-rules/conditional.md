@@ -39,8 +39,17 @@ inner conditional with `is_list_data`. To drill into a sub-map, use a child
 
 ## `priority: true`
 
-At most one child may be marked `priority: true`. If that child matches, the
-runtime stops and ignores siblings.
+`priority: true` goes on the `conditional_field` itself, not on a child.
+Children are always tried in declaration order and the first match wins. The
+flag changes only the error: when no child matches, the `:conditionals` error
+keeps the first child's error instead of one per child.
+
+```elixir
+conditional_field :actor, any(), priority: true do
+  field :actor, struct(), struct: Actor, validator: {VAL, :is_map_data}
+  field :actor, String.t(), validator: {VAL, :is_string_data}
+end
+```
 
 ## Aggregated error shape
 

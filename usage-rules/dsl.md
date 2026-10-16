@@ -32,7 +32,7 @@ field :email, :string,
 | `struct` | atom | Build value via `Mod.builder/1` (external GuardedStruct). |
 | `structs` | atom or boolean | List-of items via `Mod.builder/1`, or `true` for list-of-self. |
 | `hint` | string | Label propagated into the field's error maps. |
-| `priority` | boolean | Conditional-field short-circuit marker. |
+| `priority` | boolean | Meaningful on a `conditional_field` only: when no child matches, keep just the first child's error. Ignored on the other entities. |
 
 ## `sub_field name, type, opts do … end`
 
@@ -41,7 +41,9 @@ Same options as `field` plus:
 
 * `error: true` — generates a per-level `Error` exception.
 * `authorized_fields: true` — reject keys not declared in this sub_field.
-* `main_validator: {Mod, :fn}` — runs after every nested field validates.
+* `main_validator: {Mod, :fn}` — runs after every nested field validates, with the
+  sub_field's own attrs. A `main_validator/1` of the parent module does not run
+  for a sub_field.
 
 Children: nested `field`, `sub_field`, `conditional_field`.
 
@@ -49,7 +51,8 @@ Children: nested `field`, `sub_field`, `conditional_field`.
 
 Pick one child based on the input value. Children share the parent's `name`.
 Each child is tried in order; the first whose `validator:` returns `{:ok, ...}`
-wins. Use `priority: true` on at most one child to short-circuit.
+wins. Put `priority: true` on the `conditional_field` itself to report only the
+first child's error when none match.
 
 * `structs: true` on the conditional — iterate a list, apply children
   per element.
@@ -72,8 +75,10 @@ but not persisted. Schema accepts `name`, `type`, `enforce`, `default`,
 ## `dynamic_field name, opts`
 
 Free-form map slot. The inner map is **identity-preserved** — keys are *not*
-atomized at any depth. Used for attacker-controlled metadata where atom-table
-growth would be a DoS risk. Schema accepts the same options as `virtual_field`
+atomized at any depth, wherever the `dynamic_field` is declared (top level,
+`sub_field` of any depth, a `struct:` module, a `conditional_field`'s
+`sub_field`). Used for attacker-controlled metadata where atom-table growth
+would be a DoS risk. Schema accepts the same options as `virtual_field`
 (no `struct` / `structs` / `priority`).
 
 Defaults baked into the entity schema:
@@ -118,9 +123,9 @@ end
 | `module` | nil | Emit the struct into a sub-module name. |
 | `error` | `false` | Generate a `Module.Error` exception. |
 | `authorized_fields` | `false` | Reject unknown top-level keys with `:authorized_fields` error. |
-| `main_validator` | nil | `{Mod, :fn}` runs after per-field validators. |
-| `validate_derive` | nil | User-supplied validator module(s) for unknown ops. |
-| `sanitize_derive` | nil | User-supplied sanitizer module(s) for unknown ops. |
+| `main_validator` | nil | `{Mod, :fn}` runs after per-field validators. Wins over a `main_validator/1` defined in the module. |
+| `validate_derive` | nil | Module (or list) whose `validate/3` serves the ops the built-ins and derive extensions don't know. Tried before the `:validate_derive` application config, which still serves what they leave unhandled. |
+| `sanitize_derive` | nil | Module (or list) whose `sanitize/2` serves unknown sanitize ops. Same precedence as `validate_derive`. |
 | `json` | `false` | Auto-derive `Jason.Encoder` (or built-in `JSON.Encoder` ≥ 1.18). |
 | `auto_wire` | `false` | Ash-only: inject `GuardedStruct.AshResource.Change` automatically. |
 

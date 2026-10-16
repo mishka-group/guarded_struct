@@ -6,7 +6,7 @@ parts of the input. Parsed once at compile time into `__from_path__`,
 
 ## `auto`
 
-Fill in a missing field from an MFA call.
+Fill in a field from an MFA call.
 
 ```elixir
 field :id, :string, auto: {Ecto.UUID, :generate}
@@ -18,9 +18,12 @@ field :slug, :string, auto: {MyApp.Slug, :from_title, [:title]}
 | `{Mod, :fun}` | `Mod.fun()` (no args) |
 | `{Mod, :fun, arg}` | `Mod.fun(arg)` |
 
-* Runs only when the field is **missing** from input. To overwrite supplied
-  values, look at the type marker `:edit` vs `:add` on `do_pipeline`.
-* Compile-time verifier `VerifyAutoMFA` rejects unknown MFAs.
+* In the default `:add` mode it runs whether or not the field was supplied, and
+  **replaces** a value the caller sent. In `:edit` mode
+  (`builder({:root, attrs, :edit})`) it runs only when the field is missing or
+  `nil`, so a supplied value is kept.
+* Compile-time verifier `VerifyAutoMFA` warns about an unknown MFA; the module
+  still compiles.
 
 ## `from`
 
@@ -52,11 +55,14 @@ If the gate fails, the runtime emits a `:domain_parameters` / `:on` error.
 Cross-field constraint expressions. Compile-evaluated into a structured op map.
 
 ```elixir
-field :status, :string, domain: "!auth_type=Atom[admin::moderator]"
+field :status, :string, domain: "!auth_type=Atom[admin, moderator]"
 ```
 
-Reads: "this field is **required** when `auth_type` is in `[:admin, :moderator]`".
-Supports `:enum`, `:equal`, presence (`!`), and absence checks.
+Reads: "when `status` has a value, `auth_type` must be `:admin` or `:moderator`".
+The `!` prefix also makes a missing `auth_type` an error; `?` lets it be
+missing. The values of `Atom[...]` / `String[...]` are separated by commas
+(`enum=` in a `derives:` string separates them with `::`). Works in
+`GuardedStruct.AshResource` resources the same way as in standalone modules.
 
 ## Pipeline order
 

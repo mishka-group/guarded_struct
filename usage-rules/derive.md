@@ -1,7 +1,9 @@
 # Derive ops — `sanitize(...)` and `validate(...)` mini-language
 
 `derives:` accepts a string parsed at **compile time** into a normalized op map.
-Typos surface as `Spark.Error.DslError`. The runtime never re-parses.
+A string the parser refuses, an operand it can't read and a bad parameter
+surface as `Spark.Error.DslError` — nothing is dropped silently. The runtime
+never re-parses.
 
 ```elixir
 field :email, :string,
@@ -15,8 +17,19 @@ field :email, :string,
 <group>    ::= "sanitize(" <ops> ")"  |  "validate(" <ops> ")"
 <ops>      ::= <op> ("," <op>)*
 <op>       ::= <atom> | <atom> "=" <operand>
-<operand>  ::= literal | "Type[...]" | "Map::..."
+<operand>  ::= literal | "Type[a::b]" | "Type::value" | "[" <ops> "]"
+<literal>  ::= integer | float | negative number | atom | boolean | nil | string | list | map | tuple
 ```
+
+Operand forms:
+
+| Form | Example |
+|---|---|
+| Number, negative or not | `max_len=20`, `clamp=[-10, 10]`, `default_when_empty=-1`, `default_when_empty=1.5` |
+| Other literal | `default_when_nil=false`, `default_when_nil=:none`, `default_when_empty=[]` |
+| `Type[a::b]` (enum) | `enum=String[admin::user]`, `enum=Integer[1::2]` — values separated by `::` |
+| `Type::value` (equal) | `equal=Integer::1`, `equal=String::admin`, `equal=Float::1.5`, `equal=Atom::admin`, `equal=Map::%{a: 1}`, `equal=Tuple::{:a, 1}` |
+| Op list | `either=[string, integer]`, `each=[trim]`, `optional=[string, max_len=5]` |
 
 The same logical rules also support a keyword/block/pipe form (see source-level
 docs), but the string form above is the canonical input.
@@ -32,15 +45,15 @@ docs), but the string form above is the canonical input.
 | `{:tag, op_atom}` | `trim → op → trim`. |
 | `:string_float` / `:string_integer` | Parse numeric out of a string; returns `0`/`0.0` on failure. |
 | `:squish` | Collapse runs of whitespace into a single space + trim. Binaries only. |
-| `:no_control` | Strip ASCII control characters (`\x00`–`\x1F`, `\x7F`). Binaries only. |
+| `:no_control` | Strip ASCII control characters (`\x00`–`\x08`, `\x0B`, `\x0C`, `\x0E`–`\x1F`, `\x7F`); tab, LF and CR are kept. Binaries only. |
 | `:no_zero_width` | Strip zero-width unicode (`U+200B`, `U+200C`, `U+200D`, `U+FEFF`, `U+2060`). |
 | `:uniq` | `Enum.uniq/1` on lists; passthrough otherwise. |
 | `:compact` | Drop `nil` entries from a list. |
 | `:reject_empty` | Drop `nil`, `""`, `[]`, `%{}` entries from a list. |
 | `:sort` | `Enum.sort/1` on lists. |
 | `{:clamp, [min, max]}` | Clamp a number to `min..max`. Numbers only; passthrough otherwise. |
-| `{:default_when_nil, value}` | Replace `nil` with `value`. |
-| `{:default_when_empty, value}` | Replace `nil` / `""` / `[]` / `%{}` with `value`. |
+| `{:default_when_nil, value}` | Replace `nil` — or a field missing from the input — with `value`; the ops after it run on `value`. Every other op skips a `nil` field. |
+| `{:default_when_empty, value}` | Replace `""` / `[]` / `%{}` with `value`. A `nil` field never reaches it; use `default_when_nil`. |
 | `{:each, [ops]}` | Apply inner sanitize ops to every element of a list. |
 
 Arg order is **pipe-friendly**: `SanitizerDerive.sanitize(value, :op)`.
@@ -78,7 +91,8 @@ Content / format:
 
 1. Parse `derives:` string at compile time → `__derive_ops__: %{sanitize: [...], validate: [...]}`.
 2. Pre-evaluate operands like `enum=String[a::b::c]` → `{:enum, ["a", "b", "c"]}` at compile time.
-3. Runtime applies ops in declared order: sanitize first, then validate.
+3. Runtime applies the ops: every `sanitize(...)` group first, in the order written, then every
+   `validate(...)` group — wherever the groups sit in the string.
 4. Errors emerge as a flat list of `%{field, action, message}` maps.
 
 ## Five accepted derive syntaxes
@@ -102,6 +116,9 @@ field :frontend_domain, :string,
 
 field :priority, :integer,
   derives: "sanitize(default_when_nil=0, clamp=[0, 100])"
+
+field :slug, :string,
+  derives: "validate(string, max_len=80) sanitize(trim, downcase)"   # still trims first, then validates
 
 field :brand_color, :string,
   derives: "sanitize(trim, squish) validate(string, hex_color)"

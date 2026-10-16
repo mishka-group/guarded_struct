@@ -15,7 +15,7 @@
 ---
 
 > [!NOTE]
-> **Status — `0.1.0-beta`.** v0.1.0 rewrites the macro core on [Spark](https://hex.pm/packages/spark). Every existing 0.0.x API keeps working unchanged. Track every change in [`CHANGELOG.md`](./CHANGELOG.md).
+> **Status — `0.1.4`.** v0.1.0 rewrote the macro core on [Spark](https://hex.pm/packages/spark). Every existing 0.0.x API keeps working unchanged. Track every change in [`CHANGELOG.md`](./CHANGELOG.md).
 
 ---
 
@@ -101,15 +101,17 @@ That's the full surface. No `defstruct`, no `@enforce_keys`, no validator boiler
 
 ```elixir
 field :slug, :string,
-  derives: "sanitize(trim, downcase) validate(string, not_empty, max_len=80) sanitize(slugify)"
+  derives: "sanitize(trim, downcase, slugify) validate(string, not_empty, max_len=80)"
   
 # OR
 
-@derives "sanitize(trim, downcase) validate(string, not_empty, max_len=80) sanitize(slugify)"
+@derives "sanitize(trim, downcase, slugify) validate(string, not_empty, max_len=80)"
 field :slug, :string  
 ```
 
-- 🧩 **Combinators** — `optional=` wraps any inner ops, passing `nil` through; `each=` runs inner ops over every element of a list; both nest arbitrarily.
+Every `sanitize(...)` group runs before every `validate(...)` group, in the order written, wherever the groups sit in the string. Operands are read strictly: a negative number (`min_len=-2`), a float, a boolean or `equal=Type::value` is parsed, and anything the parser can't read is a compile-time `Spark.Error.DslError` instead of being dropped.
+
+- 🧩 **Combinators** — `optional=` wraps any inner ops, passing `nil` through; `each=` runs inner ops over every element of a list; both nest arbitrarily and accept ops from your `Derive.Extension` modules.
 - 🎯 **All ops parsed at compile time** — runtime reads pre-built op-maps from `__fields__/0`; zero `Code.eval_string` on the hot path.
 - 🧰 **`@derives` decorator** — alternative to inline `derives:` for keeping fields short.
 
@@ -259,7 +261,7 @@ Auto-derives `Jason.Encoder` when `:jason` is in deps, falling back to the built
 
 - 🌐 **i18n** — every error message resolves through `GuardedStruct.Messages`; override callbacks to translate.
 - 🛡️ **Atom-attack safe** — `dynamic_field` and pattern-keyed maps never `String.to_atom` user input.
-- 🧪 **Property-based tested** — 740+ tests including 6 property tests, real Ash integration suite with ETS data layer.
+- 🧪 **Property-based tested** — 1,280+ tests including 36 property tests, real Ash integration suite with ETS data layer.
 
 ---
 
@@ -270,10 +272,12 @@ Add to your `mix.exs`:
 ```elixir
 def deps do
   [
-    {:guarded_struct, "~> 0.1.0"}
+    {:guarded_struct, "~> 0.1.4"}
   ]
 end
 ```
+
+`spark`, `splode`, `telemetry` and `html_sanitize_ex` come with it; they are required dependencies. Elixir `~> 1.17` is the minimum.
 
 Fetch and compile:
 
@@ -290,9 +294,7 @@ Pull in only what you need:
 
 ```elixir
 {:jason, "~> 1.4"}            # for `json: true` (Elixir < 1.18, otherwise built-in JSON works)
-{:splode, "~> 0.3"}           # for Errors wrapper
 {:ash, "~> 3.0"}              # for the Ash extension
-{:html_sanitize_ex, "~> 1.5"} # for `sanitize(strip_tags, basic_html, html5)`
 {:email_checker, "~> 0.2"}    # for `validate(email)` (DNS lookup; non-atomic)
 {:ex_url, "~> 2.0"}           # for `validate(url)` (DNS / port check; non-atomic)
 ```
@@ -507,7 +509,7 @@ flowchart TD
 
     User --> Spark
 
-    Spark --> Transformers["<b>Transformers</b><br/>ParseDerive · ParseCoreKeys<br/>GenerateBuilder · GenerateSubFieldModules<br/>GenerateAshValidator · AutoWireAshChange"]
+    Spark --> Transformers["<b>Transformers</b><br/>ParseDerive · ParseCoreKeys · ParseDomain<br/>GenerateBuilder · GenerateSubFieldModules<br/>GenerateAshValidator · AutoWireAshChange"]
     Spark --> Verifiers["<b>Verifiers</b><br/>VerifyValidatorMFA · VerifyAutoMFA<br/>VerifyNoStructCycles"]
     Spark --> AsyncCompile["<b>Async submodule compile</b><br/>Spark.Dsl.Transformer.async_compile<br/>for sub_field branches"]
 
@@ -523,7 +525,7 @@ flowchart TD
 
 - 🧠 **DSL layer** — Spark sections + entities define `field`, `sub_field`, `conditional_field`, `virtual_field`, `dynamic_field`. Every op-string parsed at compile time.
 - 🔧 **Transformers** — codegen for `defstruct`/`builder`/`keys`/`__information__`/`__fields__`, async sub_field submodule generation, derive parsing, core-key parsing, Ash-variant codegen, auto-wire injection.
-- 🔍 **Verifiers** — validator MFAs exist, auto MFAs exist, no struct cycles.
+- 🔍 **Verifiers** — validator MFAs exist, auto MFAs exist, no struct cycles. A verifier only warns at compile time; the module still compiles.
 - 🏃 **Runtime** — receives a map, walks pre-parsed op-lists per field, hands back `{:ok, %Struct{}}` or `{:error, [%{field, action, message}]}`. The Ash bridge routes the same pipeline through `__guarded_change__/1` into changeset attributes.
 
 ---
@@ -536,7 +538,7 @@ flowchart TD
 | Spark | `~> 2.7` | ✅ |
 | Splode | `~> 0.3` | ✅ (errors module) |
 | Telemetry | `~> 1.0` | ✅ |
-| html_sanitize_ex | `~> 1.5` | ⚪ optional (`sanitize(strip_tags/basic_html/html5)`) |
+| html_sanitize_ex | `~> 1.5` | ✅ (`sanitize(strip_tags/basic_html/html5)`) |
 | Jason | `~> 1.4` | ⚪ optional (`json: true` on Elixir < 1.18) |
 | email_checker | `~> 0.2` | ⚪ optional (`validate(email)` with DNS) |
 | ex_url | `~> 2.0` | ⚪ optional (`validate(url)` with DNS) |
@@ -660,7 +662,7 @@ module surface, compile-time guarantees) every consumer must know.
 | Erlang Records (closes #6) | 🟢 Shipped |
 | Custom validators via Spark DSL | 🟢 Shipped |
 | Ash extension + auto-wire + atomic mode | 🟢 Shipped |
-| Test coverage | 🟢 743+ tests, real Ash integration suite |
+| Test coverage | 🟢 1,280+ tests, real Ash integration suite |
 | `1.0.0` release | 🟢 Shipped |
 
 Breaking changes will be flagged in the [CHANGELOG](./CHANGELOG.md).

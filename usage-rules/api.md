@@ -7,7 +7,7 @@ their first argument; none take the struct itself.
 
 ```elixir
 MyApp.User.builder(%{email: "..."})                 # → {:ok, %User{}} | {:error, [...]}
-MyApp.User.builder(%{email: "..."}, :error)         # raise on error (if section had `error: true`)
+MyApp.User.builder(%{email: "..."}, true)           # raise on error (if section had `error: true`)
 MyApp.User.builder({:headers, attrs})               # context tuple (key, attrs)
 MyApp.User.builder({:headers, attrs, :edit})        # context tuple with :add (default) | :edit
                                                      # :edit skips auto-fill on fields already populated
@@ -33,11 +33,11 @@ GuardedStruct.Validate.partial(MyApp.User, %{nickname: "ok"})
 | Function | Result |
 |---|---|
 | `Info.describe(mod)` | One-shot map: `module`, `keys`, `enforce_keys`, `conditional_keys`, `fields`, `options`. |
-| `Info.fields(mod)` | All field metadata, ordered. |
+| `Info.fields(mod)` | Field names in declaration order (the declared regex patterns for a pattern-keyed module). |
 | `Info.fields_meta(mod)` | Alias for `mod.__fields__()`. |
-| `Info.field(mod, name)` | O(1) lookup via `__field_meta__/1`. |
+| `Info.field(mod, name)` | O(1) lookup via `__field_meta__/1`; a pattern-keyed module answers with the first pattern that matches the name. |
 | `Info.field?(mod, name)` | Existence check. |
-| `Info.field_kind(mod, name)` | `:field` / `:sub_field` / `:conditional_field` / `:virtual_field` / `:dynamic_field` / `:pattern_field`. |
+| `Info.field_kind(mod, name)` | `:field` / `:sub_field` / `:conditional_field` / `:virtual_field` / `:dynamic_field` / `:pattern_field` (a key a pattern matches). |
 | `Info.field_default(mod, name)` | Default value (unquoted). |
 | `Info.field_derives(mod, name)` | Original derive string. |
 | `Info.field_validator(mod, name)` | `{Mod, :fn}` tuple or `nil`. |
@@ -57,7 +57,7 @@ namespaced helpers that read `__guarded_*` accessors.
 ## `GuardedStruct.Diff` — audit-log-friendly struct diffing
 
 ```elixir
-GuardedStruct.Diff.diff(a, b)            # → %{key => {old, new}}
+GuardedStruct.Diff.diff(a, b)            # → %{key => {:changed, old, new}}; a nested struct gives a nested map
 GuardedStruct.Diff.apply(a, diff)        # → b
 GuardedStruct.Diff.equal?(a, b)          # → boolean
 ```
