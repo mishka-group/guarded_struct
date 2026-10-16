@@ -996,6 +996,7 @@ defmodule GuardedStructTest.DeriveTest do
         field(:active, boolean(), derives: "sanitize(default_when_nil=false)")
         field(:offset, integer(), derives: "sanitize(default_when_nil=-1)")
         field(:scores, list(), derives: "sanitize(each=[default_when_nil=0])")
+        field(:tag, String.t(), derives: "sanitize(upcase, default_when_nil=fill)")
       end
     end
 
@@ -1022,6 +1023,11 @@ defmodule GuardedStructTest.DeriveTest do
     test "the ops written after it run on the default" do
       assert {:ok, %DefaultWhenNil{level: 100}} = DefaultWhenNil.builder(%{level: nil})
       assert {:ok, %DefaultWhenNil{name: "ANONYMOUS"}} = DefaultWhenNil.builder(%{name: nil})
+    end
+
+    test "an op written before it runs on the default as well" do
+      assert {:ok, %DefaultWhenNil{tag: "FILL"}} = DefaultWhenNil.builder(%{tag: nil})
+      assert {:ok, %DefaultWhenNil{tag: "FILL"}} = DefaultWhenNil.builder(%{})
     end
 
     test "the validate group runs on the default too" do

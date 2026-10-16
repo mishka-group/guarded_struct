@@ -8,7 +8,7 @@
 
 - Fix `main_validator: {Mod, :fun}` on the section and on a `sub_field` — it was never called, only a `main_validator/1` defined in the module ran. The option now wins; a `main_validator/1` in the module still runs when the option is not set
 - Fix the `validate_derive` / `sanitize_derive` section options — only the application config was used at runtime. The modules of the section option (and of its `sub_field`s) are tried first, the application config serves the ops they leave unhandled. `Validate.field/4` and `Validate.partial/2` read them too
-- Fix `sanitize(default_when_nil=...)` — it never filled a `nil` or missing field because derives skip `nil`. It now does, and the ops written after it run on the default; every other op still skips `nil`
+- Fix `sanitize(default_when_nil=...)` — it never filled a `nil` or missing field because derives skip `nil`. It now does, and every op of the string then runs on the default, wherever it sits in the string; every other op still skips `nil`
 - Fix the derive parser silently dropping operands: `equal=Type::value` (`equal=Integer::1`, `String::`, `Float::`, `Atom::`, `Map::`, `Tuple::`), negative numbers (`min_len=-2`, `clamp=[-10, 10]`, `default_when_empty=-1`), floats and other literals (`default_when_nil=false`). They are parsed now; an operand that can't be parsed, a derives string the Elixir parser refuses (such as `enum=Atom[a, b]`) and `enum=Integer[...]` / `equal=Integer::...` values that aren't numbers raise `Spark.Error.DslError` at compile time. A field whose derives were all dropped is no longer set to `nil`
 - Fix a `validate()` / `sanitize()` group with no ops setting the field to `nil` — the value is kept
 - Fix `equal=String::value` never matching once pre-evaluated

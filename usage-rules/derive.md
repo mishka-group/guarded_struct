@@ -52,7 +52,7 @@ docs), but the string form above is the canonical input.
 | `:reject_empty` | Drop `nil`, `""`, `[]`, `%{}` entries from a list. |
 | `:sort` | `Enum.sort/1` on lists. |
 | `{:clamp, [min, max]}` | Clamp a number to `min..max`. Numbers only; passthrough otherwise. |
-| `{:default_when_nil, value}` | Replace `nil` — or a field missing from the input — with `value`; the ops after it run on `value`. Every other op skips a `nil` field. |
+| `{:default_when_nil, value}` | Replace `nil` — or a field missing from the input — with `value`; every op of the string then runs on `value`, wherever it sits in the string. Every other op skips a `nil` field. |
 | `{:default_when_empty, value}` | Replace `""` / `[]` / `%{}` with `value`. A `nil` field never reaches it; use `default_when_nil`. |
 | `{:each, [ops]}` | Apply inner sanitize ops to every element of a list. |
 

@@ -31,7 +31,7 @@ defmodule GuardedStruct.Derive do
   end
 
   # A nil value skips every op except `sanitize(default_when_nil=...)`, which
-  # replaces it; the rest of the pipeline then runs on that default.
+  # replaces it; the whole derive string then runs on that default.
   defp update(nil, ops, hint, input, acc) do
     case nil_default(ops) do
       {:ok, default} -> update(default, ops, hint, input, acc)
