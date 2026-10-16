@@ -6,7 +6,7 @@ Mix.install([
 
   # Optional dependencies, It’s recommended to create your own
   # custom validation and sanitization functions instead of
-  # enabling these libraries.
+  # enabling these libraries. Their order in this list does not matter.
   {:email_checker, "~> 0.2.4"},
   {:ex_url, "~> 2.0"},
   {:ex_phone_number, "~> 0.4.3"},
@@ -130,7 +130,7 @@ Implement the program's logic, regardless of what it might be.
 
 **Note:** this library is only supported on versions of `Elixir 1.17` and higher (tested on `OTP 27` and `OTP 28`), and that the manufacturer does not offer bug patches for problems that occur in older software versions.
 
-**Note:** `spark`, `splode`, `telemetry` and `html_sanitize_ex` are required dependencies and come with `guarded_struct`. The others (`email_checker`, `ex_url`, `ex_phone_number`, `jason`, `ash`) are optional; if you require their use in your program, you will need to include them. We provide further explanation on the topic in the area you're looking for.
+**Note:** `spark`, `splode`, `telemetry` and `html_sanitize_ex` are required dependencies and come with `guarded_struct`. The others (`email_checker`, `ex_url`, `ex_phone_number`, `jason`, `ash`) are optional; if you require their use in your program, you will need to include them. A package is looked up when the op runs, so the order of your dependencies does not matter, and an op whose package is missing returns an error that names the package to add. We provide further explanation on the topic in the area you're looking for.
 
 > Before continuing with the discussion about the library section and also offering practical examples in this field, it is important to understand that when you construct a struct in a module, after compilation in the runtime of the program, each module includes the following functional functions:
 
@@ -422,7 +422,7 @@ end
 | `"validate(url)"`                                                | NO              | Validate if the data is url                                                                         |
 | `"validate(geo_url)"`                                            | `ex_url`        | Validate if the data is geo url                                                                     |
 | `"validate(tell)"`                                               | `ex_url`        | Validate if the data is tell                                                                        |
-| `"validate(tell=98)"`                                            | `ex_url`        | Validate if the data is tell with country code                                                      |
+| `"validate(tell=98)"`                                            | `ex_url` and `ex_phone_number` | Validate if the data is tell with country code                                       |
 | `"validate(email)"`                                              | `email_checker` | Validate if the data is email                                                                       |
 | `"validate(location)"`                                           | `ex_url`        | Validate if the data is location                                                                    |
 | `"validate(string_boolean)"`                                     | NO              | Validate if the data is string boolean                                                              |

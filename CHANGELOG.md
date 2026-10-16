@@ -15,6 +15,7 @@
 - Fix `builder/1` turning every struct other than `Date`, `DateTime` and `NaiveDateTime` into a plain map, which made `validate(time_struct)` / `validate(struct)` fail for `%Time{}` / `%URI{}`. Structs are kept intact
 - Fix extension ops inside `each=[...]` / `optional=[...]` being a compile error (`unknown validate op`) while `either=[...]` accepted them. Ops of the module's `derive_extensions:`, of the global config and (when a `validate_derive` / `sanitize_derive` is set) of those modules are accepted
 - Fix `domain:` rules not being evaluated inside a `GuardedStruct.AshResource` resource — the extension now runs `ParseDomain` (and `ParseCoreKeys`) like the standalone DSL
+- Fix the optional packages `ex_url`, `ex_phone_number` and `email_checker` being detected while GuardedStruct itself compiled. When it compiled before them, as in a `Mix.install` that lists it first, `validate(tell)`, `validate(tell=98)`, `validate(geo_url)`, `validate(location)` and `validate(email)` all failed with `Unexpected type error`. The package is looked up when the op runs, and an op whose package is missing returns an error that names the package to add
 - Fix the Ash extension not accepting `guardedstruct opts do … end`, `sub_field name, type, opts do … end` and `conditional_field name, type, opts do … end` — `undefined function sub_field/4` — although the docs show them and `use GuardedStruct` takes them. They work in a resource now; the `@derives` decorator stays standalone-only
 - Fix `dynamic_field` inside a `sub_field` not being identity-preserved: the parent converted its keys (`"role"` came back as `:role`). Keys stay as given in a `sub_field` of any depth, a list `sub_field`, a `struct:` module and a `conditional_field`'s `sub_field`; `Validate.partial/2` keeps them too
 - Fix `GuardedStruct.Info.fields/1` raising `KeyError` on a pattern-keyed (regex) module — it lists the patterns. `field_kind/2` returns `:pattern_field` for a key a pattern matches, and `field/2` / `field?/2` follow the patterns
@@ -26,6 +27,7 @@
 - Fix `auto` being documented as filling only missing values — in `:add` mode it replaces a value the caller sent; `:edit` keeps it. The Livebook's example labels were inverted
 - Fix `from` being documented as filling a field only when it is unset — a source that holds a value replaces the field's own value, a missing or `nil` source keeps it
 - Fix `on` being documented as comparing a value (`on: "role=admin"`) and as emitting a `:domain_parameters` error — it only checks that the path is present and emits `:dependent_keys`; `domain` compares the value
+- Fix `validate(url)` being documented as needing `ex_url` (it needs no package) and `validate(tell=98)` as needing only `ex_url` (it also needs `ex_phone_number`); document that the order of the optional dependencies does not matter
 - Fix `priority: true` being documented on a child — it works on the `conditional_field` and keeps only the first child's error when none match
 - Fix the README example that wrote a `sanitize(...)` group after `validate(...)`; every `sanitize` group runs before every `validate` group
 - Fix the verifiers being documented as rejecting the module — they only warn at compile time and the module still compiles
@@ -38,7 +40,7 @@
 
 ### Tests:
 
-- Add the tests for each of the fixes above: `derive_operands_test.exs`, `derive_section_options_test.exs` and new cases in the parser, op-param, registry, derive, extension, validator, Ash, dynamic, Info and pattern-map suites, `core_keys_test.exs` for `from`, `on` and `domain`, and the option forms of the Ash extension in `ash_resource_test.exs` and `ash_resource_change_test.exs`
+- Add the tests for each of the fixes above: `derive_operands_test.exs`, `derive_section_options_test.exs` and new cases in the parser, op-param, registry, derive, extension, validator, Ash, dynamic, Info and pattern-map suites, `core_keys_test.exs` for `from`, `on` and `domain`, `optional_packages_test.exs` for a missing or late package, and the option forms of the Ash extension in `ash_resource_test.exs` and `ash_resource_change_test.exs`
 
 ### Dependencies:
 

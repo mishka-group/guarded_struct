@@ -296,8 +296,11 @@ Pull in only what you need:
 {:jason, "~> 1.4"}            # for `json: true` (Elixir < 1.18, otherwise built-in JSON works)
 {:ash, "~> 3.0"}              # for the Ash extension
 {:email_checker, "~> 0.2"}    # for `validate(email)` (DNS lookup; non-atomic)
-{:ex_url, "~> 2.0"}           # for `validate(url)` (DNS / port check; non-atomic)
+{:ex_url, "~> 2.0"}           # for `validate(tell)`, `validate(geo_url)` and `validate(location)`
+{:ex_phone_number, "~> 0.4"}  # for `validate(tell=98)` (a country code), together with ex_url
 ```
+
+A package is looked up when the op runs, so the order of the deps does not matter, in `mix.exs` or in `Mix.install`. An op whose package is missing returns an error that names the package to add.
 
 ---
 
@@ -541,7 +544,8 @@ flowchart TD
 | html_sanitize_ex | `~> 1.5` | ✅ (`sanitize(strip_tags/basic_html/html5)`) |
 | Jason | `~> 1.4` | ⚪ optional (`json: true` on Elixir < 1.18) |
 | email_checker | `~> 0.2` | ⚪ optional (`validate(email)` with DNS) |
-| ex_url | `~> 2.0` | ⚪ optional (`validate(url)` with DNS) |
+| ex_url | `~> 2.0` | ⚪ optional (`validate(tell)`, `validate(geo_url)`, `validate(location)`) |
+| ex_phone_number | `~> 0.4` | ⚪ optional (`validate(tell=98)`, with ex_url) |
 | Ash | `~> 3.0` | ⚪ optional (for the `Ash.Resource` extension) |
 
 ---

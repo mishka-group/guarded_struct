@@ -71,10 +71,11 @@ Content / format:
 | `:not_empty`, `:not_empty_string` | Non-zero length. |
 | `:not_flatten_empty`, `:not_flatten_empty_item` | List-shape contracts. |
 | `{:min_len, n}` / `{:max_len, n}` | Bounds. Apply to strings, integers, floats, ranges, lists. |
-| `:email`, `:email_r` | DNS-checked vs regex-only. `email_r` is data-layer safe. |
-| `:url`, `:tell`, `:geo_url` | URL/phone/geo via `URL`/`ExPhoneNumber` (optional). |
+| `:email`, `:email_r` | DNS-checked vs regex-only. `email_r` is data-layer safe. `:email` needs `email_checker`. |
+| `:url` | Scheme, host and a DNS lookup. No extra package. |
+| `:tell`, `:geo_url`, `:location` | Phone/geo via `URL`; need `ex_url`. `{:tell, code}` (`tell=98`) also needs `ex_phone_number`. |
 | `:uuid`, `:ipv4`, `:datetime`, `:date`, `:range`, `:regex` | Format checks. |
-| `:username`, `:full_name`, `:location`, `:queue`, `:string_boolean` | Domain checks (see `lib/guarded_struct/helper/extra.ex`). |
+| `:username`, `:full_name`, `:queue`, `:string_boolean` | Domain checks (see `lib/guarded_struct/helper/extra.ex`). |
 | `:slug` | `^[a-z0-9]+(-[a-z0-9]+)*$` — kebab-case URL slug. |
 | `:hostname` | RFC 1123 hostname via Erlang's `:inet_parse.domain/1` (case-insensitive, ≤ 253 chars, no underscores, no scheme). |
 | `:port_number` | Integer in `1..65535`. |

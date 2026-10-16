@@ -4,6 +4,14 @@ defmodule GuardedStruct.Derive.ValidationDerive do
 
   @family_alphabet Enum.concat([?a..?z, ~c" "])
 
+  @compile {:no_warn_undefined, [URL, ExPhoneNumber, EmailChecker]}
+
+  @optional_packages %{
+    URL => {:ex_url, "~> 2.0"},
+    ExPhoneNumber => {:ex_phone_number, "~> 0.4"},
+    EmailChecker => {:email_checker, "~> 0.2"}
+  }
+
   @slug_regex ~r/^[a-z0-9]+(?:-[a-z0-9]+)*$/
   @hex_color_regex ~r/^#(?:[0-9a-fA-F]{6}|[0-9a-fA-F]{3})$/
   # BCP-47 / RFC 5646 simplified: 2–3 alpha primary subtag, optional
@@ -217,12 +225,12 @@ defmodule GuardedStruct.Derive.ValidationDerive do
     _ -> {:error, field, :url, translated_message(:url, field)}
   end
 
-  if Code.ensure_loaded?(ExPhoneNumber) do
-    def validate({:tell, country_code}, input, field) do
+  def validate({:tell, country_code}, input, field) do
+    with_packages(field, :tell, [URL, ExPhoneNumber], fn ->
       case URL.new("tel:#{input}") do
-        {:ok, %URL{scheme: "tel", parsed_path: %URL.Tel{tel: _tel}}} ->
+        {:ok, %{__struct__: URL, scheme: "tel", parsed_path: %{__struct__: URL.Tel}}} ->
           case ExPhoneNumber.parse(input, nil) do
-            {:ok, %ExPhoneNumber.Model.PhoneNumber{country_code: ^country_code}} ->
+            {:ok, %{__struct__: ExPhoneNumber.Model.PhoneNumber, country_code: ^country_code}} ->
               input
 
             _ ->
@@ -235,15 +243,16 @@ defmodule GuardedStruct.Derive.ValidationDerive do
         _ ->
           {:error, field, :tell, translated_message(:tell, field)}
       end
-    rescue
-      _ -> {:error, field, :tell, translated_message(:tell, field)}
-    end
+    end)
+  rescue
+    _ -> {:error, field, :tell, translated_message(:tell, field)}
   end
 
-  if Code.ensure_loaded?(URL) do
-    def validate(:tell, input, field) do
+  def validate(:tell, input, field) do
+    with_packages(field, :tell, [URL], fn ->
       case URL.new("tel:#{input}") do
-        {:ok, %URL{scheme: "tel", parsed_path: %URL.Tel{tel: tel}}} when not is_nil(tel) ->
+        {:ok, %{__struct__: URL, scheme: "tel", parsed_path: %{__struct__: URL.Tel, tel: tel}}}
+        when not is_nil(tel) ->
           input
 
         {:error, {URL.Parser.ParseError, _msg}} ->
@@ -252,28 +261,28 @@ defmodule GuardedStruct.Derive.ValidationDerive do
         _ ->
           {:error, field, :tell, translated_message(:tell, field)}
       end
-    rescue
-      _ ->
-        {:error, field, :tell, translated_message(:tell, field)}
-    end
+    end)
+  rescue
+    _ ->
+      {:error, field, :tell, translated_message(:tell, field)}
   end
 
-  if Code.ensure_loaded?(URL) do
-    def validate(:geo_url, input, field) do
+  def validate(:geo_url, input, field) do
+    with_packages(field, :geo_url, [URL], fn ->
       location("geo:#{input}", field, :geo_url)
-    end
+    end)
   end
 
-  if Code.ensure_loaded?(EmailChecker) do
-    def validate(:email, input, field) do
+  def validate(:email, input, field) do
+    with_packages(field, :email, [EmailChecker], fn ->
       EmailChecker.valid?(input)
       |> case do
         true -> input
         _ -> {:error, field, :email, translated_message(:email, field)}
       end
-    rescue
-      _ -> {:error, field, :email, translated_message(:email, field)}
-    end
+    end)
+  rescue
+    _ -> {:error, field, :email, translated_message(:email, field)}
   end
 
   def validate(:email_r, input, field) do
@@ -285,8 +294,8 @@ defmodule GuardedStruct.Derive.ValidationDerive do
     _ -> {:error, field, :email_r, translated_message(:email_r, field)}
   end
 
-  if Code.ensure_loaded?(URL) do
-    def validate(:location, input, field) when is_binary(input) do
+  def validate(:location, input, field) when is_binary(input) do
+    with_packages(field, :location, [URL], fn ->
       converted =
         input
         |> String.split(" ")
@@ -294,9 +303,9 @@ defmodule GuardedStruct.Derive.ValidationDerive do
         |> Enum.join()
 
       location("geo:#{converted}", field, :location)
-    rescue
-      _ -> {:error, field, :email, translated_message(:location, field)}
-    end
+    end)
+  rescue
+    _ -> {:error, field, :email, translated_message(:location, field)}
   end
 
   def validate(:string_boolean, input, field) do
@@ -885,20 +894,33 @@ defmodule GuardedStruct.Derive.ValidationDerive do
     end
   end
 
-  if Code.ensure_loaded?(URL) do
-    defp location(geo_link, field, action) do
-      case URL.new(geo_link) do
-        {:ok, %URL{scheme: "geo", parsed_path: %URL.Geo{lat: lat, lng: lng}}}
-        when not is_nil(lat) and not is_nil(lng) ->
-          geo_link
+  defp location(geo_link, field, action) do
+    case URL.new(geo_link) do
+      {:ok,
+       %{__struct__: URL, scheme: "geo", parsed_path: %{__struct__: URL.Geo, lat: lat, lng: lng}}}
+      when not is_nil(lat) and not is_nil(lng) ->
+        geo_link
 
-        _ ->
-          {:error, field, action, translated_message(:location_url, field)}
-      end
-    rescue
       _ ->
         {:error, field, action, translated_message(:location_url, field)}
     end
+  rescue
+    _ ->
+      {:error, field, action, translated_message(:location_url, field)}
+  end
+
+  defp with_packages(field, action, modules, fun) do
+    case Enum.find(modules, &(not Code.ensure_loaded?(&1))) do
+      nil -> fun.()
+      module -> {:error, field, action, missing_package_message(module, action, field)}
+    end
+  end
+
+  defp missing_package_message(module, action, field) do
+    {package, requirement} = Map.fetch!(@optional_packages, module)
+
+    "The #{inspect(package)} package is needed to validate #{action} in the #{field} field. " <>
+      "Add {#{inspect(package)}, #{inspect(requirement)}} to your deps"
   end
 
   defp record?(input) do
