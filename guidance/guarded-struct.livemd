@@ -1849,6 +1849,10 @@ Only top-level builds emit — nested sub_field builds inherit; you see exactly 
 GuardedStruct.Validate.run("validate(string, max_len=80, email_r)", "alice@example.com")
 # => {:ok, "alice@example.com"}
 
+# A derive string that cannot be read, or has a wrong operand, is an error
+GuardedStruct.Validate.run("validate(max_len=foo)", "x")
+# => {:error, [%{field: :__value__, action: :bad_parameters, message: "invalid parameter for `max_len` ..."}]}
+
 # Tier 2 — single named field of a module
 GuardedStruct.Validate.field(Signup, :email, "alice@x.com")
 # => {:ok, "alice@x.com"}

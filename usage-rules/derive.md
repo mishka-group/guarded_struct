@@ -151,7 +151,7 @@ derives: ~S|validate(regex="^a]b$")|         # literal ] at top level
 
 `Code.string_to_quoted` treats the inside of `"…"` as opaque. The scanner sees the `"` and skips entirely, so anything between the quotes survives as-is. Use the `~S|…|` sigil so you don't have to escape the internal `"`.
 
-If you'd rather keep regex out of the derive string altogether, pre-compile and validate with `GuardedStruct.Validate.run/2` from your `validator: {Mod, :fn}` MFA — the parser is bypassed entirely.
+If you'd rather keep regex out of the derive string altogether, pre-compile the `Regex` and match it in your `validator: {Mod, :fn}` MFA — the derive parser is bypassed entirely.
 
 ## Direct API
 

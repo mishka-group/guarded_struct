@@ -303,8 +303,11 @@ defmodule GuardedStructTest.DeriveOperandsTest do
       assert {:ok, 1.5} = Validate.run("sanitize(default_when_empty=1.5)", "")
     end
 
-    test "an operand that cannot be parsed fails the value instead of being skipped" do
-      assert {:error, [%{action: :type}]} = Validate.run("validate(max_len=foo())", "abc")
+    test "an operand that cannot be parsed is an error instead of being skipped" do
+      assert {:error, [%{action: :bad_parameters, message: message}]} =
+               Validate.run("validate(max_len=foo())", "abc")
+
+      assert message =~ "max_len = foo()"
     end
   end
 end

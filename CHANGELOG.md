@@ -16,6 +16,7 @@
 - Fix extension ops inside `each=[...]` / `optional=[...]` being a compile error (`unknown validate op`) while `either=[...]` accepted them. Ops of the module's `derive_extensions:`, of the global config and (when a `validate_derive` / `sanitize_derive` is set) of those modules are accepted
 - Fix `domain:` rules not being evaluated inside a `GuardedStruct.AshResource` resource — the extension now runs `ParseDomain` (and `ParseCoreKeys`) like the standalone DSL
 - Fix the optional packages `ex_url`, `ex_phone_number` and `email_checker` being detected while GuardedStruct itself compiled. When it compiled before them, as in a `Mix.install` that lists it first, `validate(tell)`, `validate(tell=98)`, `validate(geo_url)`, `validate(location)` and `validate(email)` all failed with `Unexpected type error`. The package is looked up when the op runs, and an op whose package is missing returns an error that names the package to add
+- Fix `Validate.run/2` skipping the checks a module makes of its derive strings: `validate(max_len=foo)` returned `{:ok, value}`, so did a string the parser refuses such as `validate(enum=Atom[a, b])`, and `validate(equal=Integer::abc)` raised `ArgumentError`. It now returns `{:error, [%{field: :__value__, action: :bad_parameters, message: ...}]}` for each of them. The inner ops of `each=[...]` / `optional=[...]` may be the ops of the global derive extensions, or any name when a `validate_derive` / `sanitize_derive` is configured
 - Fix the Ash extension not accepting `guardedstruct opts do … end`, `sub_field name, type, opts do … end` and `conditional_field name, type, opts do … end` — `undefined function sub_field/4` — although the docs show them and `use GuardedStruct` takes them. They work in a resource now; the `@derives` decorator stays standalone-only
 - Fix `dynamic_field` inside a `sub_field` not being identity-preserved: the parent converted its keys (`"role"` came back as `:role`). Keys stay as given in a `sub_field` of any depth, a list `sub_field`, a `struct:` module and a `conditional_field`'s `sub_field`; `Validate.partial/2` keeps them too
 - Fix `GuardedStruct.Info.fields/1` raising `KeyError` on a pattern-keyed (regex) module — it lists the patterns. `field_kind/2` returns `:pattern_field` for a key a pattern matches, and `field/2` / `field?/2` follow the patterns
@@ -40,7 +41,7 @@
 
 ### Tests:
 
-- Add the tests for each of the fixes above: `derive_operands_test.exs`, `derive_section_options_test.exs` and new cases in the parser, op-param, registry, derive, extension, validator, Ash, dynamic, Info and pattern-map suites, `core_keys_test.exs` for `from`, `on` and `domain`, `optional_packages_test.exs` for a missing or late package, and the option forms of the Ash extension in `ash_resource_test.exs` and `ash_resource_change_test.exs`
+- Add the tests for each of the fixes above: `derive_operands_test.exs`, `derive_section_options_test.exs` and new cases in the parser, op-param, registry, derive, extension, validator, Ash, dynamic, Info and pattern-map suites, `core_keys_test.exs` for `from`, `on` and `domain`, `optional_packages_test.exs` for a missing or late package, `validate_run_derive_test.exs` for a wrong derive string in `Validate.run/2`, and the option forms of the Ash extension in `ash_resource_test.exs` and `ash_resource_change_test.exs`
 
 ### Dependencies:
 

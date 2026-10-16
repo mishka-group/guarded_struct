@@ -21,12 +21,17 @@ Returns `{:ok, struct}` or `{:error, [error_map]}`. See `guarded_struct:errors`.
 GuardedStruct.Validate.run("validate(email_r)", "alice@x.io")
 # => {:ok, "alice@x.io"}
 
+GuardedStruct.Validate.run("validate(max_len=foo)", "x")
+# => {:error, [%{field: :__value__, action: :bad_parameters, message: "invalid parameter for `max_len` ..."}]}
+
 GuardedStruct.Validate.field(MyApp.User, :email, "bad")
 # => {:error, [%{field: :email, action: :email_r, ...}]}
 
 GuardedStruct.Validate.partial(MyApp.User, %{nickname: "ok"})
 # → run the pipeline against just the keys present; skip enforce-key checks.
 ```
+
+`run/2` checks its string the way a module checks a `derives:` string. A string the parser refuses, or an operand of the wrong type, returns a `:bad_parameters` error; it never returns `{:ok, value}` for it and never raises.
 
 ## `GuardedStruct.Info` — introspection
 

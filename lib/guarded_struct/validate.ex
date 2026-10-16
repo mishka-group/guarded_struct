@@ -19,7 +19,7 @@ defmodule GuardedStruct.Validate do
   import GuardedStruct.Messages, only: [translated_message: 2]
 
   alias GuardedStruct.{Derive, Runtime}
-  alias GuardedStruct.Derive.{Parser, OpEvaluator, ValidationDerive}
+  alias GuardedStruct.Derive.{Extension, Parser, OpEvaluator, OpParamValidator, ValidationDerive}
 
   @type error :: %{
           required(:field) => atom(),
@@ -33,21 +33,58 @@ defmodule GuardedStruct.Validate do
 
       iex> GuardedStruct.Validate.run("validate(string, max_len=80)", "hi")
       {:ok, "hi"}
+
+  The string is checked the way a `derives:` string is when a module compiles.
+  One that cannot be read, or whose operand is wrong, returns an error with the
+  action `:bad_parameters` and the field `:__value__`.
+
+      iex> {:error, [%{action: :bad_parameters}]} =
+      ...>   GuardedStruct.Validate.run("validate(max_len=foo)", "x")
   """
   @spec run(String.t(), any()) :: {:ok, any()} | {:error, [error]}
   def run(derive_string, value) when is_binary(derive_string) do
-    ops = derive_string |> Parser.parser() |> OpEvaluator.preevaluate()
+    case read_derive(derive_string) do
+      {:ok, nil} ->
+        {:ok, value}
 
-    if is_nil(ops) do
-      {:ok, value}
-    else
-      input = %{field: :__value__, derive: derive_string, derive_ops: ops}
+      {:ok, ops} ->
+        input = %{field: :__value__, derive: derive_string, derive_ops: ops}
 
-      case Derive.derive({:ok, %{__value__: value}, [input]}) do
-        {:ok, %{__value__: validated}} -> {:ok, validated}
-        {:error, errs} -> {:error, errs}
-      end
+        case Derive.derive({:ok, %{__value__: value}, [input]}) do
+          {:ok, %{__value__: validated}} -> {:ok, validated}
+          {:error, errs} -> {:error, errs}
+        end
+
+      {:error, message} ->
+        {:error, [%{field: :__value__, action: :bad_parameters, message: message}]}
     end
+  end
+
+  defp read_derive(derive_string) do
+    case Parser.parse(derive_string) do
+      {:ok, ops} ->
+        with :ok <- OpParamValidator.check(ops, :__value__, extra_ops_opts()) do
+          {:ok, OpEvaluator.preevaluate(ops)}
+        end
+
+      {:error, reason} ->
+        {:error,
+         "could not parse the derive string #{inspect(derive_string)}: #{reason}. " <>
+           "Write ops as `op`, `op=value`, `op=[...]`, `enum=Type[a::b]` or `equal=Type::value`."}
+    end
+  end
+
+  defp extra_ops_opts do
+    [
+      extra_validate: fn -> extra_ops(:validate_derive, &Extension.all_extension_validators/0) end,
+      extra_sanitize: fn -> extra_ops(:sanitize_derive, &Extension.all_extension_sanitizers/0) end
+    ]
+  end
+
+  defp extra_ops(option, extension_ops) do
+    if Derive.fallback_modules(option) == [],
+      do: MapSet.to_list(extension_ops.()),
+      else: :any
   end
 
   @doc """
