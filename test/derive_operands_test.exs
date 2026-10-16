@@ -224,7 +224,7 @@ defmodule GuardedStructTest.DeriveOperandsTest do
 
     test "equal=Map:: with code that does not evaluate" do
       assert_raise Spark.Error.DslError, ~r/`equal`/, fn ->
-        compile("validate(equal=Map::%{a:)")
+        compile("validate(equal=Map::%{a: b})")
       end
     end
 
@@ -254,6 +254,55 @@ defmodule GuardedStructTest.DeriveOperandsTest do
       assert error.message =~ ":value"
       assert error.message =~ "validate(string,,)"
       assert inspect(error.module) =~ "DeriveOperands"
+    end
+  end
+
+  describe "a derives string whose groups cannot be read" do
+    alias GuardedStruct.Validate
+
+    test "a group name other than sanitize and validate is named" do
+      for derive <- ["validte(string)", "foo", "validate(string) foo", "sanitize"] do
+        assert_raise Spark.Error.DslError, ~r/unknown group `/, fn -> compile(derive) end
+      end
+
+      assert_raise Spark.Error.DslError, ~r/unknown group `validte\(string\)`/, fn ->
+        compile("sanitize(trim) validte(string)")
+      end
+    end
+
+    test "a group that is not closed is named" do
+      assert_raise Spark.Error.DslError, ~r/the group `validate\(string` is not closed/, fn ->
+        compile("validate(string")
+      end
+
+      assert_raise Spark.Error.DslError,
+                   ~r/the group `validate\(string, max_len=3` is not closed/,
+                   fn -> compile("sanitize(trim) validate(string, max_len=3") end
+    end
+
+    test "the error carries the field, the derives string and the reason" do
+      error = assert_raise Spark.Error.DslError, fn -> compile("validte(string)") end
+
+      assert error.path == [:guardedstruct, :field, :value, :derives]
+      assert error.message =~ ~S|"validte(string)"|
+      assert error.message =~ "write `sanitize(...)` or `validate(...)`"
+    end
+
+    test "an empty string and a blank one stay a no-op" do
+      for derive <- ["", "   ", "\n  \t"] do
+        assert [{_module, _binary}] = compile(derive)
+      end
+    end
+
+    test "Validate.run/2 returns the bad_parameters error for them" do
+      for derive <- ["validte(string)", "foo", "validate(string", "validate(string) foo"] do
+        assert {:error, [%{field: :__value__, action: :bad_parameters, message: message}]} =
+                 Validate.run(derive, "x")
+
+        assert message =~ inspect(derive)
+      end
+
+      assert {:ok, "x"} = Validate.run("   ", "x")
     end
   end
 

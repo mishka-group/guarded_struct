@@ -1,9 +1,12 @@
 # Derive ops — `sanitize(...)` and `validate(...)` mini-language
 
 `derives:` accepts a string parsed at **compile time** into a normalized op map.
-A string the parser refuses, an operand it can't read and a bad parameter
-surface as `Spark.Error.DslError` — nothing is dropped silently. The runtime
-never re-parses.
+A string the parser refuses, a group that is not `sanitize(...)` or
+`validate(...)`, a group with no closing `)`, an operand it can't read and a bad
+parameter surface as `Spark.Error.DslError` — nothing is dropped silently. An
+empty or blank string is a no-op. The builder never re-parses; `Validate.run/2`
+parses its string when it runs and returns the same problems as a
+`:bad_parameters` error.
 
 ```elixir
 field :email, :string,

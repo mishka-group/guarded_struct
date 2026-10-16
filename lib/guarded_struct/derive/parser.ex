@@ -6,7 +6,7 @@ defmodule GuardedStruct.Derive.Parser do
   @doc """
   Parse a derive string into `%{sanitize: [...], validate: [...]}`.
 
-  Returns `nil` for `nil`/empty input or for strings the AST parser refuses.
+  Returns `nil` for `nil`, empty and blank input, and for a string `parse/1` reports as an error.
   An operand that is not understood is kept in its list as
   `{:invalid_operand, source}` so `OpParamValidator` can reject it at compile time.
   """
@@ -24,8 +24,10 @@ defmodule GuardedStruct.Derive.Parser do
   end
 
   @doc """
-  Like `parser/1`, but a string the AST parser refuses is reported as
-  `{:error, reason}` instead of `nil`.
+  Like `parser/1`, but a string that cannot be read is reported as
+  `{:error, reason}` instead of `nil`: one the AST parser refuses, a group that
+  is not `sanitize(...)` or `validate(...)`, and a group that is not closed.
+  An empty or blank string is `{:ok, nil}`.
   """
   @spec parse(nil | String.t()) :: {:ok, nil | map()} | {:error, String.t()}
   def parse(nil), do: {:ok, nil}
@@ -33,32 +35,23 @@ defmodule GuardedStruct.Derive.Parser do
 
   def parse(input) when is_binary(input) do
     case to_block_ast(input) do
-      {:ok, ast} ->
-        ops =
-          ast
-          |> normalize_block()
-          |> Enum.reduce(%{}, &collect_call/2)
-          |> nilify_empty()
-
-        {:ok, ops}
-
-      {:error, error} ->
-        {:error, syntax_error_message(error)}
+      {:ok, ast} -> ast |> normalize_block() |> collect_groups()
+      {:error, message} when is_binary(message) -> {:error, message}
+      {:error, error} -> {:error, syntax_error_message(error)}
     end
   rescue
     exception -> {:error, Exception.message(exception)}
   end
 
   defp to_block_ast(input) do
-    wrapped =
-      input
-      |> String.trim()
-      |> quote_operand_values()
-      |> balance_parens()
+    quoted = input |> String.trim() |> quote_operand_values()
+
+    with :ok <- check_closed(quoted) do
+      quoted
       |> String.replace(~r/\)\s+/u, ")\n")
       |> then(&"(\n#{&1}\n)")
-
-    Code.string_to_quoted(wrapped, emit_warnings: false)
+      |> Code.string_to_quoted(emit_warnings: false)
+    end
   end
 
   defp syntax_error_message({_meta, {prefix, suffix}, token}),
@@ -167,29 +160,53 @@ defmodule GuardedStruct.Derive.Parser do
     |> String.replace(~S("), ~S(\"))
   end
 
-  defp balance_parens(input) do
-    {depth, _state} =
-      input
+  # A group that is not closed is an error: the `(` that opens it is named.
+  defp check_closed(source) do
+    {open, _state, _index} =
+      source
       |> :binary.bin_to_list()
-      |> Enum.reduce({0, :code}, fn ch, {d, state} ->
-        case {state, ch} do
-          {:in_string, ?\\} -> {d, :string_escape}
-          {:string_escape, _} -> {d, :in_string}
-          {:in_string, ?"} -> {d, :code}
-          {:in_string, _} -> {d, :in_string}
-          {:in_charlist, ?\\} -> {d, :charlist_escape}
-          {:charlist_escape, _} -> {d, :in_charlist}
-          {:in_charlist, ?'} -> {d, :code}
-          {:in_charlist, _} -> {d, :in_charlist}
-          {:code, ?"} -> {d, :in_string}
-          {:code, ?'} -> {d, :in_charlist}
-          {:code, ?(} -> {d + 1, :code}
-          {:code, ?)} -> {d - 1, :code}
-          {:code, _} -> {d, :code}
-        end
+      |> Enum.reduce({[], :code, 0}, fn ch, {open, state, index} ->
+        {open, state} = scan_char(ch, index, open, state)
+        {open, state, index + 1}
       end)
 
-    if depth > 0, do: input <> String.duplicate(")", depth), else: input
+    case List.last(open) do
+      nil -> :ok
+      index -> {:error, "the group `#{group_source(source, index)}` is not closed, add `)`"}
+    end
+  end
+
+  defp scan_char(ch, index, open, state) do
+    case {state, ch} do
+      {:in_string, ?\\} -> {open, :string_escape}
+      {:string_escape, _} -> {open, :in_string}
+      {:in_string, ?"} -> {open, :code}
+      {:in_string, _} -> {open, :in_string}
+      {:in_charlist, ?\\} -> {open, :charlist_escape}
+      {:charlist_escape, _} -> {open, :in_charlist}
+      {:in_charlist, ?'} -> {open, :code}
+      {:in_charlist, _} -> {open, :in_charlist}
+      {:code, ?"} -> {open, :in_string}
+      {:code, ?'} -> {open, :in_charlist}
+      {:code, ?(} -> {[index | open], :code}
+      {:code, ?)} -> {Enum.drop(open, 1), :code}
+      {:code, _} -> {open, :code}
+    end
+  end
+
+  defp group_source(source, index) do
+    before = :binary.part(source, 0, index)
+    name = before |> then(&Regex.run(~r/[A-Za-z_][A-Za-z0-9_]*$/, &1)) |> List.wrap() |> hd_or("")
+    rest = :binary.part(source, index, byte_size(source) - index)
+    shorten(name <> rest)
+  end
+
+  defp hd_or([], default), do: default
+  defp hd_or([head | _], _default), do: head
+
+  defp shorten(text) do
+    text = String.trim(text)
+    if String.length(text) > 40, do: String.slice(text, 0, 40) <> "...", else: text
   end
 
   defp normalize_block({:__block__, _, calls}), do: calls
@@ -198,13 +215,24 @@ defmodule GuardedStruct.Derive.Parser do
   defp nilify_empty(map) when map == %{}, do: nil
   defp nilify_empty(map), do: map
 
-  defp collect_call({op, _meta, args}, acc)
-       when op in [:sanitize, :validate] and is_list(args) do
+  defp collect_groups(calls) do
+    case Enum.find(calls, &(not group?(&1))) do
+      nil -> {:ok, calls |> Enum.reduce(%{}, &collect_call/2) |> nilify_empty()}
+      other -> {:error, unknown_group_message(other)}
+    end
+  end
+
+  defp group?({op, _meta, args}) when op in [:sanitize, :validate] and is_list(args), do: true
+  defp group?(_other), do: false
+
+  defp unknown_group_message(ast) do
+    "unknown group `#{ast |> Macro.to_string() |> shorten()}`, write `sanitize(...)` or `validate(...)`"
+  end
+
+  defp collect_call({op, _meta, args}, acc) do
     parsed = Enum.map(args, &(&1 |> fold_negative_numbers() |> parse_arg()))
     Map.update(acc, op, parsed, &(&1 ++ parsed))
   end
-
-  defp collect_call(_other, acc), do: acc
 
   # `-10` reaches the AST as a unary minus call on `10`, not as a literal.
   defp fold_negative_numbers(ast) do

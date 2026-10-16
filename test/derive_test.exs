@@ -662,8 +662,8 @@ defmodule GuardedStructTest.DeriveTest do
       field(:id, integer())
       field(:title, String.t(), derives: "validate(not_empty, testv1)")
       field(:name, String.t(), derives: "validate(string, not_empty) sanitize(trim, capitalize)")
-      field(:last_name, String.t(), derives: "sanitize(capitalize_v1")
-      field(:nikname, String.t(), derives: "sanitize(not_exist")
+      field(:last_name, String.t(), derives: "sanitize(capitalize_v1)")
+      field(:nikname, String.t(), derives: "sanitize(not_exist)")
     end
   end
 
@@ -715,8 +715,8 @@ defmodule GuardedStructTest.DeriveTest do
         derives: "validate(string, not_empty) sanitize(trim, capitalize_v2)"
       )
 
-      field(:last_name, String.t(), derives: "sanitize(capitalize_v1")
-      field(:nikname, String.t(), derives: "sanitize(not_exist")
+      field(:last_name, String.t(), derives: "sanitize(capitalize_v1)")
+      field(:nikname, String.t(), derives: "sanitize(not_exist)")
     end
   end
 
