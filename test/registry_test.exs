@@ -65,4 +65,44 @@ defmodule GuardedStructTest.RegistryTest do
       refute Registry.known_sanitize?(:slug)
     end
   end
+
+  describe "known_validate?/2 + known_sanitize?/2 — extra ops" do
+    test "a built-in op is known whatever the extra ops are" do
+      assert Registry.known_validate?(:string, [])
+      assert Registry.known_sanitize?(:trim, [])
+    end
+
+    test "an op outside the built-in set is known when the extra list holds it" do
+      assert Registry.known_validate?(:zz_custom, [:zz_custom])
+      assert Registry.known_sanitize?(:zz_shout, [:zz_shout])
+    end
+
+    test "an op outside both sets stays unknown" do
+      refute Registry.known_validate?(:zz_custom, [])
+      refute Registry.known_validate?(:zz_custom, [:other])
+      refute Registry.known_sanitize?(:zz_shout, [:other])
+    end
+
+    test ":any knows every op" do
+      assert Registry.known_validate?(:anything_at_all, :any)
+      assert Registry.known_sanitize?(:anything_at_all, :any)
+    end
+
+    test "a function returning the extra ops is only called for an op that is not built in" do
+      extra = fn ->
+        send(self(), :extra_called)
+        [:zz_custom]
+      end
+
+      assert Registry.known_validate?(:string, extra)
+      refute_received :extra_called
+
+      assert Registry.known_validate?(:zz_custom, extra)
+      assert_received :extra_called
+    end
+
+    test "a function may return :any" do
+      assert Registry.known_sanitize?(:whatever, fn -> :any end)
+    end
+  end
 end

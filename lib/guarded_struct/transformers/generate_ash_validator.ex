@@ -30,10 +30,14 @@ defmodule GuardedStruct.Transformers.GenerateAshValidator do
 
     Codegen.validate_entities!(entities)
 
-    section_options = %{
-      authorized_fields:
-        Transformer.get_option(dsl_state, [:guardedstruct], :authorized_fields, false)
-    }
+    section_options =
+      Codegen.declared_options(%{
+        authorized_fields:
+          Transformer.get_option(dsl_state, [:guardedstruct], :authorized_fields, false),
+        main_validator: Transformer.get_option(dsl_state, [:guardedstruct], :main_validator),
+        validate_derive: Transformer.get_option(dsl_state, [:guardedstruct], :validate_derive),
+        sanitize_derive: Transformer.get_option(dsl_state, [:guardedstruct], :sanitize_derive)
+      })
 
     {keys, _defstruct_kw, _types, enforce_keys, fields_runtime} =
       Codegen.struct_pieces(entities, block_enforce)

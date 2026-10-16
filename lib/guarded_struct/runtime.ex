@@ -32,10 +32,13 @@ defmodule GuardedStruct.Runtime do
     # top-level call. The wrap closure short-circuits on `build_struct? =
     # false` so non-Ash callers pay zero dict lookups.
     prior = Process.put(:guarded_as_map?, true)
+    previous_module = push_current_module(module)
 
     try do
       do_pipeline(module, attrs, attrs, :add, error?, [], _build_struct? = false)
     after
+      pop_current_module(previous_module)
+
       case prior do
         nil -> Process.delete(:guarded_as_map?)
         v -> Process.put(:guarded_as_map?, v)
@@ -88,12 +91,7 @@ defmodule GuardedStruct.Runtime do
     start = System.monotonic_time()
     metadata = %{module: module}
 
-    # Push the current module onto the process dictionary so per-module
-    # `derive_extensions` lookups in Extension.dispatch_*/2,3 can find it.
-    # Nested sub_field builds inherit; external `struct: Other` calls push
-    # their own and restore the previous on return.
-    previous_module = Process.get(:guarded_struct_current_module)
-    Process.put(:guarded_struct_current_module, module)
+    previous_module = push_current_module(module)
 
     :telemetry.execute(
       [:guarded_struct, :builder, :start],
@@ -124,12 +122,34 @@ defmodule GuardedStruct.Runtime do
 
         reraise(e, __STACKTRACE__)
     after
-      case previous_module do
-        nil -> Process.delete(:guarded_struct_current_module)
-        prev -> Process.put(:guarded_struct_current_module, prev)
-      end
+      pop_current_module(previous_module)
     end
   end
+
+  @doc false
+  def with_current_module(module, fun) do
+    previous = push_current_module(module)
+
+    try do
+      fun.()
+    after
+      pop_current_module(previous)
+    end
+  end
+
+  # Push the current module onto the process dictionary so per-module
+  # `derive_extensions` lookups in Extension.dispatch_*/2,3 and the
+  # `validate_derive` / `sanitize_derive` lookups in Derive.fallback_modules/1
+  # can find it. Nested sub_field builds inherit; external `struct: Other`
+  # calls push their own and restore the previous on return.
+  defp push_current_module(module) do
+    previous = Process.get(:guarded_struct_current_module)
+    Process.put(:guarded_struct_current_module, module)
+    previous
+  end
+
+  defp pop_current_module(nil), do: Process.delete(:guarded_struct_current_module)
+  defp pop_current_module(previous), do: Process.put(:guarded_struct_current_module, previous)
 
   defp telemetry_result({:ok, _}), do: %{result: :ok}
 
@@ -221,13 +241,16 @@ defmodule GuardedStruct.Runtime do
     case apply(mod, fun, [key_str, value]) do
       {:ok, _key, validated} -> {:ok, validated}
       {:ok, validated} -> {:ok, validated}
-      {:error, _key, message} -> {:error, [%{key: key_str, action: :validator, message: message}]}
-      {:error, message} -> {:error, [%{key: key_str, action: :validator, message: message}]}
+      {:error, _key, message} -> {:error, [pattern_validator_error(key_str, message)]}
+      {:error, message} -> {:error, [pattern_validator_error(key_str, message)]}
       _ -> {:ok, value}
     end
   end
 
   defp process_pattern_value(_pf, value, _key_str), do: {:ok, value}
+
+  defp pattern_validator_error(key_str, message),
+    do: %{field: :__map__, key: key_str, action: :validator, message: message}
 
   defp prefix_key(errs, key_str) do
     Enum.map(errs, fn
@@ -281,14 +304,11 @@ defmodule GuardedStruct.Runtime do
 
     keys = info.keys
     enforce_keys = info.enforce_keys
-    dynamic_field_names = Map.get(info, :dynamic_keys, [])
 
-    full_attrs_atomized =
-      full_attrs
-      |> Parser.convert_to_atom_map(dynamic_field_names, module.__guarded_atom_lookup__())
+    # A nested build receives `full_attrs` already converted by the root build.
+    full_attrs_atomized = if path == [], do: atomize(module, full_attrs), else: full_attrs
 
-    with {:ok, normalized} <-
-           normalize_keys(attrs, dynamic_field_names, module.__guarded_atom_lookup__()),
+    with {:ok, normalized} <- normalize_keys(attrs, module),
          {:ok, attrs_after_authorized} <-
            authorized_fields(normalized, keys, section_opts.authorized_fields),
          :ok <- check_enforce_keys(attrs_after_authorized, enforce_keys),
@@ -324,7 +344,7 @@ defmodule GuardedStruct.Runtime do
       end
 
       {derive_errors, struct_value} =
-        case run_main_validator(validator_attrs, module) do
+        case run_main_validator(validator_attrs, module, section_opts) do
           {:ok, after_main} ->
             merged = Map.merge(after_main, sub_field_data)
 
@@ -380,11 +400,75 @@ defmodule GuardedStruct.Runtime do
     Map.get(info, :options, %{authorized_fields: false})
   end
 
-  defp normalize_keys(attrs, dynamic_field_names, atom_lookup) when is_map(attrs) do
+  defp normalize_keys(attrs, module) when is_map(attrs) do
     case Map.keys(attrs) |> List.first() do
       nil -> {:ok, attrs}
-      _ -> {:ok, Parser.convert_to_atom_map(attrs, dynamic_field_names, atom_lookup)}
+      _ -> {:ok, atomize(module, attrs)}
     end
+  end
+
+  @doc false
+  def atomize(module, attrs) do
+    Parser.convert_to_atom_map(
+      attrs,
+      Map.get(module.__guarded_information__(), :dynamic_keys, []),
+      module.__guarded_atom_lookup__(),
+      nested_conversion([module])
+    )
+  end
+
+  # How `Parser.convert_to_atom_map/4` treats the map under a key: the nested
+  # module(s) the key's value is built by decide which of its keys are
+  # `dynamic_field`s, whose values stay as the caller sent them.
+  defp nested_conversion(modules) do
+    fn key ->
+      case Enum.flat_map(modules, &embedded_modules(&1, key)) do
+        [] ->
+          nil
+
+        embedded ->
+          %{
+            passthrough:
+              Enum.flat_map(embedded, &Map.get(&1.__guarded_information__(), :dynamic_keys, [])),
+            nested: nested_conversion(embedded)
+          }
+      end
+    end
+  end
+
+  defp embedded_modules(module, key) do
+    case module.__guarded_field_meta__(key) do
+      nil -> []
+      meta -> meta_modules(meta, module)
+    end
+  end
+
+  defp meta_modules(%{kind: :conditional_field} = meta, owner),
+    do: conditional_modules(meta, owner)
+
+  defp meta_modules(%{kind: kind} = meta, _owner) do
+    struct = Map.get(meta, :struct)
+    structs = Map.get(meta, :structs)
+
+    cond do
+      is_atom(structs) and structs not in [nil, true, false] -> [structs]
+      is_atom(struct) and not is_nil(struct) -> [struct]
+      kind == :sub_field -> [meta.child_module]
+      true -> []
+    end
+  end
+
+  defp conditional_modules(%{name: name, children: children}, owner) do
+    Enum.flat_map(children, fn
+      %{kind: :sub_field, sub_field_index: index} ->
+        [Module.concat(owner, atom_to_module(String.to_atom("#{name}#{index}")))]
+
+      %{kind: :conditional_field} = inner ->
+        conditional_modules(inner, owner)
+
+      child ->
+        meta_modules(child, owner)
+    end)
   end
 
   defp authorized_fields(attrs, _keys, false), do: {:ok, attrs}
@@ -1083,28 +1167,33 @@ defmodule GuardedStruct.Runtime do
   end
 
   # Push `module` onto the process-dict current-module stack so derive
-  # extension lookups inside this build resolve against it. We only push
-  # when `module` has a per-module `derive_extensions:` opt — otherwise
-  # we inherit the caller's pdict (this is how sub_field auto-generated
-  # submodules pick up the root user module's opt).
+  # extension and fallback lookups inside this build resolve against it. We only
+  # push when `module` is a top-level module that declares its own
+  # `derive_extensions:` opt or `validate_derive` / `sanitize_derive` section
+  # option — otherwise we inherit the caller's pdict (this is how sub_field
+  # auto-generated submodules pick up the root user module's settings).
   defp with_module_context(module, fun) do
-    case module.__guarded_derive_extensions_opt__() do
-      nil ->
+    if own_derive_settings?(module) do
+      previous = push_current_module(module)
+
+      try do
         fun.()
-
-      _opt ->
-        previous = Process.get(:guarded_struct_current_module)
-        Process.put(:guarded_struct_current_module, module)
-
-        try do
-          fun.()
-        after
-          case previous do
-            nil -> Process.delete(:guarded_struct_current_module)
-            prev -> Process.put(:guarded_struct_current_module, prev)
-          end
-        end
+      after
+        pop_current_module(previous)
+      end
+    else
+      fun.()
     end
+  end
+
+  defp own_derive_settings?(module) do
+    info = module.__guarded_information__()
+    options = Map.get(info, :options, %{})
+
+    info.path == [] and
+      (not is_nil(module.__guarded_derive_extensions_opt__()) or
+         Map.get(options, :validate_derive) not in [nil, []] or
+         Map.get(options, :sanitize_derive) not in [nil, []])
   end
 
   defp run_per_field_validators_collect(attrs, _fields_meta, module) do
@@ -1159,17 +1248,22 @@ defmodule GuardedStruct.Runtime do
     end
   end
 
-  defp run_main_validator(attrs, module) do
-    if module.__guarded_has_main_validator__() do
-      case module.main_validator(attrs) do
-        {:ok, value} -> {:ok, value}
-        {:error, errs} when is_list(errs) -> {:error, errs}
-        {:error, err} -> {:error, [err]}
-        _ -> {:ok, attrs}
-      end
-    else
-      {:ok, attrs}
+  defp run_main_validator(attrs, module, section_opts) do
+    case call_main_validator(attrs, module, section_opts) do
+      {:ok, value} -> {:ok, value}
+      {:error, errs} when is_list(errs) -> {:error, errs}
+      {:error, err} -> {:error, [err]}
+      _ -> {:ok, attrs}
     end
+  end
+
+  defp call_main_validator(attrs, _module, %{main_validator: {mod, fun}}),
+    do: apply(mod, fun, [attrs])
+
+  defp call_main_validator(attrs, module, _section_opts) do
+    if module.__guarded_has_main_validator__(),
+      do: module.main_validator(attrs),
+      else: {:ok, attrs}
   end
 
   defp run_derives(value, fields_meta) do
@@ -1224,7 +1318,7 @@ defmodule GuardedStruct.Runtime do
   def all_enforce_keys(module) do
     Enum.flat_map(module.__information__().enforce_keys, fn k ->
       case module.__field_meta__(k) do
-        %{kind: :sub_field, child_module: child} -> [%{k => all_keys(child)}]
+        %{kind: :sub_field, child_module: child} -> [%{k => all_enforce_keys(child)}]
         _ -> [k]
       end
     end)

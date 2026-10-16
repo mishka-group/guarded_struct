@@ -10,7 +10,9 @@ defmodule GuardedStructTest.AshIntegrationTest do
     WithListSubField,
     WithAshChange,
     AtomicEligibleUser,
-    AtomicWithCounter
+    AtomicWithCounter,
+    WithDomainRule,
+    WithSectionRules
   }
 
   describe "sanitize end-to-end through Ash.create/1" do
@@ -738,6 +740,122 @@ defmodule GuardedStructTest.AshIntegrationTest do
 
       assert updated.email == "dean@x.io"
       refute is_nil(updated.last_seen_at)
+    end
+  end
+
+  describe "domain: rules through Ash.create/1" do
+    test "a value inside the domain is created" do
+      for auth_type <- [:admin, :moderator] do
+        assert {:ok, record} =
+                 WithDomainRule
+                 |> Ash.Changeset.for_create(:create, %{status: "x", auth_type: auth_type})
+                 |> Ash.create()
+
+        assert record.status == "x"
+      end
+    end
+
+    test "a value outside the domain is refused" do
+      assert {:error, %Ash.Error.Invalid{} = err} =
+               WithDomainRule
+               |> Ash.Changeset.for_create(:create, %{status: "x", auth_type: :guest})
+               |> Ash.create()
+
+      assert inspect(err) =~ "status"
+    end
+
+    test "a missing field that the domain requires is refused" do
+      assert {:error, %Ash.Error.Invalid{} = err} =
+               WithDomainRule
+               |> Ash.Changeset.for_create(:create, %{status: "x"})
+               |> Ash.create()
+
+      assert inspect(err) =~ "status"
+    end
+
+    test "an optional (?) rule lets a missing field through" do
+      assert {:ok, _} =
+               WithDomainRule
+               |> Ash.Changeset.for_create(:create, %{auth_type: :admin, note: "n"})
+               |> Ash.create()
+
+      assert {:ok, _} =
+               WithDomainRule
+               |> Ash.Changeset.for_create(:create, %{auth_type: :guest})
+               |> Ash.create()
+    end
+
+    test "a rule on a field of a sub_field reads the root's value" do
+      assert {:ok, _} =
+               WithDomainRule
+               |> Ash.Changeset.for_create(:create, %{
+                 auth_type: :admin,
+                 settings: %{mode: "full"}
+               })
+               |> Ash.create()
+
+      assert {:error, err} =
+               WithDomainRule
+               |> Ash.Changeset.for_create(:create, %{
+                 auth_type: :guest,
+                 settings: %{mode: "full"}
+               })
+               |> Ash.create()
+
+      assert inspect(err) =~ "domain_parameters"
+    end
+  end
+
+  describe "section options through Ash.create/1" do
+    test "main_validator {Mod, :fun} rejects the create" do
+      assert {:error, %Ash.Error.Invalid{} = err} =
+               WithSectionRules
+               |> Ash.Changeset.for_create(:create, %{name: "blocked", slug: "ok"})
+               |> Ash.create()
+
+      assert inspect(err) =~ "name is blocked"
+    end
+
+    test "main_validator {Mod, :fun} lets a valid create through" do
+      assert {:ok, record} =
+               WithSectionRules
+               |> Ash.Changeset.for_create(:create, %{name: "mishka", slug: "ok"})
+               |> Ash.create()
+
+      assert record.name == "MISHKA"
+    end
+
+    test "validate_derive serves the validate op" do
+      assert {:error, %Ash.Error.Invalid{} = err} =
+               WithSectionRules
+               |> Ash.Changeset.for_create(:create, %{name: "mishka", slug: "blocked"})
+               |> Ash.create()
+
+      assert inspect(err) =~ "slug"
+    end
+
+    test "default_when_nil fills a field that was not sent" do
+      assert {:ok, %{score: 0}} =
+               WithSectionRules
+               |> Ash.Changeset.for_create(:create, %{name: "mishka"})
+               |> Ash.create()
+
+      assert {:ok, %{score: 100}} =
+               WithSectionRules
+               |> Ash.Changeset.for_create(:create, %{name: "mishka", score: 500})
+               |> Ash.create()
+    end
+
+    test "a sub_field's main_validator rejects the create" do
+      assert {:error, err} =
+               WithSectionRules
+               |> Ash.Changeset.for_create(:create, %{
+                 name: "mishka",
+                 profile: %{nickname: "blocked"}
+               })
+               |> Ash.create()
+
+      assert inspect(err) =~ "nickname is blocked"
     end
   end
 

@@ -53,4 +53,40 @@ defmodule GuardedStructFixtures.Dynamic do
       field(:shards, struct(), enforce: true, struct: ShardsMap)
     end
   end
+
+  defmodule Envelope do
+    @moduledoc "dynamic_field below the top level: nested and list sub_field, struct: reference, conditional."
+    use GuardedStruct
+
+    guardedstruct do
+      field(:meta, map())
+      dynamic_field(:top_meta)
+
+      sub_field(:account, struct()) do
+        field(:email, String.t())
+        dynamic_field(:meta)
+
+        sub_field(:settings, struct()) do
+          field(:theme, String.t())
+          dynamic_field(:prefs)
+        end
+      end
+
+      sub_field(:events, list(struct()), structs: true) do
+        field(:name, String.t())
+        dynamic_field(:payload)
+      end
+
+      field(:document, struct(), struct: Document)
+
+      conditional_field(:attachment, any()) do
+        field(:attachment, String.t(), hint: "url", derives: "validate(string)")
+
+        sub_field(:attachment, struct(), hint: "inline") do
+          field(:kind, String.t())
+          dynamic_field(:data)
+        end
+      end
+    end
+  end
 end

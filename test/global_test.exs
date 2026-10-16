@@ -301,7 +301,7 @@ defmodule GuardedStructTest.GlobalTest do
         field(:nickname, String.t(), derives: "validate(not_empty, time)")
 
         sub_field(:auth, struct(), enforce: true) do
-          field(:role, String.t(), derives: "validate(enum=Atom[admin, user])")
+          field(:role, String.t(), derives: "validate(enum=Atom[admin::user])")
           field(:action, String.t(), derives: "validate(not_empty)")
 
           sub_field(:path, struct()) do
@@ -315,7 +315,7 @@ defmodule GuardedStructTest.GlobalTest do
     [:name, :title, :nickname, %{auth: [:role, :action, %{path: [:name, :mobile]}]}] =
       assert TestCallNestedKeys.keys(:all)
 
-    [%{auth: [:role, :action, %{path: [:name, :mobile]}]}, :name] =
+    [%{auth: [%{path: []}, :action, :role]}, :name] =
       assert TestCallNestedKeys.enforce_keys(:all)
   end
 

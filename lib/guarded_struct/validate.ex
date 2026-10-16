@@ -18,7 +18,7 @@ defmodule GuardedStruct.Validate do
 
   import GuardedStruct.Messages, only: [translated_message: 2]
 
-  alias GuardedStruct.Derive
+  alias GuardedStruct.{Derive, Runtime}
   alias GuardedStruct.Derive.{Parser, OpEvaluator, ValidationDerive}
 
   @type error :: %{
@@ -79,7 +79,7 @@ defmodule GuardedStruct.Validate do
          ]}
 
       meta ->
-        do_field_validate(meta, value, opts, module)
+        Runtime.with_current_module(module, fn -> do_field_validate(meta, value, opts, module) end)
     end
   end
 
@@ -93,18 +93,20 @@ defmodule GuardedStruct.Validate do
   end
 
   def partial(module, attrs) do
-    attrs = Parser.convert_to_atom_map(attrs)
+    attrs = Runtime.atomize(module, attrs)
     fields = module.__fields__()
     present = Enum.filter(fields, &Map.has_key?(attrs, &1.name))
 
     {ok_acc, err_acc} =
-      Enum.reduce(present, {%{}, []}, fn meta, {ok, errs} ->
-        value = Map.get(attrs, meta.name)
+      Runtime.with_current_module(module, fn ->
+        Enum.reduce(present, {%{}, []}, fn meta, {ok, errs} ->
+          value = Map.get(attrs, meta.name)
 
-        case do_field_validate(meta, value, [context: attrs, mode: :strict], module) do
-          {:ok, validated} -> {Map.put(ok, meta.name, validated), errs}
-          {:error, e} -> {ok, errs ++ List.wrap(e)}
-        end
+          case do_field_validate(meta, value, [context: attrs, mode: :strict], module) do
+            {:ok, validated} -> {Map.put(ok, meta.name, validated), errs}
+            {:error, e} -> {ok, errs ++ List.wrap(e)}
+          end
+        end)
       end)
 
     if err_acc == [], do: {:ok, ok_acc}, else: {:error, err_acc}

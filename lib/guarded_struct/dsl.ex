@@ -117,7 +117,13 @@ defmodule GuardedStruct.Dsl do
       priority: [type: :boolean],
       error: [type: :boolean],
       authorized_fields: [type: :boolean],
-      main_validator: [type: {:tuple, [:atom, :atom]}]
+      main_validator: [
+        type: {:tuple, [:atom, :atom]},
+        doc:
+          "A `{Module, :function}` called with the sub_field's validated attributes, " <>
+            "like the section option. A `main_validator/1` defined in the parent module " <>
+            "does not run for a sub_field."
+      ]
     ],
     recursive_as: :sub_fields,
     entities: [
@@ -187,9 +193,29 @@ defmodule GuardedStruct.Dsl do
       module: [type: :quoted],
       error: [type: :boolean, default: false],
       authorized_fields: [type: :boolean, default: false],
-      main_validator: [type: {:tuple, [:atom, :atom]}],
-      validate_derive: [type: {:or, [:atom, {:list, :atom}]}],
-      sanitize_derive: [type: {:or, [:atom, {:list, :atom}]}],
+      main_validator: [
+        type: {:tuple, [:atom, :atom]},
+        doc:
+          "A `{Module, :function}` called with the attributes once every field has passed " <>
+            "its validator; it returns `{:ok, attrs}` or `{:error, errors}`. When it is not " <>
+            "set, a `main_validator/1` defined in the module is called instead."
+      ],
+      validate_derive: [
+        type: {:or, [:atom, {:list, :atom}]},
+        doc:
+          "A module, or a list of modules, whose `validate/3` serves the `validate(...)` ops " <>
+            "the built-in ones and the derive extensions do not know. They are tried before " <>
+            "the `:validate_derive` application config, which still serves the ops they do " <>
+            "not handle."
+      ],
+      sanitize_derive: [
+        type: {:or, [:atom, {:list, :atom}]},
+        doc:
+          "A module, or a list of modules, whose `sanitize/2` serves the `sanitize(...)` ops " <>
+            "the built-in ones and the derive extensions do not know. They are tried before " <>
+            "the `:sanitize_derive` application config, which still serves the ops they do " <>
+            "not handle."
+      ],
       json: [
         type: :boolean,
         default: false,

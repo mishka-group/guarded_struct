@@ -403,3 +403,108 @@ defmodule GuardedStructTest.AshResources.AtomicEligibleUser do
     attribute :status, :string, public?: true
   end
 end
+
+defmodule GuardedStructTest.AshResources.SectionChecks do
+  @moduledoc false
+
+  def verify(attrs) do
+    if Map.get(attrs, :name) == "blocked",
+      do: {:error, [%{field: :name, action: :main_validator, message: "name is blocked"}]},
+      else: {:ok, attrs}
+  end
+
+  def verify_profile(attrs) do
+    if Map.get(attrs, :nickname) == "blocked",
+      do:
+        {:error, [%{field: :nickname, action: :main_validator, message: "nickname is blocked"}]},
+      else: {:ok, attrs}
+  end
+
+  def validate(:ash_not_blocked, input, field) do
+    if input == "blocked",
+      do: {:error, field, :ash_not_blocked, "must not be blocked"},
+      else: input
+  end
+
+  def sanitize(input, :ash_shout) when is_binary(input), do: String.upcase(input)
+  def sanitize(input, :ash_shout), do: input
+end
+
+defmodule GuardedStructTest.AshResources.WithSectionRules do
+  @moduledoc false
+  use Ash.Resource,
+    domain: GuardedStructTest.Support.TestDomain,
+    data_layer: Ash.DataLayer.Ets,
+    extensions: [GuardedStruct.AshResource]
+
+  alias GuardedStructTest.AshResources.SectionChecks
+
+  ets do
+    private? true
+  end
+
+  guardedstruct do
+    auto_wire true
+    main_validator {SectionChecks, :verify}
+    validate_derive SectionChecks
+    sanitize_derive SectionChecks
+
+    field :name, :string, derives: "sanitize(ash_shout)"
+    field :slug, :string, derives: "validate(ash_not_blocked)"
+    field :score, :integer, derives: "sanitize(default_when_nil=0, clamp=[0, 100])"
+
+    sub_field :profile, :map,
+      main_validator: {SectionChecks, :verify_profile},
+      do: field(:nickname, :string)
+  end
+
+  actions do
+    defaults [:read, :destroy]
+    create :create, accept: [:name, :slug, :score, :profile]
+  end
+
+  attributes do
+    uuid_primary_key :id
+    attribute :name, :string, public?: true
+    attribute :slug, :string, public?: true
+    attribute :score, :integer, public?: true
+    attribute :profile, :map, public?: true
+  end
+end
+
+defmodule GuardedStructTest.AshResources.WithDomainRule do
+  @moduledoc false
+  use Ash.Resource,
+    domain: GuardedStructTest.Support.TestDomain,
+    data_layer: Ash.DataLayer.Ets,
+    extensions: [GuardedStruct.AshResource]
+
+  ets do
+    private? true
+  end
+
+  guardedstruct do
+    auto_wire true
+
+    field :status, :string, domain: "!auth_type=Atom[admin, moderator]"
+    field :note, :string, domain: "?auth_type=Atom[admin]"
+    field :auth_type, :atom
+
+    sub_field :settings, :map do
+      field :mode, :string, domain: "!auth_type=Atom[admin]"
+    end
+  end
+
+  actions do
+    defaults [:read, :destroy]
+    create :create, accept: [:status, :note, :auth_type, :settings]
+  end
+
+  attributes do
+    uuid_primary_key :id
+    attribute :status, :string, public?: true
+    attribute :note, :string, public?: true
+    attribute :auth_type, :atom, public?: true
+    attribute :settings, :map, public?: true
+  end
+end

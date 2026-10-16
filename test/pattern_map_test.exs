@@ -227,4 +227,100 @@ defmodule GuardedStructTest.PatternMapTest do
       assert Enum.any?(errs, &(&1[:key] == "lowercase-bad"))
     end
   end
+
+  describe "error shape of a pattern-keyed map" do
+    defmodule Checks do
+      def check(key, "bad"), do: {:error, key, "#{key} is bad"}
+      def check(_key, "shout"), do: {:ok, "SHOUT"}
+      def check(key, "short"), do: {:error, "#{key} is short"}
+      def check(key, value), do: {:ok, key, value}
+    end
+
+    defmodule WithValidator do
+      use GuardedStruct
+
+      guardedstruct do
+        field(~r/^k_\d+$/, String.t(), validator: {Checks, :check})
+      end
+    end
+
+    test "a validator error carries the key, the field, the action and the message" do
+      assert {:error, [error]} = WithValidator.builder(%{"k_1" => "bad"})
+
+      assert error == %{
+               field: :__map__,
+               key: "k_1",
+               action: :validator,
+               message: "k_1 is bad"
+             }
+    end
+
+    test "the {:error, message} return of a validator has the same shape" do
+      assert {:error, [error]} = WithValidator.builder(%{"k_2" => "short"})
+
+      assert error == %{
+               field: :__map__,
+               key: "k_2",
+               action: :validator,
+               message: "k_2 is short"
+             }
+    end
+
+    test "one error per failing key" do
+      assert {:error, errors} =
+               WithValidator.builder(%{"k_1" => "bad", "k_2" => "ok", "k_3" => "short"})
+
+      assert errors |> Enum.map(& &1.key) |> Enum.sort() == ["k_1", "k_3"]
+    end
+
+    test "a validator that passes the value on keeps it" do
+      assert {:ok, %{"k_1" => "ok", "k_2" => "SHOUT"}} =
+               WithValidator.builder(%{"k_1" => "ok", "k_2" => "shout"})
+    end
+
+    test "every error the module returns has a :field, an :action and a :message" do
+      {:error, errors} =
+        WithValidator.builder(%{"k_1" => "bad", "k_2" => "short", "nope" => "x"})
+
+      assert length(errors) == 3
+
+      for error <- errors do
+        assert %{field: field, action: action, message: message} = error
+        assert is_atom(field)
+        assert is_atom(action)
+        assert is_binary(message)
+      end
+    end
+
+    test "an unmatched key and a failing validator share the field" do
+      {:error, errors} = WithValidator.builder(%{"k_1" => "bad", "nope" => "x"})
+
+      assert [%{field: :__map__}, %{field: :__map__}] = errors
+      assert Enum.any?(errors, &match?(%{key: "nope", action: :key_pattern}, &1))
+      assert Enum.any?(errors, &match?(%{key: "k_1", action: :validator}, &1))
+    end
+
+    test "an error from a struct: value keeps its own field and gets the key" do
+      {:error, errors} = ShardsMap.builder(%{"shard_1" => %{node: "not-an-ip"}})
+
+      assert Enum.all?(errors, &match?(%{key: "shard_1", field: :node}, &1))
+    end
+
+    test "the whole-map derive error names the map as its field" do
+      assert {:error, [%{field: :__map__, action: :not_empty}]} = ShardsMap.builder(%{})
+    end
+
+    test "with error: true the exception carries the same list" do
+      defmodule Raising do
+        use GuardedStruct
+
+        guardedstruct error: true do
+          field(~r/^k_\d+$/, String.t(), validator: {Checks, :check})
+        end
+      end
+
+      error = assert_raise Raising.Error, fn -> Raising.builder(%{"k_1" => "bad"}, true) end
+      assert [%{field: :__map__, key: "k_1", action: :validator}] = error.errors
+    end
+  end
 end

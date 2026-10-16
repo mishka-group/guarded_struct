@@ -21,13 +21,17 @@ defmodule GuardedStruct.Derive.OpEvaluator do
   end
 
   defp rewrite({:enum, "Integer[" <> rest}) do
-    items = rest |> strip_close() |> split_to_list() |> Enum.map(&String.to_integer/1)
-    {:enum, items}
+    case parse_all(rest, &Integer.parse/1) do
+      {:ok, items} -> {:enum, items}
+      :error -> {:enum, "Integer[" <> rest}
+    end
   end
 
   defp rewrite({:enum, "Float[" <> rest}) do
-    items = rest |> strip_close() |> split_to_list() |> Enum.map(&String.to_float/1)
-    {:enum, items}
+    case parse_all(rest, &Float.parse/1) do
+      {:ok, items} -> {:enum, items}
+      :error -> {:enum, "Float[" <> rest}
+    end
   end
 
   defp rewrite({:enum, "Map[" <> rest}) do
@@ -106,6 +110,14 @@ defmodule GuardedStruct.Derive.OpEvaluator do
   end
 
   defp rewrite(other), do: other
+
+  defp parse_all(rest, parse) do
+    parsed = rest |> strip_close() |> split_to_list() |> Enum.map(parse)
+
+    if Enum.all?(parsed, &match?({_, ""}, &1)),
+      do: {:ok, Enum.map(parsed, &elem(&1, 0))},
+      else: :error
+  end
 
   defp strip_close(s) do
     case String.split(s, "]", parts: 2) do

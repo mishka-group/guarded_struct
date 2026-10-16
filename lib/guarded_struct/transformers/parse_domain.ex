@@ -9,6 +9,7 @@ defmodule GuardedStruct.Transformers.ParseDomain do
 
   @impl true
   def before?(GuardedStruct.Transformers.GenerateBuilder), do: true
+  def before?(GuardedStruct.Transformers.GenerateAshValidator), do: true
   def before?(GuardedStruct.Transformers.GenerateSubFieldModules), do: true
   def before?(_), do: false
 

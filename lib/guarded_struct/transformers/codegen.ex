@@ -20,6 +20,8 @@ defmodule GuardedStruct.Transformers.Codegen do
     the root user module down to this submodule (used in `__information__/0`).
   """
   def build_body(entities, block_enforce, opaque?, error?, path \\ [], options \\ %{}) do
+    options = declared_options(options)
+
     case classify_shape(entities) do
       :pattern_map ->
         build_pattern_map_body(entities, error?, path, options)
@@ -40,6 +42,14 @@ defmodule GuardedStruct.Transformers.Codegen do
               "via `struct:`.",
           path: [:guardedstruct]
     end
+  end
+
+  @doc """
+  Drop the section options that are not set, so `__information__/0` lists the options
+  the module declares and the ones that always have a value.
+  """
+  def declared_options(options) do
+    options |> Enum.reject(fn {_option, value} -> is_nil(value) end) |> Map.new()
   end
 
   defp classify_shape(entities) do

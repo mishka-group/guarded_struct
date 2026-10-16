@@ -20,7 +20,10 @@ defmodule GuardedStruct.Transformers.GenerateBuilder do
     section_options = %{
       authorized_fields:
         Transformer.get_option(dsl_state, [:guardedstruct], :authorized_fields, false),
-      json: Transformer.get_option(dsl_state, [:guardedstruct], :json, false)
+      json: Transformer.get_option(dsl_state, [:guardedstruct], :json, false),
+      main_validator: Transformer.get_option(dsl_state, [:guardedstruct], :main_validator),
+      validate_derive: Transformer.get_option(dsl_state, [:guardedstruct], :validate_derive),
+      sanitize_derive: Transformer.get_option(dsl_state, [:guardedstruct], :sanitize_derive)
     }
 
     body =

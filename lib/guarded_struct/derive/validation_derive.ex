@@ -11,10 +11,9 @@ defmodule GuardedStruct.Derive.ValidationDerive do
   # `US`/`419`, variant `1996`, etc.). Anchored + bounded — ReDoS-safe.
   @language_code_regex ~r/^[a-zA-Z]{2,3}(?:-[a-zA-Z0-9]{2,8})*$/
 
-  @cache_key {__MODULE__, :fallback_module}
-
   @spec call({atom(), any()}, list(any()), String.t()) :: {any(), any()}
   def call({_field, input}, nil, _hint), do: {input, []}
+  def call({_field, input}, [], _hint), do: {input, []}
 
   def call({field, input}, actions, hint) do
     validated = Enum.map(actions, &validate(&1, input, field))
@@ -534,6 +533,11 @@ defmodule GuardedStruct.Derive.ValidationDerive do
     |> vlidate_equal(input, field)
   end
 
+  # `OpEvaluator` strips the `String::` prefix, so a plain string is the value itself.
+  def validate({:equal, value}, input, field) when is_binary(value) do
+    vlidate_equal(value, input, field)
+  end
+
   def validate({:custom, {module, function}}, input, field)
       when is_atom(module) and is_atom(function) do
     executed = apply(module, function, [input])
@@ -875,33 +879,11 @@ defmodule GuardedStruct.Derive.ValidationDerive do
   end
 
   defp fallback_dispatch(action, input, field) do
-    case fallback_module() do
-      nil ->
-        {:error, field, :type, translated_message(:validate_unexpected, field)}
-
-      derive_module when is_list(derive_module) ->
-        custom_derive(derive_module, action, input, field)
-
-      derive_module ->
-        derive_module.validate(action, input, field)
+    case GuardedStruct.Derive.fallback_modules(:validate_derive) do
+      [] -> {:error, field, :type, translated_message(:validate_unexpected, field)}
+      derive_modules -> custom_derive(derive_modules, action, input, field)
     end
   end
-
-  defp fallback_module do
-    raw = Application.get_env(:guarded_struct, :validate_derive)
-
-    case :persistent_term.get(@cache_key, :__miss__) do
-      {^raw, cached} ->
-        cached
-
-      _ ->
-        :persistent_term.put(@cache_key, {raw, raw})
-        raw
-    end
-  end
-
-  @doc false
-  def clear_fallback_cache, do: :persistent_term.erase(@cache_key)
 
   if Code.ensure_loaded?(URL) do
     defp location(geo_link, field, action) do

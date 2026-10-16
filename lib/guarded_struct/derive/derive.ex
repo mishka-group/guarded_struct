@@ -1,7 +1,7 @@
 defmodule GuardedStruct.Derive do
   @moduledoc false
 
-  alias GuardedStruct.Derive.{SanitizerDerive, ValidationDerive}
+  alias GuardedStruct.Derive.{Extension, SanitizerDerive, ValidationDerive}
 
   @type derive_input :: %{
           required(:field) => atom(),
@@ -30,7 +30,14 @@ defmodule GuardedStruct.Derive do
     end
   end
 
-  defp update(nil, _ops, _hint, _input, acc), do: acc
+  # A nil value skips every op except `sanitize(default_when_nil=...)`, which
+  # replaces it; the rest of the pipeline then runs on that default.
+  defp update(nil, ops, hint, input, acc) do
+    case nil_default(ops) do
+      {:ok, default} -> update(default, ops, hint, input, acc)
+      :none -> acc
+    end
+  end
 
   defp update(field_value, ops, hints, input, acc)
        when is_list(ops) and ops != [] do
@@ -79,6 +86,16 @@ defmodule GuardedStruct.Derive do
     if errors == [], do: processed, else: {:error, errors}
   end
 
+  defp nil_default(ops) do
+    ops
+    |> List.wrap()
+    |> Enum.flat_map(&(&1 |> get_in_ops(:sanitize) |> List.wrap()))
+    |> Enum.find_value(:none, fn
+      {:default_when_nil, default} when not is_nil(default) -> {:ok, default}
+      _other -> nil
+    end)
+  end
+
   defp get_in_ops(nil, _key), do: nil
   defp get_in_ops(map, key) when is_map(map), do: Map.get(map, key)
   defp get_in_ops(_, _), do: nil
@@ -88,5 +105,25 @@ defmodule GuardedStruct.Derive do
     |> Map.values()
     |> Enum.filter(&match?({:error, _}, &1))
     |> Enum.flat_map(fn {:error, e} -> e end)
+  end
+
+  @doc """
+  The modules that serve the ops no built-in clause or derive extension handles:
+  the `validate_derive` / `sanitize_derive` section option of the module being
+  built first, then the application config of the same name.
+  """
+  @spec fallback_modules(:validate_derive | :sanitize_derive) :: [module()]
+  def fallback_modules(option) when option in [:validate_derive, :sanitize_derive] do
+    section_modules(Extension.current_module(), option) ++
+      List.wrap(Application.get_env(:guarded_struct, option))
+  end
+
+  defp section_modules(nil, _option), do: []
+
+  defp section_modules(module, option) do
+    module.__guarded_information__()
+    |> Map.get(:options, %{})
+    |> Map.get(option)
+    |> List.wrap()
   end
 end

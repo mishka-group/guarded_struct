@@ -205,4 +205,187 @@ defmodule GuardedStructTest.ParserStringFormTest do
                Parser.parser("validate(each=[string, max_len=20])")
     end
   end
+
+  # `equal=Type::value` reads as `(equal=Type)::value` to the Elixir parser, so
+  # the value is lifted into a string literal before the AST is built.
+  describe "equal=Type::value operands" do
+    test "Integer::value" do
+      assert %{validate: [{:equal, "Integer::1"}]} = Parser.parser("validate(equal=Integer::1)")
+    end
+
+    test "negative Integer::value" do
+      assert %{validate: [{:equal, "Integer::-1"}]} =
+               Parser.parser("validate(equal=Integer::-1)")
+    end
+
+    test "Float::value" do
+      assert %{validate: [{:equal, "Float::1.5"}]} = Parser.parser("validate(equal=Float::1.5)")
+    end
+
+    test "String::value keeps spaces inside the value" do
+      assert %{validate: [{:equal, "String::hello world"}]} =
+               Parser.parser("validate(equal=String::hello world)")
+    end
+
+    test "Atom::value" do
+      assert %{validate: [{:equal, "Atom::admin"}]} = Parser.parser("validate(equal=Atom::admin)")
+    end
+
+    test "Map::value keeps the commas inside the braces" do
+      assert %{validate: [{:equal, "Map::%{a: 1, b: 2}"}]} =
+               Parser.parser("validate(equal=Map::%{a: 1, b: 2})")
+    end
+
+    test "Tuple::value keeps the commas inside the braces" do
+      assert %{validate: [{:equal, "Tuple::{:a, 1}"}]} =
+               Parser.parser("validate(equal=Tuple::{:a, 1})")
+    end
+
+    test "the ops written after it are kept" do
+      assert %{validate: [:string, {:equal, "String::admin"}, {:max_len, 10}]} =
+               Parser.parser("validate(string, equal=String::admin, max_len=10)")
+    end
+
+    test "inside either=[...]" do
+      assert %{validate: [%{either: [{:equal, "Integer::1"}, :string]}]} =
+               Parser.parser("validate(either=[equal=Integer::1, string])")
+    end
+
+    test "inside each=[...]" do
+      assert %{validate: [%{each: [{:equal, "String::a"}, {:max_len, 3}]}]} =
+               Parser.parser("validate(each=[equal=String::a, max_len=3])")
+    end
+
+    test "whitespace around the equals sign is kept out of the value" do
+      assert %{validate: [{:equal, "Integer::1"}]} = Parser.parser("validate(equal = Integer::1)")
+    end
+
+    test "an untyped value keeps parsing as before" do
+      assert %{validate: [{:equal, "admin"}]} = Parser.parser("validate(equal=admin)")
+      assert %{validate: [{:equal, 3}]} = Parser.parser("validate(equal=3)")
+    end
+
+    test "another op that ends in `equal` is not rewritten" do
+      assert %{validate: [{:invalid_operand, _source}]} =
+               Parser.parser("validate(not_equal=Integer::1)")
+    end
+  end
+
+  describe "negative number operands" do
+    test "min_len=-2 parses to a negative integer" do
+      assert %{validate: [{:min_len, -2}]} = Parser.parser("validate(min_len=-2)")
+    end
+
+    test "clamp=[-10, 10]" do
+      assert %{sanitize: [{:clamp, [-10, 10]}]} = Parser.parser("sanitize(clamp=[-10, 10])")
+    end
+
+    test "clamp=[-2.5, -0.5]" do
+      assert %{sanitize: [{:clamp, [-2.5, -0.5]}]} = Parser.parser("sanitize(clamp=[-2.5, -0.5])")
+    end
+
+    test "default_when_empty=-1" do
+      assert %{sanitize: [{:default_when_empty, -1}]} =
+               Parser.parser("sanitize(default_when_empty=-1)")
+    end
+
+    test "default_when_nil=-1.5" do
+      assert %{sanitize: [{:default_when_nil, -1.5}]} =
+               Parser.parser("sanitize(default_when_nil=-1.5)")
+    end
+
+    test "inside each=[...]" do
+      assert %{validate: [%{each: [{:min_len, -1}]}]} =
+               Parser.parser("validate(each=[min_len=-1])")
+    end
+
+    test "equal=-3" do
+      assert %{validate: [{:equal, -3}]} = Parser.parser("validate(equal=-3)")
+    end
+  end
+
+  describe "float and literal operands" do
+    test "default_when_empty=1.5" do
+      assert %{sanitize: [{:default_when_empty, 1.5}]} =
+               Parser.parser("sanitize(default_when_empty=1.5)")
+    end
+
+    test "max_len=1.5 is kept for OpParamValidator to reject" do
+      assert %{validate: [{:max_len, 1.5}]} = Parser.parser("validate(max_len=1.5)")
+    end
+
+    test "default_when_nil=true and false" do
+      assert %{sanitize: [{:default_when_nil, true}]} =
+               Parser.parser("sanitize(default_when_nil=true)")
+
+      assert %{sanitize: [{:default_when_nil, false}]} =
+               Parser.parser("sanitize(default_when_nil=false)")
+    end
+
+    test "default_when_nil=:none keeps the atom" do
+      assert %{sanitize: [{:default_when_nil, :none}]} =
+               Parser.parser("sanitize(default_when_nil=:none)")
+    end
+
+    test "default_when_empty=%{} and a tuple literal" do
+      assert %{sanitize: [{:default_when_empty, %{}}]} =
+               Parser.parser("sanitize(default_when_empty=%{})")
+
+      assert %{sanitize: [{:default_when_empty, {:ok, 1}}]} =
+               Parser.parser("sanitize(default_when_empty={:ok, 1})")
+    end
+  end
+
+  describe "operands that cannot be parsed" do
+    test "a call is kept as {:invalid_operand, source}" do
+      assert %{validate: [{:invalid_operand, "max_len = foo()"}]} =
+               Parser.parser("validate(max_len=foo())")
+    end
+
+    test "a bare number is kept as {:invalid_operand, source}" do
+      assert %{validate: [:string, {:invalid_operand, "5"}]} =
+               Parser.parser("validate(string, 5)")
+    end
+
+    test "inside a list of ops" do
+      assert %{validate: [%{either: [:string, {:invalid_operand, _source}]}]} =
+               Parser.parser("validate(either=[string, max_len=foo()])")
+    end
+
+    test "custom= with an unexpected shape" do
+      assert %{validate: [{:invalid_operand, _source}]} = Parser.parser("validate(custom=[1, 2])")
+    end
+
+    test "the ops around it are still parsed" do
+      assert %{sanitize: [:trim, {:invalid_operand, _source}, :upcase]} =
+               Parser.parser("sanitize(trim, default_when_nil=foo(), upcase)")
+    end
+  end
+
+  describe "parse/1" do
+    test "nil and empty input have no ops" do
+      assert {:ok, nil} = Parser.parse(nil)
+      assert {:ok, nil} = Parser.parse("")
+    end
+
+    test "returns the ops of a valid string" do
+      assert {:ok, %{sanitize: [:trim], validate: [:string, {:max_len, 3}]}} =
+               Parser.parse("sanitize(trim) validate(string, max_len=3)")
+    end
+
+    test "a string the Elixir parser refuses is an error with the reason" do
+      assert {:error, reason} = Parser.parse("validate(string,,)")
+      assert is_binary(reason)
+      assert reason != ""
+    end
+
+    test "enum=Atom[a, b] (comma instead of ::) is an error" do
+      assert {:error, reason} = Parser.parse("validate(enum=Atom[admin, user])")
+      refute reason =~ "\n"
+    end
+
+    test "parser/1 turns the same error into nil" do
+      assert Parser.parser("validate(string,,)") == nil
+    end
+  end
 end

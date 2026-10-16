@@ -5,7 +5,7 @@ defmodule GuardedStruct.Transformers.ParseDerive do
 
   alias Spark.Dsl.Transformer
   alias GuardedStruct.Dsl.{Field, SubField, ConditionalField, VirtualField}
-  alias GuardedStruct.Derive.{Parser, OpEvaluator, OpParamValidator}
+  alias GuardedStruct.Derive.{Extension, Parser, OpEvaluator, OpParamValidator}
 
   @impl true
   def before?(GuardedStruct.Transformers.GenerateBuilder), do: true
@@ -16,10 +16,11 @@ defmodule GuardedStruct.Transformers.ParseDerive do
   def transform(dsl_state) do
     module = Transformer.get_persisted(dsl_state, :module)
     entities = Transformer.get_entities(dsl_state, [:guardedstruct])
+    ctx = %{module: module, op_opts: op_opts(dsl_state, module)}
 
     {new_entities, warnings} =
       Enum.map_reduce(entities, [], fn entity, acc ->
-        {parsed, w} = parse_entity(entity, module)
+        {parsed, w} = parse_entity(entity, ctx)
         {parsed, w ++ acc}
       end)
 
@@ -37,40 +38,40 @@ defmodule GuardedStruct.Transformers.ParseDerive do
     end
   end
 
-  defp parse_entity(%Field{} = f, module) do
-    {derive, warnings} = resolve(f, module)
+  defp parse_entity(%Field{} = f, ctx) do
+    {derive, warnings} = resolve(f, ctx)
 
     parsed = %{
       f
       | name: escapable_name(f.name),
         default: literal_default(f.default),
-        __derive_ops__: parse_or_raise(derive, f.name, module)
+        __derive_ops__: parse_or_raise(derive, f.name, ctx)
     }
 
     {parsed, warnings}
   end
 
-  defp parse_entity(%VirtualField{} = vf, module) do
-    {derive, warnings} = resolve(vf, module)
+  defp parse_entity(%VirtualField{} = vf, ctx) do
+    {derive, warnings} = resolve(vf, ctx)
 
     parsed = %{
       vf
       | default: literal_default(vf.default),
-        __derive_ops__: parse_or_raise(derive, vf.name, module)
+        __derive_ops__: parse_or_raise(derive, vf.name, ctx)
     }
 
     {parsed, warnings}
   end
 
-  defp parse_entity(%SubField{} = sf, module) do
-    {derive, warnings} = resolve(sf, module)
-    {fields, w1} = walk_children(sf.fields, module)
-    {sub_fields, w2} = walk_children(sf.sub_fields, module)
-    {conditional_fields, w3} = walk_children(sf.conditional_fields, module)
+  defp parse_entity(%SubField{} = sf, ctx) do
+    {derive, warnings} = resolve(sf, ctx)
+    {fields, w1} = walk_children(sf.fields, ctx)
+    {sub_fields, w2} = walk_children(sf.sub_fields, ctx)
+    {conditional_fields, w3} = walk_children(sf.conditional_fields, ctx)
 
     parsed = %{
       sf
-      | __derive_ops__: parse_or_raise(derive, sf.name, module),
+      | __derive_ops__: parse_or_raise(derive, sf.name, ctx),
         default: literal_default(sf.default),
         fields: fields,
         sub_fields: sub_fields,
@@ -80,15 +81,15 @@ defmodule GuardedStruct.Transformers.ParseDerive do
     {parsed, warnings ++ w1 ++ w2 ++ w3}
   end
 
-  defp parse_entity(%ConditionalField{} = cf, module) do
-    {derive, warnings} = resolve(cf, module)
-    {fields, w1} = walk_children(cf.fields, module)
-    {sub_fields, w2} = walk_children(cf.sub_fields, module)
-    {conditional_fields, w3} = walk_children(cf.conditional_fields, module)
+  defp parse_entity(%ConditionalField{} = cf, ctx) do
+    {derive, warnings} = resolve(cf, ctx)
+    {fields, w1} = walk_children(cf.fields, ctx)
+    {sub_fields, w2} = walk_children(cf.sub_fields, ctx)
+    {conditional_fields, w3} = walk_children(cf.conditional_fields, ctx)
 
     parsed = %{
       cf
-      | __derive_ops__: parse_or_raise(derive, cf.name, module),
+      | __derive_ops__: parse_or_raise(derive, cf.name, ctx),
         default: literal_default(cf.default),
         fields: fields,
         sub_fields: sub_fields,
@@ -121,47 +122,88 @@ defmodule GuardedStruct.Transformers.ParseDerive do
   defp name_key(%Regex{source: source}), do: {:regex_pattern, source}
   defp name_key(other), do: other
 
-  defp walk_children(entities, module) do
+  defp walk_children(entities, ctx) do
     Enum.map_reduce(entities, [], fn entity, acc ->
-      {parsed, w} = parse_entity(entity, module)
+      {parsed, w} = parse_entity(entity, ctx)
       {parsed, w ++ acc}
     end)
   end
 
   # Prefer `derives:` (canonical). Fall back to legacy `derive:` and surface a
   # soft-deprecation warning via the transformer's `{:warn, ...}` return.
-  defp resolve(%{derives: derives}, _module) when is_binary(derives) and derives != "",
+  defp resolve(%{derives: derives}, _ctx) when is_binary(derives) and derives != "",
     do: {derives, []}
 
-  defp resolve(%{derive: derive, name: name} = _entity, module)
+  defp resolve(%{derive: derive, name: name} = _entity, ctx)
        when is_binary(derive) and derive != "" do
     warning =
-      "`derive:` option on field #{inspect(name)} of #{inspect(module)} is deprecated. " <>
+      "`derive:` option on field #{inspect(name)} of #{inspect(ctx.module)} is deprecated. " <>
         "Use `derives:` instead. `derive:` will be removed in a future release."
 
     {derive, [warning]}
   end
 
-  defp resolve(_entity, _module), do: {nil, []}
+  defp resolve(_entity, _ctx), do: {nil, []}
 
-  defp parse_or_raise(nil, _field_name, _module), do: nil
-  defp parse_or_raise("", _field_name, _module), do: nil
+  defp parse_or_raise(nil, _field_name, _ctx), do: nil
+  defp parse_or_raise("", _field_name, _ctx), do: nil
 
-  defp parse_or_raise(str, field_name, module) when is_binary(str) do
-    str
-    |> Parser.parser()
-    |> OpEvaluator.preevaluate()
-    |> OpParamValidator.validate!(field_name, module)
-    |> stringify_regexes()
+  defp parse_or_raise(str, field_name, ctx) when is_binary(str) do
+    case Parser.parse(str) do
+      {:ok, ops} ->
+        ops
+        |> OpParamValidator.validate!(field_name, ctx.module, ctx.op_opts)
+        |> OpEvaluator.preevaluate()
+        |> stringify_regexes()
+
+      {:error, reason} ->
+        raise Spark.Error.DslError,
+          message:
+            "could not parse the derives string #{inspect(str)} on field " <>
+              "#{inspect(field_name)}: #{reason}. Write ops as `op`, `op=value`, " <>
+              "`op=[...]`, `enum=Type[a::b]` or `equal=Type::value`.",
+          path: [:guardedstruct, :field, field_name, :derives],
+          module: ctx.module
+    end
   end
 
-  defp parse_or_raise(other, field_name, module) do
+  defp parse_or_raise(other, field_name, ctx) do
     raise Spark.Error.DslError,
       message:
         "invalid derives on field #{inspect(field_name)}: expected a string, got #{inspect(other)}",
       path: [:guardedstruct, :field, field_name, :derives],
-      module: module
+      module: ctx.module
   end
+
+  # The ops `each=` / `optional=` accept besides the built-in ones: the derive
+  # extensions the module resolves to, or anything when a `validate_derive` /
+  # `sanitize_derive` module is configured. Resolved only if an inner op is not built in.
+  defp op_opts(dsl_state, module) do
+    [
+      extra_validate: fn -> extra_ops(dsl_state, module, :validate_derive, :__validators__) end,
+      extra_sanitize: fn -> extra_ops(dsl_state, module, :sanitize_derive, :__sanitizers__) end
+    ]
+  end
+
+  defp extra_ops(dsl_state, module, fallback_option, extension_listing) do
+    if fallback_modules?(dsl_state, fallback_option) do
+      :any
+    else
+      module
+      |> derive_extensions_opt()
+      |> Extension.resolve_opt()
+      |> Enum.flat_map(&apply(&1, extension_listing, []))
+    end
+  end
+
+  defp fallback_modules?(dsl_state, option) do
+    declared = Transformer.get_option(dsl_state, [:guardedstruct], option)
+    configured = Application.get_env(:guarded_struct, option)
+    declared not in [nil, []] or configured not in [nil, []]
+  end
+
+  defp derive_extensions_opt(module),
+    do: Module.get_attribute(module, :__guarded_derive_extensions_opt__, nil)
 
   # Store regex source, not a compiled `%Regex{}`: Spark escapes derive ops to
   # persist them, and a compiled regex can't be escaped before Elixir 1.19

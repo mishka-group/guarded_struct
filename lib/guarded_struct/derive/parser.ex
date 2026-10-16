@@ -1,10 +1,14 @@
 defmodule GuardedStruct.Derive.Parser do
   @moduledoc false
 
+  @typed_equal_prefixes ["String::", "Integer::", "Float::", "Atom::", "Map::", "Tuple::"]
+
   @doc """
   Parse a derive string into `%{sanitize: [...], validate: [...]}`.
 
   Returns `nil` for `nil`/empty input or for strings the AST parser refuses.
+  An operand that is not understood is kept in its list as
+  `{:invalid_operand, source}` so `OpParamValidator` can reject it at compile time.
   """
   @spec parser(nil | String.t() | [String.t()]) :: nil | map() | [map()]
   def parser(nil), do: nil
@@ -13,23 +17,43 @@ defmodule GuardedStruct.Derive.Parser do
   def parser(inputs) when is_list(inputs), do: Enum.map(inputs, &parser/1)
 
   def parser(input) when is_binary(input) do
-    with {:ok, ast} <- to_block_ast(input) do
-      ast
-      |> normalize_block()
-      |> Enum.reduce(%{}, &collect_call/2)
-      |> nilify_empty()
-    else
-      _ -> nil
+    case parse(input) do
+      {:ok, ops} -> ops
+      {:error, _reason} -> nil
+    end
+  end
+
+  @doc """
+  Like `parser/1`, but a string the AST parser refuses is reported as
+  `{:error, reason}` instead of `nil`.
+  """
+  @spec parse(nil | String.t()) :: {:ok, nil | map()} | {:error, String.t()}
+  def parse(nil), do: {:ok, nil}
+  def parse(""), do: {:ok, nil}
+
+  def parse(input) when is_binary(input) do
+    case to_block_ast(input) do
+      {:ok, ast} ->
+        ops =
+          ast
+          |> normalize_block()
+          |> Enum.reduce(%{}, &collect_call/2)
+          |> nilify_empty()
+
+        {:ok, ops}
+
+      {:error, error} ->
+        {:error, syntax_error_message(error)}
     end
   rescue
-    _ -> nil
+    exception -> {:error, Exception.message(exception)}
   end
 
   defp to_block_ast(input) do
     wrapped =
       input
       |> String.trim()
-      |> quote_regex_values()
+      |> quote_operand_values()
       |> balance_parens()
       |> String.replace(~r/\)\s+/u, ")\n")
       |> then(&"(\n#{&1}\n)")
@@ -37,31 +61,67 @@ defmodule GuardedStruct.Derive.Parser do
     Code.string_to_quoted(wrapped, emit_warnings: false)
   end
 
-  defp quote_regex_values(input), do: rewrite_regex(input, "")
+  defp syntax_error_message({_meta, {prefix, suffix}, token}),
+    do: first_line("#{prefix}#{token}#{suffix}")
 
-  defp rewrite_regex("", acc), do: acc
+  defp syntax_error_message({_meta, message, token}) when is_binary(message),
+    do: first_line("#{message}#{token}")
 
-  defp rewrite_regex(<<"regex", rest::binary>>, acc) do
+  defp syntax_error_message(other), do: inspect(other)
+
+  defp first_line(message), do: message |> String.split("\n", parts: 2) |> hd()
+
+  defp quote_operand_values(input), do: rewrite_operands(input, "")
+
+  defp rewrite_operands("", acc), do: acc
+
+  defp rewrite_operands(<<"regex", rest::binary>>, acc) do
     {ws, after_ws} = take_ws(rest)
 
     case after_ws do
       <<?=, after_eq::binary>> ->
         case after_eq do
           <<q, _::binary>> when q in [?", ?'] ->
-            rewrite_regex(after_eq, acc <> "regex" <> ws <> "=")
+            rewrite_operands(after_eq, acc <> "regex" <> ws <> "=")
 
           _ ->
             {pattern, remaining} = read_unquoted(after_eq, 0, "")
             cleaned = pattern |> String.trim_trailing() |> escape_for_string_literal()
-            rewrite_regex(remaining, acc <> "regex" <> ws <> ~s(=") <> cleaned <> ~s("))
+            rewrite_operands(remaining, acc <> "regex" <> ws <> ~s(=") <> cleaned <> ~s("))
         end
 
       _ ->
-        rewrite_regex(rest, acc <> "regex")
+        rewrite_operands(rest, acc <> "regex")
     end
   end
 
-  defp rewrite_regex(<<c, rest::binary>>, acc), do: rewrite_regex(rest, <<acc::binary, c>>)
+  # `equal=Type::value` reads as `(equal=Type)::value` to the Elixir parser, so
+  # the operand is wrapped in a string literal the same way a regex is.
+  defp rewrite_operands(<<"equal", rest::binary>>, acc) do
+    {ws, after_ws} = take_ws(rest)
+
+    with <<?=, after_eq::binary>> <- after_ws,
+         {ws_eq, operand} = take_ws(after_eq),
+         true <- op_boundary?(acc) and typed_equal_operand?(operand) do
+      {value, remaining} = read_unquoted(operand, 0, "")
+      cleaned = value |> String.trim_trailing() |> escape_for_string_literal()
+      quoted = "equal" <> ws <> "=" <> ws_eq <> ~s(") <> cleaned <> ~s(")
+      rewrite_operands(remaining, acc <> quoted)
+    else
+      _ -> rewrite_operands(rest, acc <> "equal")
+    end
+  end
+
+  defp rewrite_operands(<<c, rest::binary>>, acc), do: rewrite_operands(rest, <<acc::binary, c>>)
+
+  defp typed_equal_operand?(operand),
+    do: Enum.any?(@typed_equal_prefixes, &String.starts_with?(operand, &1))
+
+  defp op_boundary?(""), do: true
+  defp op_boundary?(acc), do: not identifier_char?(:binary.last(acc))
+
+  defp identifier_char?(char),
+    do: char in ?a..?z or char in ?A..?Z or char in ?0..?9 or char == ?_
 
   defp take_ws(input), do: take_ws(input, "")
 
@@ -140,21 +200,29 @@ defmodule GuardedStruct.Derive.Parser do
 
   defp collect_call({op, _meta, args}, acc)
        when op in [:sanitize, :validate] and is_list(args) do
-    parsed = args |> Enum.map(&parse_arg/1) |> Enum.reject(&is_nil/1)
+    parsed = Enum.map(args, &(&1 |> fold_negative_numbers() |> parse_arg()))
     Map.update(acc, op, parsed, &(&1 ++ parsed))
   end
 
   defp collect_call(_other, acc), do: acc
 
+  # `-10` reaches the AST as a unary minus call on `10`, not as a literal.
+  defp fold_negative_numbers(ast) do
+    Macro.prewalk(ast, fn
+      {:-, _meta, [number]} when is_number(number) -> -number
+      other -> other
+    end)
+  end
+
   defp parse_arg({atom, _meta, nil}) when is_atom(atom), do: atom
 
-  defp parse_arg({:=, _, [{:custom, _, nil}, value]}) when is_list(value) do
+  defp parse_arg({:=, _, [{:custom, _, nil}, value]} = ast) when is_list(value) do
     case value do
       [{:__aliases__, _, mods}, {fun, _, nil}] when is_atom(fun) ->
         {:custom, {mods, fun}}
 
       _ ->
-        nil
+        invalid_operand(ast)
     end
   end
 
@@ -168,7 +236,7 @@ defmodule GuardedStruct.Derive.Parser do
   end
 
   defp parse_arg({:=, _, [{key, _, nil}, value]})
-       when is_atom(key) and is_integer(value),
+       when is_atom(key) and is_number(value),
        do: {key, value}
 
   defp parse_arg({:=, _, [{key, _, nil}, nil]}) when is_atom(key),
@@ -187,8 +255,7 @@ defmodule GuardedStruct.Derive.Parser do
   defp parse_arg({:=, _, [{key, _, nil}, value]})
        when is_atom(key) and is_list(value) do
     if Enum.any?(value, &is_tuple/1) do
-      inner = value |> Enum.map(&parse_arg/1) |> Enum.reject(&is_nil/1)
-      if inner == [], do: nil, else: %{key => inner}
+      %{key => Enum.map(value, &parse_arg/1)}
     else
       {key, value}
     end
@@ -199,7 +266,18 @@ defmodule GuardedStruct.Derive.Parser do
     {key, ast_to_string(value)}
   end
 
-  defp parse_arg(_other), do: nil
+  defp parse_arg({:=, _, [{key, _, nil}, value]} = ast) when is_atom(key) do
+    if Macro.quoted_literal?(value) do
+      {literal, _binding} = Code.eval_quoted(value)
+      {key, literal}
+    else
+      invalid_operand(ast)
+    end
+  end
+
+  defp parse_arg(other), do: invalid_operand(other)
+
+  defp invalid_operand(ast), do: {:invalid_operand, ast_to_string(ast)}
 
   defp precompile_regex(source) do
     case Regex.compile(source) do
@@ -229,6 +307,14 @@ defmodule GuardedStruct.Derive.Parser do
        to mark `dynamic_field` values, so their free-form inner shapes
        round-trip exactly as the user submitted them.
 
+  `nested` is a function that receives the converted key of a nested value
+  and returns that value's conversion spec — `%{passthrough: [atom()], nested:
+  function}` — or `nil` for the plain deep conversion. The runtime uses it so a
+  `dynamic_field` inside a `sub_field` keeps its keys too.
+
+  Structs are never converted: a `%Time{}` or `%URI{}` nested in the input
+  reaches the validators as the struct it was.
+
   See the "Atom-attack safety" section of the `GuardedStruct` module
   `@moduledoc` for the threat model and the recommended pattern when
   consuming user-supplied data into a `dynamic_field`.
@@ -236,32 +322,46 @@ defmodule GuardedStruct.Derive.Parser do
   @spec convert_to_atom_map(
           {:ok, map()} | {:error, any(), any()} | map(),
           [atom()],
-          map() | nil
+          map() | nil,
+          (atom() -> map() | nil) | nil
         ) :: {:error, any(), any()} | map()
-  def convert_to_atom_map(map_or_result, passthrough_keys \\ [], atom_lookup \\ nil)
+  def convert_to_atom_map(
+        map_or_result,
+        passthrough_keys \\ [],
+        atom_lookup \\ nil,
+        nested \\ nil
+      )
 
-  def convert_to_atom_map({:error, _, _} = error, _, _), do: error
+  def convert_to_atom_map({:error, _, _} = error, _, _, _), do: error
 
-  def convert_to_atom_map({:ok, map}, pt, lookup) when is_map(map),
-    do: convert_to_atom_map(map, pt, lookup)
+  def convert_to_atom_map({:ok, map}, pt, lookup, nested) when is_map(map),
+    do: convert_to_atom_map(map, pt, lookup, nested)
 
-  def convert_to_atom_map(map, pt, lookup) when is_struct(map) do
-    do_convert(Map.from_struct(map), pt, lookup)
+  def convert_to_atom_map(map, pt, lookup, nested) when is_struct(map) do
+    do_convert(Map.from_struct(map), pt, lookup, nested)
   end
 
-  def convert_to_atom_map(map, pt, lookup) when is_map(map) do
-    do_convert(map, pt, lookup)
+  def convert_to_atom_map(map, pt, lookup, nested) when is_map(map) do
+    do_convert(map, pt, lookup, nested)
   end
 
-  defp do_convert(map, passthrough_keys, atom_lookup) do
+  defp do_convert(map, passthrough_keys, atom_lookup, nested) do
     passthrough = MapSet.new(passthrough_keys)
 
     for {k, v} <- map, into: %{} do
       atom_key = convert_key(k, atom_lookup)
-      new_value = if MapSet.member?(passthrough, atom_key), do: v, else: convert_value(v)
+
+      new_value =
+        if MapSet.member?(passthrough, atom_key),
+          do: v,
+          else: convert_value(v, nested_spec(nested, atom_key))
+
       {atom_key, new_value}
     end
   end
+
+  defp nested_spec(nil, _key), do: nil
+  defp nested_spec(nested, key), do: nested.(key)
 
   defp convert_key(key, lookup) when is_binary(key) and is_map(lookup) do
     case Map.fetch(lookup, key) do
@@ -279,11 +379,15 @@ defmodule GuardedStruct.Derive.Parser do
     ArgumentError -> key
   end
 
-  defp convert_value(%{__struct__: s} = m) when s in [NaiveDateTime, DateTime, Date], do: m
-  defp convert_value(%{} = m), do: convert_to_atom_map(m)
-  defp convert_value([]), do: []
-  defp convert_value(list) when is_list(list), do: Enum.map(list, &convert_value/1)
-  defp convert_value(value), do: value
+  defp convert_value(%{__struct__: _} = struct, _spec), do: struct
+  defp convert_value(%{} = map, nil), do: convert_to_atom_map(map)
+
+  defp convert_value(%{} = map, %{passthrough: passthrough, nested: nested}),
+    do: do_convert(map, passthrough, nil, nested)
+
+  defp convert_value([], _spec), do: []
+  defp convert_value(list, spec) when is_list(list), do: Enum.map(list, &convert_value(&1, spec))
+  defp convert_value(value, _spec), do: value
 
   @spec parse_core_keys_pattern(binary()) :: [atom()]
   def parse_core_keys_pattern(pattern) do
