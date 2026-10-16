@@ -3,7 +3,7 @@ defmodule GuardedStructTest.AshResourceChangeTest do
 
   @moduletag capture_log: true
 
-  alias GuardedStructTest.AshResources.{Manual, AutoWired, AutoWireOff}
+  alias GuardedStructTest.AshResources.{Manual, AutoWired, AutoWireOff, AutoWiredForm}
 
   describe "Change.change/3 — happy path" do
     test "valid input → changeset.attributes contain sanitized values" do
@@ -77,6 +77,39 @@ defmodule GuardedStructTest.AshResourceChangeTest do
         |> Ash.create()
 
       assert user.email == "bob@y.com"
+    end
+  end
+
+  describe "AutoWireAshChange — guardedstruct auto_wire: true do" do
+    test "the section option is set and the change is injected" do
+      assert GuardedStruct.AshResource.Info.guardedstruct_auto_wire!(AutoWiredForm) == true
+
+      assert Enum.any?(Ash.Resource.Info.changes(AutoWiredForm), fn c ->
+               c.change == {GuardedStruct.AshResource.Change, []}
+             end)
+    end
+
+    test "sanitizes end-to-end, including a sub_field written with options and a do block" do
+      {:ok, record} =
+        AutoWiredForm
+        |> Ash.Changeset.for_create(:create, %{
+          email: "  Bob@Y.COM  ",
+          profile: %{nickname: "  bob "}
+        })
+        |> Ash.create()
+
+      assert record.email == "bob@y.com"
+      assert record.profile == %{nickname: "bob"}
+    end
+
+    test "the sub_field's authorized_fields rejects an unknown key" do
+      assert {:error, _} =
+               AutoWiredForm
+               |> Ash.Changeset.for_create(:create, %{
+                 email: "bob@y.com",
+                 profile: %{nickname: "bob", extra: 1}
+               })
+               |> Ash.create()
     end
   end
 

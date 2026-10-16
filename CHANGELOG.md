@@ -15,6 +15,7 @@
 - Fix `builder/1` turning every struct other than `Date`, `DateTime` and `NaiveDateTime` into a plain map, which made `validate(time_struct)` / `validate(struct)` fail for `%Time{}` / `%URI{}`. Structs are kept intact
 - Fix extension ops inside `each=[...]` / `optional=[...]` being a compile error (`unknown validate op`) while `either=[...]` accepted them. Ops of the module's `derive_extensions:`, of the global config and (when a `validate_derive` / `sanitize_derive` is set) of those modules are accepted
 - Fix `domain:` rules not being evaluated inside a `GuardedStruct.AshResource` resource — the extension now runs `ParseDomain` (and `ParseCoreKeys`) like the standalone DSL
+- Fix the Ash extension not accepting `guardedstruct opts do … end`, `sub_field name, type, opts do … end` and `conditional_field name, type, opts do … end` — `undefined function sub_field/4` — although the docs show them and `use GuardedStruct` takes them. They work in a resource now; the `@derives` decorator stays standalone-only
 - Fix `dynamic_field` inside a `sub_field` not being identity-preserved: the parent converted its keys (`"role"` came back as `:role`). Keys stay as given in a `sub_field` of any depth, a list `sub_field`, a `struct:` module and a `conditional_field`'s `sub_field`; `Validate.partial/2` keeps them too
 - Fix `GuardedStruct.Info.fields/1` raising `KeyError` on a pattern-keyed (regex) module — it lists the patterns. `field_kind/2` returns `:pattern_field` for a key a pattern matches, and `field/2` / `field?/2` follow the patterns
 - Fix `enforce_keys(:all)` listing every key of a `sub_field` instead of only the enforced ones
@@ -37,7 +38,7 @@
 
 ### Tests:
 
-- Add the tests for each of the fixes above: `derive_operands_test.exs`, `derive_section_options_test.exs` and new cases in the parser, op-param, registry, derive, extension, validator, Ash, dynamic, Info and pattern-map suites, and `core_keys_test.exs` for `from`, `on` and `domain`
+- Add the tests for each of the fixes above: `derive_operands_test.exs`, `derive_section_options_test.exs` and new cases in the parser, op-param, registry, derive, extension, validator, Ash, dynamic, Info and pattern-map suites, `core_keys_test.exs` for `from`, `on` and `domain`, and the option forms of the Ash extension in `ash_resource_test.exs` and `ash_resource_change_test.exs`
 
 ### Dependencies:
 

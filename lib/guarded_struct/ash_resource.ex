@@ -14,7 +14,8 @@ defmodule GuardedStruct.AshResource do
           attribute :email, :string, allow_nil?: false, public?: true
         end
 
-        # GuardedStruct DSL — identical syntax to standalone `use GuardedStruct`.
+        # GuardedStruct DSL — the syntax of standalone `use GuardedStruct`, without
+        # the `@derives` decorator (write `derives:` on the field).
         guardedstruct do
           field :email, :string,
             derives: "sanitize(trim, downcase) validate(string, not_empty, email_r)"
@@ -138,6 +139,7 @@ defmodule GuardedStruct.AshResource do
   """
 
   use Spark.Dsl.Extension,
+    imports: [GuardedStruct.AshResource.Macros],
     sections: GuardedStruct.Dsl.sections(),
     transformers: [
       GuardedStruct.Transformers.ParseDerive,

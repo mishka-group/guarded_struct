@@ -71,6 +71,37 @@ defmodule GuardedStructTest.AshResources.AutoWired do
   end
 end
 
+defmodule GuardedStructTest.AshResources.AutoWiredForm do
+  @moduledoc false
+  use Ash.Resource,
+    domain: GuardedStructTest.Support.TestDomain,
+    data_layer: Ash.DataLayer.Ets,
+    extensions: [GuardedStruct.AshResource]
+
+  ets do
+    private? true
+  end
+
+  guardedstruct auto_wire: true do
+    field :email, :string, enforce: true, derives: "sanitize(trim, downcase) validate(email_r)"
+
+    sub_field :profile, :map, authorized_fields: true do
+      field :nickname, :string, derives: "sanitize(trim)"
+    end
+  end
+
+  actions do
+    defaults [:read, :destroy]
+    create :create, accept: [:email, :profile]
+  end
+
+  attributes do
+    uuid_primary_key :id
+    attribute :email, :string, allow_nil?: false, public?: true
+    attribute :profile, :map, public?: true
+  end
+end
+
 defmodule GuardedStructTest.AshResources.AutoWireOff do
   @moduledoc false
   use Ash.Resource,

@@ -17,10 +17,6 @@ defmodule GuardedStructTest.AshResourceTest do
     # — same wiring as `use FakeFramework, ...` here.
     use FakeFramework
 
-    # Note: Ash users don't get our arity-2 `guardedstruct opts do … end`
-    # wrapper (that's auto-imported only by `use GuardedStruct`). Set options
-    # via the Spark-generated inline setters at the top of the block — this
-    # is idiomatic Spark.
     guardedstruct do
       field(:email, :string,
         enforce: true,
@@ -75,6 +71,27 @@ defmodule GuardedStructTest.AshResourceTest do
 
       field(:name, :string, derives: "sanitize(fake_op) validate(fake_op)")
       field(:score, :integer, derives: "sanitize(default_when_nil=0, clamp=[0, 100])")
+    end
+  end
+
+  defmodule FakeAshWithForms do
+    use FakeFramework
+
+    guardedstruct main_validator: {FakeChecks, :verify}, authorized_fields: true do
+      field(:name, :string, derives: "sanitize(trim)")
+
+      sub_field(:profile, :map, authorized_fields: true, main_validator: {FakeChecks, :verify}) do
+        field(:name, :string, derives: "sanitize(trim)")
+
+        sub_field(:address, :map, structs: true) do
+          field(:city, :string, derives: "sanitize(trim, downcase)")
+        end
+      end
+
+      conditional_field(:contact, :any, priority: true) do
+        field(:contact, :string, derives: "validate(string, email_r)", hint: "email")
+        field(:contact, :integer, derives: "validate(integer)", hint: "phone")
+      end
     end
   end
 
@@ -280,6 +297,48 @@ defmodule GuardedStructTest.AshResourceTest do
     test "the process is left as it was found" do
       FakeAshWithOptions.__guarded_change__(%{name: "fine"})
       assert GuardedStruct.Derive.Extension.current_module() == nil
+    end
+  end
+
+  describe "options and a do block" do
+    test "guardedstruct opts do sets the section options" do
+      options = FakeAshWithForms.__guarded_information__().options
+
+      assert %{main_validator: {FakeChecks, :verify}, authorized_fields: true} = options
+    end
+
+    test "the section's authorized_fields and main_validator apply" do
+      assert {:error, [%{field: :name, action: :main_validator}]} =
+               FakeAshWithForms.__guarded_change__(%{name: "blocked"})
+
+      assert {:error, [%{field: :other, action: :authorized_fields}]} =
+               FakeAshWithForms.__guarded_change__(%{name: "ok", other: 1})
+    end
+
+    test "sub_field name, type, opts do keeps the options and nests" do
+      assert {:ok, %{profile: %{name: "mishka", address: [%{city: "tehran"}, %{city: "rasht"}]}}} =
+               FakeAshWithForms.__guarded_change__(%{
+                 profile: %{
+                   name: "  mishka ",
+                   address: [%{city: " Tehran "}, %{city: "RASHT"}]
+                 }
+               })
+
+      assert {:error, [%{field: :profile}]} =
+               FakeAshWithForms.__guarded_change__(%{profile: %{name: "ok", extra: 1}})
+
+      assert {:error, [%{field: :profile}]} =
+               FakeAshWithForms.__guarded_change__(%{profile: %{name: "blocked"}})
+    end
+
+    test "conditional_field name, type, opts do keeps the options and its children" do
+      assert {:ok, %{contact: "a@mishka.group"}} =
+               FakeAshWithForms.__guarded_change__(%{contact: "a@mishka.group"})
+
+      assert {:ok, %{contact: 98}} = FakeAshWithForms.__guarded_change__(%{contact: 98})
+
+      assert {:error, [%{field: :contact, action: :conditionals, errors: [%{__hint__: "email"}]}]} =
+               FakeAshWithForms.__guarded_change__(%{contact: %{}})
     end
   end
 end

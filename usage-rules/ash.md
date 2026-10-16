@@ -41,6 +41,26 @@ The resource gains:
 The extension does **not** generate `defstruct`, `builder/2`, or an `Error`
 module — Ash owns those concerns.
 
+## DSL forms
+
+The `guardedstruct` block takes the same forms as `use GuardedStruct`:
+
+```elixir
+guardedstruct auto_wire: true, authorized_fields: true do
+  sub_field :profile, :map, authorized_fields: true do
+    field :nickname, :string
+  end
+
+  conditional_field :contact, :any, priority: true do
+    field :contact, :string, derives: "validate(email_r)"
+  end
+end
+```
+
+Options can also be set as setters at the top of the block (`auto_wire true`).
+The one difference is the `@derives` decorator: it is for `use GuardedStruct`
+only. Write `derives:` on the field inside a resource.
+
 ## Wiring `GuardedStruct.AshResource.Change`
 
 `Change` bridges `__guarded_change__/1` into Ash's changeset pipeline.
