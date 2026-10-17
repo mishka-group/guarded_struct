@@ -41,6 +41,45 @@ The resource gains:
 The extension does **not** generate `defstruct`, `builder/2`, or an `Error`
 module — Ash owns those concerns.
 
+## DSL forms
+
+The `guardedstruct` block takes the same forms as `use GuardedStruct`:
+
+```elixir
+guardedstruct auto_wire: true, authorized_fields: true do
+  sub_field :profile, :map, authorized_fields: true do
+    field :nickname, :string
+  end
+
+  conditional_field :contact, :any, priority: true do
+    field :contact, :string, derives: "validate(email_r)"
+  end
+end
+```
+
+The Spark form works too: each option is a setter at the top of its own block.
+Both give the same options, and a resource can mix them.
+
+```elixir
+guardedstruct do
+  auto_wire true
+  authorized_fields true
+
+  sub_field :profile, :map do
+    authorized_fields true
+    field :nickname, :string
+  end
+
+  conditional_field :contact, :any do
+    priority true
+    field :contact, :string, derives: "validate(email_r)"
+  end
+end
+```
+
+The one difference is the `@derives` decorator: it is for `use GuardedStruct`
+only. Write `derives:` on the field inside a resource.
+
 ## Wiring `GuardedStruct.AshResource.Change`
 
 `Change` bridges `__guarded_change__/1` into Ash's changeset pipeline.
@@ -144,7 +183,7 @@ Use `each=[…]` for content checks Ash can't express:
 derives: "validate(each=[hostname])"          # ✓ runs through Ash
 derives: "validate(each=[regex=^[a-z]+$])"    # ✓ runs through Ash
 derives: "validate(each=[slug])"              # ✓ runs through Ash
-derives: "validate(each=[custom=[Mod, :ok?]])" # ✓ runs through Ash
+derives: "validate(each=[custom=[Mod, ok?]])"  # ✓ runs through Ash
 ```
 
 Not for type checks Ash already does at the attribute layer. The same

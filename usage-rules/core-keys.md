@@ -6,7 +6,7 @@ parts of the input. Parsed once at compile time into `__from_path__`,
 
 ## `auto`
 
-Fill in a missing field from an MFA call.
+Fill in a field from an MFA call.
 
 ```elixir
 field :id, :string, auto: {Ecto.UUID, :generate}
@@ -18,45 +18,65 @@ field :slug, :string, auto: {MyApp.Slug, :from_title, [:title]}
 | `{Mod, :fun}` | `Mod.fun()` (no args) |
 | `{Mod, :fun, arg}` | `Mod.fun(arg)` |
 
-* Runs only when the field is **missing** from input. To overwrite supplied
-  values, look at the type marker `:edit` vs `:add` on `do_pipeline`.
-* Compile-time verifier `VerifyAutoMFA` rejects unknown MFAs.
+* In the default `:add` mode it runs whether or not the field was supplied, and
+  **replaces** a value the caller sent. In `:edit` mode
+  (`builder({:root, attrs, :edit})`) it runs only when the field is missing or
+  `nil`, so a supplied value is kept.
+* Compile-time verifier `VerifyAutoMFA` warns about an unknown MFA; the module
+  still compiles.
 
 ## `from`
 
-Pull a value from a path elsewhere in the input.
+Copy a value from a path elsewhere in the input.
 
 ```elixir
 field :user_id, :string, from: "headers::auth_user_id"
+field :owner, :string, from: "root::username"
 ```
 
-The string is split on `::` into a path. The runtime reads
-`get_in(input, [:headers, :auth_user_id])` and assigns it as the field's value
-*if the field is unset*.
+The string is split on `::` into a path. A leading `root` starts at the whole
+input; any other path starts at the map the field sits in. The runtime reads
+`get_in(input, [:headers, :auth_user_id])` and assigns it as the field's value.
+
+* When the source holds a value, it **replaces** the field's own value, even one
+  the caller sent.
+* When the source is missing or `nil`, the field keeps its own value.
 
 ## `on`
 
-A pre-condition: the field is **only allowed** when another path satisfies a
-predicate. Useful for conditional ownership ("`role_id` only present when
-`role: :admin`").
+A pre-condition: the field is **only allowed** when another path is present.
+Useful for ownership ("`role_id` only present when `role` is sent").
 
 ```elixir
-field :role_id, :string, on: "role"        # role_id requires role to be set
-field :role_id, :string, on: "role=admin"  # role_id requires role == "admin"
+field :role_id, :string, on: "role"
+field :owner_id, :string, on: "root::owner"
 ```
 
-If the gate fails, the runtime emits a `:domain_parameters` / `:on` error.
+The path follows the same rules as `from`. It is present when `get_in/2` finds a
+value that is not `nil`. The value itself is not compared. The gate only runs
+when the field itself has a value; `enforce: true` makes the field required.
+
+If the gate fails, the runtime emits a `:dependent_keys` error for the field.
+
+To compare the value, use `domain`:
+
+```elixir
+field :role_id, :string, domain: "!role=String[admin]"
+```
 
 ## `domain`
 
 Cross-field constraint expressions. Compile-evaluated into a structured op map.
 
 ```elixir
-field :status, :string, domain: "!auth_type=Atom[admin::moderator]"
+field :status, :string, domain: "!auth_type=Atom[admin, moderator]"
 ```
 
-Reads: "this field is **required** when `auth_type` is in `[:admin, :moderator]`".
-Supports `:enum`, `:equal`, presence (`!`), and absence checks.
+Reads: "when `status` has a value, `auth_type` must be `:admin` or `:moderator`".
+The `!` prefix also makes a missing `auth_type` an error; `?` lets it be
+missing. The values of `Atom[...]` / `String[...]` are separated by commas
+(`enum=` in a `derives:` string separates them with `::`). Works in
+`GuardedStruct.AshResource` resources the same way as in standalone modules.
 
 ## Pipeline order
 
@@ -65,10 +85,10 @@ Per `do_pipeline/7` (`lib/guarded_struct/runtime.ex`):
 1. `normalize_keys` — atom-convert keys (except `dynamic_field` values).
 2. `authorized_fields` — reject unknown top-level keys when section opted in.
 3. `check_enforce_keys` — required-fields check.
-4. `apply_auto` — fill missing fields via MFAs.
+4. `apply_auto` — run the `auto` MFAs (`:add` replaces a supplied value, `:edit` keeps it).
 5. `check_domain` — cross-field constraints.
 6. `check_on` — conditional gates.
-7. `apply_from` — pull from other paths.
+7. `apply_from` — copy from other paths.
 8. Sub-field recursion.
 9. Per-field validators.
 10. `run_main_validator`.

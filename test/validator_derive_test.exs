@@ -495,4 +495,247 @@ defmodule GuardedStructTest.ValidatorDeriveTest do
                profile1: %{}
              })
   end
+
+  ############# (▰˘◡˘▰) main_validator: {Mod, :fun} option (▰˘◡˘▰) ##############
+
+  defmodule MainChecks do
+    @moduledoc false
+
+    def reject(attrs) do
+      send(self(), {:main_validator_called, :reject, attrs})
+
+      {:error, [%{field: :__root__, action: :main_validator, message: "rejected by MainChecks"}]}
+    end
+
+    def reject_one(attrs) do
+      send(self(), {:main_validator_called, :reject_one, attrs})
+      {:error, %{field: :name, action: :main_validator, message: "one error"}}
+    end
+
+    def accept(attrs) do
+      send(self(), {:main_validator_called, :accept, attrs})
+      {:ok, attrs}
+    end
+
+    def stamp(attrs), do: {:ok, Map.put(attrs, :name, "stamped")}
+
+    def ignore(_attrs), do: :anything_else
+
+    def profile_rule(attrs) do
+      send(self(), {:profile_rule_called, attrs})
+
+      if Map.get(attrs, :nickname) == "blocked",
+        do: {:error, [%{field: :nickname, action: :main_validator, message: "blocked"}]},
+        else: {:ok, attrs}
+    end
+  end
+
+  defmodule MainValidatorSection do
+    use GuardedStruct
+
+    guardedstruct main_validator: {MainChecks, :reject} do
+      field(:name, String.t())
+    end
+  end
+
+  defmodule MainValidatorAccepts do
+    use GuardedStruct
+
+    guardedstruct main_validator: {MainChecks, :accept} do
+      field(:name, String.t())
+    end
+  end
+
+  defmodule MainValidatorStamps do
+    use GuardedStruct
+
+    guardedstruct main_validator: {MainChecks, :stamp} do
+      field(:name, String.t())
+    end
+  end
+
+  defmodule MainValidatorSingleError do
+    use GuardedStruct
+
+    guardedstruct main_validator: {MainChecks, :reject_one} do
+      field(:name, String.t())
+    end
+  end
+
+  defmodule MainValidatorIgnored do
+    use GuardedStruct
+
+    guardedstruct main_validator: {MainChecks, :ignore} do
+      field(:name, String.t())
+    end
+  end
+
+  defmodule MainValidatorBoth do
+    use GuardedStruct
+
+    guardedstruct main_validator: {MainChecks, :accept} do
+      field(:name, String.t())
+    end
+
+    def main_validator(attrs) do
+      send(self(), {:module_main_validator_called, attrs})
+      {:error, [%{field: :__root__, action: :main_validator, message: "rejected by module"}]}
+    end
+  end
+
+  defmodule MainValidatorSelf do
+    use GuardedStruct
+
+    guardedstruct main_validator: {__MODULE__, :check} do
+      field(:name, String.t())
+    end
+
+    def check(attrs) do
+      send(self(), {:self_check_called, attrs})
+      {:ok, attrs}
+    end
+  end
+
+  defmodule MainValidatorWithFieldValidator do
+    use GuardedStruct
+
+    guardedstruct main_validator: {MainChecks, :accept} do
+      field(:name, String.t(), validator: {__MODULE__, :check_name})
+      field(:title, String.t())
+    end
+
+    def check_name(:name, "ok"), do: {:ok, :name, "ok"}
+    def check_name(:name, _value), do: {:error, :name, "bad name"}
+  end
+
+  defmodule MainValidatorSubField do
+    use GuardedStruct
+
+    guardedstruct do
+      field(:top, String.t())
+
+      sub_field(:profile, struct(), main_validator: {MainChecks, :profile_rule}) do
+        field(:nickname, String.t())
+      end
+
+      sub_field(:accounts, list(struct()),
+        structs: true,
+        main_validator: {MainChecks, :reject}
+      ) do
+        field(:id, String.t())
+      end
+    end
+
+    def main_validator(attrs) do
+      send(self(), {:root_main_validator_called, attrs})
+      {:ok, attrs}
+    end
+  end
+
+  describe "main_validator: {Mod, :fun} on the section" do
+    test "is called with the validated attrs and its error is returned" do
+      assert {:error,
+              [%{field: :__root__, action: :main_validator, message: "rejected by MainChecks"}]} =
+               MainValidatorSection.builder(%{name: "mishka"})
+
+      assert_received {:main_validator_called, :reject, %{name: "mishka"}}
+    end
+
+    test "an {:ok, attrs} builds the struct" do
+      assert {:ok, %MainValidatorAccepts{name: "mishka"}} =
+               MainValidatorAccepts.builder(%{name: "mishka"})
+
+      assert_received {:main_validator_called, :accept, %{name: "mishka"}}
+    end
+
+    test "the attrs it returns are the ones that are built" do
+      assert {:ok, %MainValidatorStamps{name: "stamped"}} =
+               MainValidatorStamps.builder(%{name: "mishka"})
+    end
+
+    test "a single error map comes back inside a list" do
+      assert {:error, [%{field: :name, message: "one error"}]} =
+               MainValidatorSingleError.builder(%{name: "mishka"})
+    end
+
+    test "a return that is neither :ok nor :error leaves the attrs as they were" do
+      assert {:ok, %MainValidatorIgnored{name: "mishka"}} =
+               MainValidatorIgnored.builder(%{name: "mishka"})
+    end
+
+    test "it receives keys that were sent as strings, as atoms" do
+      MainValidatorSection.builder(%{"name" => "mishka"})
+      assert_received {:main_validator_called, :reject, %{name: "mishka"}}
+    end
+
+    test "it wins over a main_validator/1 defined in the module, which is then not called" do
+      assert {:ok, %MainValidatorBoth{name: "mishka"}} =
+               MainValidatorBoth.builder(%{name: "mishka"})
+
+      assert_received {:main_validator_called, :accept, _attrs}
+      refute_received {:module_main_validator_called, _attrs}
+    end
+
+    test "it can point at a function of the module that declares it" do
+      assert {:ok, %MainValidatorSelf{name: "mishka"}} =
+               MainValidatorSelf.builder(%{name: "mishka"})
+
+      assert_received {:self_check_called, %{name: "mishka"}}
+    end
+
+    test "a main_validator/1 in the module still runs when the option is not set" do
+      assert {:error, [%{action: :main_validator, message: "there is an Error"}]} =
+               TestAuthStruct.builder(%{changed: "https://github.com/mishka-group", action: 25})
+    end
+
+    test "it gets the attrs of the fields that passed their own validator" do
+      assert {:error, [%{field: :name, action: :validator, message: "bad name"}]} =
+               MainValidatorWithFieldValidator.builder(%{name: "bad", title: "t"})
+
+      assert_received {:main_validator_called, :accept, attrs}
+      assert attrs == %{title: "t"}
+    end
+  end
+
+  describe "main_validator: {Mod, :fun} on a sub_field" do
+    test "is called with the sub_field's attrs and its error is reported on the sub_field" do
+      assert {:error, [%{field: :profile, errors: [%{field: :nickname, message: "blocked"}]}]} =
+               MainValidatorSubField.builder(%{top: "t", profile: %{nickname: "blocked"}})
+
+      assert_received {:profile_rule_called, %{nickname: "blocked"}}
+    end
+
+    test "an {:ok, attrs} lets the sub_field build" do
+      assert {:ok,
+              %MainValidatorSubField{profile: %MainValidatorSubField.Profile{nickname: "ok"}}} =
+               MainValidatorSubField.builder(%{top: "t", profile: %{nickname: "ok"}})
+    end
+
+    test "is called for every item of a list sub_field" do
+      assert {:error, [%{field: :accounts}]} =
+               MainValidatorSubField.builder(%{top: "t", accounts: [%{id: "1"}, %{id: "2"}]})
+
+      assert_received {:main_validator_called, :reject, %{id: "1"}}
+    end
+
+    test "the sub_field's module runs it on its own too" do
+      assert {:error, [%{field: :nickname, message: "blocked"}]} =
+               MainValidatorSubField.Profile.builder(%{nickname: "blocked"})
+    end
+
+    test "the main_validator/1 of the parent module does not run for the sub_field" do
+      MainValidatorSubField.builder(%{top: "t", profile: %{nickname: "ok"}})
+
+      assert_received {:root_main_validator_called, %{top: "t"}}
+      refute_received {:root_main_validator_called, %{nickname: "ok"}}
+    end
+
+    test "is kept in the sub_field module's information" do
+      assert %{main_validator: {MainChecks, :profile_rule}} =
+               MainValidatorSubField.Profile.__information__().options
+
+      assert %{main_validator: {MainChecks, :profile_rule}} =
+               GuardedStruct.Info.describe(MainValidatorSubField.Profile).options
+    end
+  end
 end

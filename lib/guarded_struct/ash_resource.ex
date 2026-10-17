@@ -14,7 +14,8 @@ defmodule GuardedStruct.AshResource do
           attribute :email, :string, allow_nil?: false, public?: true
         end
 
-        # GuardedStruct DSL — identical syntax to standalone `use GuardedStruct`.
+        # GuardedStruct DSL — the syntax of standalone `use GuardedStruct`, without
+        # the `@derives` decorator (write `derives:` on the field).
         guardedstruct do
           field :email, :string,
             derives: "sanitize(trim, downcase) validate(string, not_empty, email_r)"
@@ -54,6 +55,17 @@ defmodule GuardedStruct.AshResource do
       end
 
       # no `changes do ... end` block needed — the transformer added it
+
+  The same option can be a setter at the top of the block, the Spark form:
+
+      guardedstruct do
+        auto_wire true
+        field :email, :string, derives: "sanitize(trim) validate(email_r)"
+      end
+
+  `sub_field` and `conditional_field` take both forms as well:
+  `sub_field :profile, :map, authorized_fields: true do ... end`, or
+  `authorized_fields true` as the first line of its block.
 
   Under the hood this calls `Ash.Resource.Builder.add_change/3` from a Spark
   transformer that runs after our codegen. The result is identical to writing
@@ -138,9 +150,12 @@ defmodule GuardedStruct.AshResource do
   """
 
   use Spark.Dsl.Extension,
+    imports: [GuardedStruct.AshResource.Macros],
     sections: GuardedStruct.Dsl.sections(),
     transformers: [
       GuardedStruct.Transformers.ParseDerive,
+      GuardedStruct.Transformers.ParseCoreKeys,
+      GuardedStruct.Transformers.ParseDomain,
       GuardedStruct.Transformers.GenerateAshValidator,
       GuardedStruct.Transformers.GenerateSubFieldModules,
       GuardedStruct.Transformers.AutoWireAshChange

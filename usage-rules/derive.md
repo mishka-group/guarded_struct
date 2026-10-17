@@ -1,7 +1,12 @@
 # Derive ops — `sanitize(...)` and `validate(...)` mini-language
 
 `derives:` accepts a string parsed at **compile time** into a normalized op map.
-Typos surface as `Spark.Error.DslError`. The runtime never re-parses.
+A string the parser refuses, a group that is not `sanitize(...)` or
+`validate(...)`, a group with no closing `)`, an operand it can't read and a bad
+parameter surface as `Spark.Error.DslError` — nothing is dropped silently. An
+empty or blank string is a no-op. The builder never re-parses; `Validate.run/2`
+parses its string when it runs and returns the same problems as a
+`:bad_parameters` error.
 
 ```elixir
 field :email, :string,
@@ -15,8 +20,19 @@ field :email, :string,
 <group>    ::= "sanitize(" <ops> ")"  |  "validate(" <ops> ")"
 <ops>      ::= <op> ("," <op>)*
 <op>       ::= <atom> | <atom> "=" <operand>
-<operand>  ::= literal | "Type[...]" | "Map::..."
+<operand>  ::= literal | "Type[a::b]" | "Type::value" | "[" <ops> "]"
+<literal>  ::= integer | float | negative number | atom | boolean | nil | string | list | map | tuple
 ```
+
+Operand forms:
+
+| Form | Example |
+|---|---|
+| Number, negative or not | `max_len=20`, `clamp=[-10, 10]`, `default_when_empty=-1`, `default_when_empty=1.5` |
+| Other literal | `default_when_nil=false`, `default_when_nil=:none`, `default_when_empty=[]` |
+| `Type[a::b]` (enum) | `enum=String[admin::user]`, `enum=Integer[1::2]` — values separated by `::` |
+| `Type::value` (equal) | `equal=Integer::1`, `equal=String::admin`, `equal=Float::1.5`, `equal=Atom::admin`, `equal=Map::%{a: 1}`, `equal=Tuple::{:a, 1}` |
+| Op list | `either=[string, integer]`, `each=[trim]`, `optional=[string, max_len=5]` |
 
 The same logical rules also support a keyword/block/pipe form (see source-level
 docs), but the string form above is the canonical input.
@@ -32,15 +48,15 @@ docs), but the string form above is the canonical input.
 | `{:tag, op_atom}` | `trim → op → trim`. |
 | `:string_float` / `:string_integer` | Parse numeric out of a string; returns `0`/`0.0` on failure. |
 | `:squish` | Collapse runs of whitespace into a single space + trim. Binaries only. |
-| `:no_control` | Strip ASCII control characters (`\x00`–`\x1F`, `\x7F`). Binaries only. |
+| `:no_control` | Strip ASCII control characters (`\x00`–`\x08`, `\x0B`, `\x0C`, `\x0E`–`\x1F`, `\x7F`); tab, LF and CR are kept. Binaries only. |
 | `:no_zero_width` | Strip zero-width unicode (`U+200B`, `U+200C`, `U+200D`, `U+FEFF`, `U+2060`). |
 | `:uniq` | `Enum.uniq/1` on lists; passthrough otherwise. |
 | `:compact` | Drop `nil` entries from a list. |
 | `:reject_empty` | Drop `nil`, `""`, `[]`, `%{}` entries from a list. |
 | `:sort` | `Enum.sort/1` on lists. |
 | `{:clamp, [min, max]}` | Clamp a number to `min..max`. Numbers only; passthrough otherwise. |
-| `{:default_when_nil, value}` | Replace `nil` with `value`. |
-| `{:default_when_empty, value}` | Replace `nil` / `""` / `[]` / `%{}` with `value`. |
+| `{:default_when_nil, value}` | Replace `nil` — or a field missing from the input — with `value`; every op of the string then runs on `value`, wherever it sits in the string. Every other op skips a `nil` field. |
+| `{:default_when_empty, value}` | Replace `""` / `[]` / `%{}` with `value`. A `nil` field never reaches it; use `default_when_nil`. |
 | `{:each, [ops]}` | Apply inner sanitize ops to every element of a list. |
 
 Arg order is **pipe-friendly**: `SanitizerDerive.sanitize(value, :op)`.
@@ -58,10 +74,11 @@ Content / format:
 | `:not_empty`, `:not_empty_string` | Non-zero length. |
 | `:not_flatten_empty`, `:not_flatten_empty_item` | List-shape contracts. |
 | `{:min_len, n}` / `{:max_len, n}` | Bounds. Apply to strings, integers, floats, ranges, lists. |
-| `:email`, `:email_r` | DNS-checked vs regex-only. `email_r` is data-layer safe. |
-| `:url`, `:tell`, `:geo_url` | URL/phone/geo via `URL`/`ExPhoneNumber` (optional). |
+| `:email`, `:email_r` | DNS-checked vs regex-only. `email_r` is data-layer safe. `:email` needs `email_checker`. |
+| `:url` | Scheme, host and a DNS lookup. No extra package. |
+| `:tell`, `:geo_url`, `:location` | Phone/geo via `URL`; need `ex_url`. `{:tell, code}` (`tell=98`) also needs `ex_phone_number`. |
 | `:uuid`, `:ipv4`, `:datetime`, `:date`, `:range`, `:regex` | Format checks. |
-| `:username`, `:full_name`, `:location`, `:queue`, `:string_boolean` | Domain checks (see `lib/guarded_struct/helper/extra.ex`). |
+| `:username`, `:full_name`, `:queue`, `:string_boolean` | Domain checks (see `lib/guarded_struct/helper/extra.ex`). |
 | `:slug` | `^[a-z0-9]+(-[a-z0-9]+)*$` — kebab-case URL slug. |
 | `:hostname` | RFC 1123 hostname via Erlang's `:inet_parse.domain/1` (case-insensitive, ≤ 253 chars, no underscores, no scheme). |
 | `:port_number` | Integer in `1..65535`. |
@@ -78,7 +95,8 @@ Content / format:
 
 1. Parse `derives:` string at compile time → `__derive_ops__: %{sanitize: [...], validate: [...]}`.
 2. Pre-evaluate operands like `enum=String[a::b::c]` → `{:enum, ["a", "b", "c"]}` at compile time.
-3. Runtime applies ops in declared order: sanitize first, then validate.
+3. Runtime applies the ops: every `sanitize(...)` group first, in the order written, then every
+   `validate(...)` group — wherever the groups sit in the string.
 4. Errors emerge as a flat list of `%{field, action, message}` maps.
 
 ## Five accepted derive syntaxes
@@ -102,6 +120,9 @@ field :frontend_domain, :string,
 
 field :priority, :integer,
   derives: "sanitize(default_when_nil=0, clamp=[0, 100])"
+
+field :slug, :string,
+  derives: "validate(string, max_len=80) sanitize(trim, downcase)"   # still trims first, then validates
 
 field :brand_color, :string,
   derives: "sanitize(trim, squish) validate(string, hex_color)"
@@ -133,7 +154,7 @@ derives: ~S|validate(regex="^a]b$")|         # literal ] at top level
 
 `Code.string_to_quoted` treats the inside of `"…"` as opaque. The scanner sees the `"` and skips entirely, so anything between the quotes survives as-is. Use the `~S|…|` sigil so you don't have to escape the internal `"`.
 
-If you'd rather keep regex out of the derive string altogether, pre-compile and validate with `GuardedStruct.Validate.run/2` from your `validator: {Mod, :fn}` MFA — the parser is bypassed entirely.
+If you'd rather keep regex out of the derive string altogether, pre-compile the `Regex` and match it in your `validator: {Mod, :fn}` MFA — the derive parser is bypassed entirely.
 
 ## Direct API
 

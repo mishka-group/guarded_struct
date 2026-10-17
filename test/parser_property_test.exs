@@ -100,12 +100,30 @@ defmodule GuardedStructTest.ParserPropertyTest do
       assert [%{validate: [:string]}, nil] = Parser.parser(["validate(string)", ""])
     end
 
-    test "missing closing paren is balanced" do
-      assert %{sanitize: [:trim]} = Parser.parser("sanitize(trim")
+    test "a missing closing paren is an error, not repaired" do
+      assert nil == Parser.parser("sanitize(trim")
+      assert {:error, message} = Parser.parse("sanitize(trim")
+      assert message =~ "the group `sanitize(trim` is not closed"
     end
 
-    test "missing closing paren on validate" do
-      assert %{validate: [:string]} = Parser.parser("validate(string")
+    test "the unclosed group is named even after a closed one" do
+      assert {:error, message} = Parser.parse("sanitize(trim) validate(string, max_len=3")
+      assert message =~ "the group `validate(string, max_len=3` is not closed"
+    end
+
+    test "a group name other than sanitize and validate is an error" do
+      assert {:error, message} = Parser.parse("validte(string)")
+      assert message =~ "unknown group `validte(string)`"
+      assert {:error, message} = Parser.parse("foo")
+      assert message =~ "unknown group `foo`"
+      assert {:error, message} = Parser.parse("validate(string) foo")
+      assert message =~ "unknown group `foo`"
+    end
+
+    test "an empty or blank string reads as no ops" do
+      assert {:ok, nil} = Parser.parse("")
+      assert {:ok, nil} = Parser.parse("   ")
+      assert {:ok, nil} = Parser.parse("\n  \t")
     end
 
     test "trailing whitespace doesn't break parsing" do

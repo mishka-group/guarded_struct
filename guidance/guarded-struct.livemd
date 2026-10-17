@@ -2,12 +2,11 @@
 
 ```elixir
 Mix.install([
-  {:guarded_struct, "~> 0.1.0"},
-  {:html_sanitize_ex, "~> 1.4.3"},
+  {:guarded_struct, "~> 0.1.4"},
 
   # Optional dependencies, It’s recommended to create your own
   # custom validation and sanitization functions instead of
-  # enabling these libraries.
+  # enabling these libraries. Their order in this list does not matter.
   {:email_checker, "~> 0.2.4"},
   {:ex_url, "~> 2.0"},
   {:ex_phone_number, "~> 0.4.3"},
@@ -129,9 +128,9 @@ Implement the program's logic, regardless of what it might be.
 
 **Note:** Because of different limitations, if you want to write a test, you must first place the module in which you built the struct outside of the test macro. Once the struct has been built, you may then test it by calling it within the test macro itself. The examples it provides can also be found in the testing done by this library itself.
 
-**Note:** this library is only supported on versions of `Elixir 1.15` and higher, as well as `OTP 26`, and that the manufacturer does not offer bug patches for problems that occur in older software versions.
+**Note:** this library is only supported on versions of `Elixir 1.17` and higher (tested on `OTP 27` and `OTP 28`), and that the manufacturer does not offer bug patches for problems that occur in older software versions.
 
-**Note:** All of this library's dependencies are optional; nonetheless, if you require their use in your program, you will need to include them. We provide further explanation on the topic in the area you're looking for.
+**Note:** `spark`, `splode`, `telemetry` and `html_sanitize_ex` are required dependencies and come with `guarded_struct`. The others (`email_checker`, `ex_url`, `ex_phone_number`, `jason`, `ash`) are optional; if you require their use in your program, you will need to include them. A package is looked up when the op runs, so the order of your dependencies does not matter, and an op whose package is missing returns an error that names the package to add. We provide further explanation on the topic in the area you're looking for.
 
 > Before continuing with the discussion about the library section and also offering practical examples in this field, it is important to understand that when you construct a struct in a module, after compilation in the runtime of the program, each module includes the following functional functions:
 
@@ -363,9 +362,19 @@ NormalMainValidatorStruct.builder(%{title: :mishka})
 
 As the code sample above illustrates. `main_validator` is a bit rudimentary in terms of error and data presentation, and it can only be used once. since it gives you the ability to generate a unique code. Similar to `validator`, this option can be called by a macro within the same module or from another module.
 
+When `main_validator` is set, it is the one that runs and a `main_validator/1` written in the module is not called. A `sub_field` takes the same option and calls it with its own data:
+
+<!-- livebook:{"force_markdown":true} -->
+
+```elixir
+sub_field(:profile, struct(), main_validator: {MyChecks, :profile_rule}) do
+  field(:nickname, String.t())
+end
+```
+
 ## Define struct with derive
 
-> derive is divided into two parts: `validate` and `sanitize`, which is priority with `sanitize`
+> derive is divided into two parts: `validate` and `sanitize`, which is priority with `sanitize`: every `sanitize(...)` group runs before every `validate(...)` group, wherever the groups are written in the string.
 
 **It should be noted that in the following tables you can see that in order to use some derives, you need to add its dependency on your project.**
 
@@ -413,7 +422,7 @@ As the code sample above illustrates. `main_validator` is a bit rudimentary in t
 | `"validate(url)"`                                                | NO              | Validate if the data is url                                                                         |
 | `"validate(geo_url)"`                                            | `ex_url`        | Validate if the data is geo url                                                                     |
 | `"validate(tell)"`                                               | `ex_url`        | Validate if the data is tell                                                                        |
-| `"validate(tell=98)"`                                            | `ex_url`        | Validate if the data is tell with country code                                                      |
+| `"validate(tell=98)"`                                            | `ex_url` and `ex_phone_number` | Validate if the data is tell with country code                                       |
 | `"validate(email)"`                                              | `email_checker` | Validate if the data is email                                                                       |
 | `"validate(location)"`                                           | `ex_url`        | Validate if the data is location                                                                    |
 | `"validate(string_boolean)"`                                     | NO              | Validate if the data is string boolean                                                              |
@@ -430,7 +439,12 @@ As the code sample above illustrates. `main_validator` is a bit rudimentary in t
 | `"validate(enum=Float[1.5::2.0::4.5])"`                          | NO              | Validate if the data is one of the enum value, which is Float                                       |
 | `"validate(enum=Map[%{status: 1}::%{status: 2}::%{status: 3}])"` | NO              | Validate if the data is one of the enum value, which is Map                                         |
 | `"validate(enum=Tuple[{:admin, 1}::{:user, 2}::{:banned, 3}])"`  | NO              | Validate if the data is one of the enum value, which is Tuple                                       |
-| `"validate(equal=some_thing)"`                                   | NO              | Validate if the data is equal with validation value, which is any type                              |
+| `"validate(equal=String::admin)"`                                | NO              | Validate if the data is equal with the value, which is a String                                     |
+| `"validate(equal=Integer::1)"`                                   | NO              | Validate if the data is equal with the value, which is an Integer (`Integer::-1` is negative)       |
+| `"validate(equal=Float::1.5)"`                                   | NO              | Validate if the data is equal with the value, which is a Float                                      |
+| `"validate(equal=Atom::admin)"`                                  | NO              | Validate if the data is equal with the value, which is an Atom                                      |
+| `"validate(equal=Map::%{status: 1})"`                            | NO              | Validate if the data is equal with the value, which is a Map                                        |
+| `"validate(equal=Tuple::{:admin, 1})"`                           | NO              | Validate if the data is equal with the value, which is a Tuple                                      |
 | `"validate(either=[string, enum=Integer[1::2::3]])"`             | NO              | Validate if the data is valid with each derive validation                                           |
 | `"validate(custom=[Enum, all?])"`                                | NO              | Validate if the you custom function returns trueو **Please read section 20**                       |
 | `"validate(some_string_float)"`                                  | NO              | Validate if the string data is float (Somewhat by removing the string)                              |
@@ -472,6 +486,8 @@ NormalDeriveStruct.builder(%{title: :mishka})
 
 * `validate_derive` - It can be just one module or a list of modules
 * `sanitize_derive` - It can be just one module or a list of modules
+
+The modules of the section option are tried first, in the order you list them; the Application env of the same name stays the fallback for every op they do not handle. The section option works on the module, on every `sub_field` of it and on `Validate.field/3`.
 
 - First set Application env:
 
@@ -1019,21 +1035,23 @@ defmodule AutoCoreKeyStruct do
 end
 ```
 
-> **Note**: When changing a record in the database, for example, you might need to make sure that a particular piece of data does not get overwritten by an automatic piece of data if one already exists. To find a solution to this issue, you will need to invoke the `builder` function in the following manner.
+> **Note**: In the default `:add` mode `auto` always replaces the value the user sent. When changing a record in the database, for example, you might need to make sure that a particular piece of data does not get overwritten by an automatic piece of data if one already exists. To find a solution to this issue, you will need to invoke the `builder` function in the `:edit` mode, which keeps a value that is already there and only fills the missing ones.
 
 ```elixir
-AutoCoreKeyStruct.builder(%{username: "mishka", user_id: "test_not_to_be_replaced"})
+# `:add` (the default): user_id is replaced by the generated value
+AutoCoreKeyStruct.builder(%{username: "mishka", user_id: "test_should_be_replaced"})
 ```
 
 ```elixir
 AutoCoreKeyStruct.builder(
-  {:root, %{username: "mishka", user_id: "test_not_to_be_replaced"}, :add}
+  {:root, %{username: "mishka", user_id: "test_should_be_replaced"}, :add}
 )
 ```
 
 ```elixir
+# `:edit`: user_id keeps the value that was sent
 AutoCoreKeyStruct.builder(
-  {:root, %{username: "mishka", user_id: "test_should_be_replaced"}, :edit}
+  {:root, %{username: "mishka", user_id: "test_not_to_be_replaced"}, :edit}
 )
 ```
 
@@ -1110,7 +1128,7 @@ OnCoreKeyStruct.builder(%{
 
 ## From core key
 
-You can select this alternative if you require any data that was delivered in another key to be incorporated into the key that you are looking for. If the key is present, the data associated with it will be copied; however, if the key is not there, the data in and of itself will be retained.
+You can select this alternative if you require any data that was delivered in another key to be incorporated into the key that you are looking for. If the key is present, the data associated with it will be copied, and it replaces a value that was sent for the field; however, if the key is not there, the data in and of itself will be retained.
 
 If you pay attention to the routing method, the routing will start from the sent map itself if `:root` is specified, but if it is not used, the routing will start from the received map in the child if it is not used.
 
@@ -1576,7 +1594,8 @@ end
   })
 
 sample
-# tags collapsed/sorted/uniq'd, title scrubbed, priority defaulted+clamped,
+# tags collapsed/sorted/uniq'd, title scrubbed, priority defaulted+clamped
+# (a priority missing from the input is filled the same way),
 # display_name filled from the default.
 ```
 
@@ -1830,6 +1849,10 @@ Only top-level builds emit — nested sub_field builds inherit; you see exactly 
 GuardedStruct.Validate.run("validate(string, max_len=80, email_r)", "alice@example.com")
 # => {:ok, "alice@example.com"}
 
+# A derive string that cannot be read, or has a wrong operand, is an error
+GuardedStruct.Validate.run("validate(max_len=foo)", "x")
+# => {:error, [%{field: :__value__, action: :bad_parameters, message: "invalid parameter for `max_len` ..."}]}
+
 # Tier 2 — single named field of a module
 GuardedStruct.Validate.field(Signup, :email, "alice@x.com")
 # => {:ok, "alice@x.com"}
@@ -1947,6 +1970,8 @@ end
 MyApp.Resources.User.__guarded_change__(%{name: "Alice", email: "alice@x.com"})
 # => {:ok, %{name: "Alice", email: "alice@x.com"}}
 ```
+
+Options take both forms here: `guardedstruct auto_wire: true do ... end`, or `auto_wire true` as the first line of the block, the way Ash's own sections set options. `sub_field` and `conditional_field` take both forms as well.
 
 The pipeline lives under the `__guarded_*__` namespace so it doesn't clash with Ash's own callbacks. The `Change` module bridges `__guarded_change__/1` into the changeset pipeline — runs sanitize + validate on every `:create` and `:update`.
 

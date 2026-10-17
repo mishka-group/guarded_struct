@@ -7,7 +7,7 @@ their first argument; none take the struct itself.
 
 ```elixir
 MyApp.User.builder(%{email: "..."})                 # → {:ok, %User{}} | {:error, [...]}
-MyApp.User.builder(%{email: "..."}, :error)         # raise on error (if section had `error: true`)
+MyApp.User.builder(%{email: "..."}, true)           # raise on error (if section had `error: true`)
 MyApp.User.builder({:headers, attrs})               # context tuple (key, attrs)
 MyApp.User.builder({:headers, attrs, :edit})        # context tuple with :add (default) | :edit
                                                      # :edit skips auto-fill on fields already populated
@@ -21,6 +21,9 @@ Returns `{:ok, struct}` or `{:error, [error_map]}`. See `guarded_struct:errors`.
 GuardedStruct.Validate.run("validate(email_r)", "alice@x.io")
 # => {:ok, "alice@x.io"}
 
+GuardedStruct.Validate.run("validate(max_len=foo)", "x")
+# => {:error, [%{field: :__value__, action: :bad_parameters, message: "invalid parameter for `max_len` ..."}]}
+
 GuardedStruct.Validate.field(MyApp.User, :email, "bad")
 # => {:error, [%{field: :email, action: :email_r, ...}]}
 
@@ -28,16 +31,18 @@ GuardedStruct.Validate.partial(MyApp.User, %{nickname: "ok"})
 # → run the pipeline against just the keys present; skip enforce-key checks.
 ```
 
+`run/2` checks its string the way a module checks a `derives:` string. A string the parser refuses, or an operand of the wrong type, returns a `:bad_parameters` error; it never returns `{:ok, value}` for it and never raises.
+
 ## `GuardedStruct.Info` — introspection
 
 | Function | Result |
 |---|---|
 | `Info.describe(mod)` | One-shot map: `module`, `keys`, `enforce_keys`, `conditional_keys`, `fields`, `options`. |
-| `Info.fields(mod)` | All field metadata, ordered. |
+| `Info.fields(mod)` | Field names in declaration order (the declared regex patterns for a pattern-keyed module). |
 | `Info.fields_meta(mod)` | Alias for `mod.__fields__()`. |
-| `Info.field(mod, name)` | O(1) lookup via `__field_meta__/1`. |
+| `Info.field(mod, name)` | O(1) lookup via `__field_meta__/1`; a pattern-keyed module answers with the first pattern that matches the name. |
 | `Info.field?(mod, name)` | Existence check. |
-| `Info.field_kind(mod, name)` | `:field` / `:sub_field` / `:conditional_field` / `:virtual_field` / `:dynamic_field` / `:pattern_field`. |
+| `Info.field_kind(mod, name)` | `:field` / `:sub_field` / `:conditional_field` / `:virtual_field` / `:dynamic_field` / `:pattern_field` (a key a pattern matches). |
 | `Info.field_default(mod, name)` | Default value (unquoted). |
 | `Info.field_derives(mod, name)` | Original derive string. |
 | `Info.field_validator(mod, name)` | `{Mod, :fn}` tuple or `nil`. |
@@ -57,7 +62,7 @@ namespaced helpers that read `__guarded_*` accessors.
 ## `GuardedStruct.Diff` — audit-log-friendly struct diffing
 
 ```elixir
-GuardedStruct.Diff.diff(a, b)            # → %{key => {old, new}}
+GuardedStruct.Diff.diff(a, b)            # → %{key => {:changed, old, new}}; a nested struct gives a nested map
 GuardedStruct.Diff.apply(a, diff)        # → b
 GuardedStruct.Diff.equal?(a, b)          # → boolean
 ```

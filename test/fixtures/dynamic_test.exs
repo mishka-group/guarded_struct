@@ -185,4 +185,139 @@ defmodule GuardedStructFixtures.DynamicTest do
                })
     end
   end
+
+  describe "dynamic_field below the top level" do
+    # A dynamic_field keeps its keys exactly as sent wherever it is declared:
+    # in a sub_field, in a sub_field of a sub_field, in a list sub_field, in a
+    # struct: module, and in the sub_field branch of a conditional_field.
+
+    @uuid "11111111-1111-1111-1111-111111111111"
+    @meta %{
+      "role" => "admin",
+      :k => 1,
+      "nested" => %{"deep" => %{"email" => 2}},
+      "list" => [%{"inner" => 1}, %{"name" => 2}]
+    }
+
+    test "in a sub_field" do
+      assert {:ok, envelope} =
+               Dynamic.Envelope.builder(%{account: %{email: "a@b.c", meta: @meta}})
+
+      assert envelope.account.meta == @meta
+    end
+
+    test "the same value at the top level and in a sub_field comes back the same" do
+      assert {:ok, envelope} =
+               Dynamic.Envelope.builder(%{top_meta: @meta, account: %{meta: @meta}})
+
+      assert envelope.top_meta == envelope.account.meta
+    end
+
+    test "in a sub_field of a sub_field" do
+      assert {:ok, envelope} =
+               Dynamic.Envelope.builder(%{account: %{settings: %{theme: "dark", prefs: @meta}}})
+
+      assert envelope.account.settings.prefs == @meta
+    end
+
+    test "in every item of a list sub_field" do
+      other = %{"Other" => %{"role" => 1}}
+
+      assert {:ok, envelope} =
+               Dynamic.Envelope.builder(%{
+                 events: [%{name: "a", payload: @meta}, %{name: "b", payload: other}]
+               })
+
+      assert [%{name: "a", payload: @meta}, %{name: "b", payload: ^other}] = envelope.events
+    end
+
+    test "in a struct: module" do
+      assert {:ok, envelope} =
+               Dynamic.Envelope.builder(%{
+                 document: %{id: @uuid, body: "hi", metadata: @meta}
+               })
+
+      assert envelope.document.metadata == @meta
+    end
+
+    test "in the sub_field branch of a conditional_field" do
+      assert {:ok, envelope} =
+               Dynamic.Envelope.builder(%{attachment: %{kind: "file", data: @meta}})
+
+      assert envelope.attachment.data == @meta
+    end
+
+    test "when the whole input is string-keyed" do
+      assert {:ok, envelope} =
+               Dynamic.Envelope.builder(%{
+                 "top_meta" => @meta,
+                 "account" => %{
+                   "email" => "a@b.c",
+                   "meta" => @meta,
+                   "settings" => %{"theme" => "dark", "prefs" => @meta}
+                 },
+                 "events" => [%{"name" => "a", "payload" => @meta}]
+               })
+
+      assert envelope.top_meta == @meta
+      assert envelope.account.email == "a@b.c"
+      assert envelope.account.meta == @meta
+      assert envelope.account.settings.theme == "dark"
+      assert envelope.account.settings.prefs == @meta
+      assert [%{name: "a", payload: @meta}] = envelope.events
+    end
+
+    test "attacker-controlled keys inside it do not create atoms" do
+      key = "z9_nested_dynamic_neverdeclared_#{:rand.uniform(99_999_999)}"
+
+      assert {:ok, envelope} =
+               Dynamic.Envelope.builder(%{account: %{meta: %{key => 1, "x" => %{key => 2}}}})
+
+      assert envelope.account.meta == %{key => 1, "x" => %{key => 2}}
+      assert_raise ArgumentError, fn -> String.to_existing_atom(key) end
+    end
+
+    test "the declared fields around it are still converted" do
+      assert {:ok, envelope} =
+               Dynamic.Envelope.builder(%{
+                 "account" => %{"email" => "a@b.c", "settings" => %{"theme" => "dark"}}
+               })
+
+      assert %Dynamic.Envelope.Account{
+               email: "a@b.c",
+               settings: %Dynamic.Envelope.Account.Settings{theme: "dark"}
+             } = envelope.account
+    end
+
+    test "a plain map field of the same name elsewhere is still converted" do
+      assert {:ok, envelope} =
+               Dynamic.Envelope.builder(%{
+                 "meta" => %{"email" => 1},
+                 "account" => %{"meta" => %{"email" => 1}}
+               })
+
+      assert envelope.meta == %{email: 1}
+      assert envelope.account.meta == %{"email" => 1}
+    end
+
+    test "the sub_field's own module keeps it when built on its own" do
+      assert {:ok, account} = Dynamic.Envelope.Account.builder(%{"meta" => @meta})
+      assert account.meta == @meta
+    end
+
+    test "an empty or missing one is the default" do
+      assert {:ok, envelope} = Dynamic.Envelope.builder(%{account: %{email: "a@b.c"}})
+      assert envelope.account.meta == %{}
+    end
+
+    test "GuardedStruct.Validate.partial/2 keeps the top-level and the nested ones" do
+      assert {:ok, %{top_meta: @meta}} =
+               GuardedStruct.Validate.partial(Dynamic.Envelope, %{"top_meta" => @meta})
+
+      assert {:ok, %{account: %{meta: @meta}}} =
+               GuardedStruct.Validate.partial(Dynamic.Envelope, %{
+                 "account" => %{"meta" => @meta}
+               })
+    end
+  end
 end

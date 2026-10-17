@@ -17,7 +17,8 @@ A Spark DSL extension that adds the GuardedStruct DSL to an Ash resource.
         attribute :email, :string, allow_nil?: false, public?: true
       end
 
-      # GuardedStruct DSL — identical syntax to standalone `use GuardedStruct`.
+      # GuardedStruct DSL — the syntax of standalone `use GuardedStruct`, without
+      # the `@derives` decorator (write `derives:` on the field).
       guardedstruct do
         field :email, :string,
           derives: "sanitize(trim, downcase) validate(string, not_empty, email_r)"
@@ -57,6 +58,17 @@ Set `auto_wire: true` on the section and the change is injected for you:
     end
 
     # no `changes do ... end` block needed — the transformer added it
+
+The same option can be a setter at the top of the block, the Spark form:
+
+    guardedstruct do
+      auto_wire true
+      field :email, :string, derives: "sanitize(trim) validate(email_r)"
+    end
+
+`sub_field` and `conditional_field` take both forms as well:
+`sub_field :profile, :map, authorized_fields: true do ... end`, or
+`authorized_fields true` as the first line of its block.
 
 Under the hood this calls `Ash.Resource.Builder.add_change/3` from a Spark
 transformer that runs after our codegen. The result is identical to writing
@@ -183,9 +195,9 @@ has_one :preferences, ... end`.
 | [`module`](#guardedstruct-module){: #guardedstruct-module } | `any` |  |  |
 | [`error`](#guardedstruct-error){: #guardedstruct-error } | `boolean` | `false` |  |
 | [`authorized_fields`](#guardedstruct-authorized_fields){: #guardedstruct-authorized_fields } | `boolean` | `false` |  |
-| [`main_validator`](#guardedstruct-main_validator){: #guardedstruct-main_validator } | `{atom, atom}` |  |  |
-| [`validate_derive`](#guardedstruct-validate_derive){: #guardedstruct-validate_derive } | `atom \| list(atom)` |  |  |
-| [`sanitize_derive`](#guardedstruct-sanitize_derive){: #guardedstruct-sanitize_derive } | `atom \| list(atom)` |  |  |
+| [`main_validator`](#guardedstruct-main_validator){: #guardedstruct-main_validator } | `{atom, atom}` |  | A `{Module, :function}` called with the attributes once every field has passed its validator; it returns `{:ok, attrs}` or `{:error, errors}`. When it is not set, a `main_validator/1` defined in the module is called instead. |
+| [`validate_derive`](#guardedstruct-validate_derive){: #guardedstruct-validate_derive } | `atom \| list(atom)` |  | A module, or a list of modules, whose `validate/3` serves the `validate(...)` ops the built-in ones and the derive extensions do not know. They are tried before the `:validate_derive` application config, which still serves the ops they do not handle. |
+| [`sanitize_derive`](#guardedstruct-sanitize_derive){: #guardedstruct-sanitize_derive } | `atom \| list(atom)` |  | A module, or a list of modules, whose `sanitize/2` serves the `sanitize(...)` ops the built-in ones and the derive extensions do not know. They are tried before the `:sanitize_derive` application config, which still serves the ops they do not handle. |
 | [`json`](#guardedstruct-json){: #guardedstruct-json } | `boolean` | `false` | When `true`, derives a JSON encoder. Uses `Jason.Encoder` if `:jason` is in the user's deps; otherwise falls back to the built-in `JSON.Encoder` on Elixir 1.18+. No-op if neither is available. |
 | [`auto_wire`](#guardedstruct-auto_wire){: #guardedstruct-auto_wire } | `boolean` | `false` | Only effective inside the `GuardedStruct.AshResource` extension. When `true`, injects `GuardedStruct.AshResource.Change` into the resource's top-level `changes` section so every `:create` and `:update` action automatically runs the GuardedStruct pipeline. Equivalent to writing `changes do change GuardedStruct.AshResource.Change end` by hand. No-op outside the Ash extension. |
 
@@ -293,7 +305,7 @@ dynamic_field name
 |------|------|---------|------|
 | [`type`](#guardedstruct-dynamic_field-type){: #guardedstruct-dynamic_field-type } | `any` | `{:map, [], []}` |  |
 | [`enforce`](#guardedstruct-dynamic_field-enforce){: #guardedstruct-dynamic_field-enforce } | `boolean` |  |  |
-| [`default`](#guardedstruct-dynamic_field-default){: #guardedstruct-dynamic_field-default } | `any` | `{:%{}, [], []}` |  |
+| [`default`](#guardedstruct-dynamic_field-default){: #guardedstruct-dynamic_field-default } | `any` | `%{}` |  |
 | [`derives`](#guardedstruct-dynamic_field-derives){: #guardedstruct-dynamic_field-derives } | `String.t` | `"validate(map)"` |  |
 | [`derive`](#guardedstruct-dynamic_field-derive){: #guardedstruct-dynamic_field-derive } | `String.t` |  |  |
 | [`validator`](#guardedstruct-dynamic_field-validator){: #guardedstruct-dynamic_field-validator } | `{atom, atom}` |  |  |
@@ -353,7 +365,7 @@ sub_field name, type
 | [`priority`](#guardedstruct-sub_field-priority){: #guardedstruct-sub_field-priority } | `boolean` |  |  |
 | [`error`](#guardedstruct-sub_field-error){: #guardedstruct-sub_field-error } | `boolean` |  |  |
 | [`authorized_fields`](#guardedstruct-sub_field-authorized_fields){: #guardedstruct-sub_field-authorized_fields } | `boolean` |  |  |
-| [`main_validator`](#guardedstruct-sub_field-main_validator){: #guardedstruct-sub_field-main_validator } | `{atom, atom}` |  |  |
+| [`main_validator`](#guardedstruct-sub_field-main_validator){: #guardedstruct-sub_field-main_validator } | `{atom, atom}` |  | A `{Module, :function}` called with the sub_field's validated attributes, like the section option. A `main_validator/1` defined in the parent module does not run for a sub_field. |
 
 
 ### guardedstruct.sub_field.conditional_field
@@ -477,7 +489,7 @@ sub_field name, type
 | [`priority`](#guardedstruct-sub_field-conditional_field-sub_field-priority){: #guardedstruct-sub_field-conditional_field-sub_field-priority } | `boolean` |  |  |
 | [`error`](#guardedstruct-sub_field-conditional_field-sub_field-error){: #guardedstruct-sub_field-conditional_field-sub_field-error } | `boolean` |  |  |
 | [`authorized_fields`](#guardedstruct-sub_field-conditional_field-sub_field-authorized_fields){: #guardedstruct-sub_field-conditional_field-sub_field-authorized_fields } | `boolean` |  |  |
-| [`main_validator`](#guardedstruct-sub_field-conditional_field-sub_field-main_validator){: #guardedstruct-sub_field-conditional_field-sub_field-main_validator } | `{atom, atom}` |  |  |
+| [`main_validator`](#guardedstruct-sub_field-conditional_field-sub_field-main_validator){: #guardedstruct-sub_field-conditional_field-sub_field-main_validator } | `{atom, atom}` |  | A `{Module, :function}` called with the sub_field's validated attributes, like the section option. A `main_validator/1` defined in the parent module does not run for a sub_field. |
 
 
 ### guardedstruct.sub_field.conditional_field.sub_field.field
@@ -568,7 +580,7 @@ sub_field name, type
 | [`priority`](#guardedstruct-sub_field-sub_field-priority){: #guardedstruct-sub_field-sub_field-priority } | `boolean` |  |  |
 | [`error`](#guardedstruct-sub_field-sub_field-error){: #guardedstruct-sub_field-sub_field-error } | `boolean` |  |  |
 | [`authorized_fields`](#guardedstruct-sub_field-sub_field-authorized_fields){: #guardedstruct-sub_field-sub_field-authorized_fields } | `boolean` |  |  |
-| [`main_validator`](#guardedstruct-sub_field-sub_field-main_validator){: #guardedstruct-sub_field-sub_field-main_validator } | `{atom, atom}` |  |  |
+| [`main_validator`](#guardedstruct-sub_field-sub_field-main_validator){: #guardedstruct-sub_field-sub_field-main_validator } | `{atom, atom}` |  | A `{Module, :function}` called with the sub_field's validated attributes, like the section option. A `main_validator/1` defined in the parent module does not run for a sub_field. |
 
 
 ### guardedstruct.sub_field.sub_field.field
@@ -757,7 +769,7 @@ sub_field name, type
 | [`priority`](#guardedstruct-conditional_field-sub_field-priority){: #guardedstruct-conditional_field-sub_field-priority } | `boolean` |  |  |
 | [`error`](#guardedstruct-conditional_field-sub_field-error){: #guardedstruct-conditional_field-sub_field-error } | `boolean` |  |  |
 | [`authorized_fields`](#guardedstruct-conditional_field-sub_field-authorized_fields){: #guardedstruct-conditional_field-sub_field-authorized_fields } | `boolean` |  |  |
-| [`main_validator`](#guardedstruct-conditional_field-sub_field-main_validator){: #guardedstruct-conditional_field-sub_field-main_validator } | `{atom, atom}` |  |  |
+| [`main_validator`](#guardedstruct-conditional_field-sub_field-main_validator){: #guardedstruct-conditional_field-sub_field-main_validator } | `{atom, atom}` |  | A `{Module, :function}` called with the sub_field's validated attributes, like the section option. A `main_validator/1` defined in the parent module does not run for a sub_field. |
 
 
 ### guardedstruct.conditional_field.sub_field.conditional_field
@@ -881,7 +893,7 @@ sub_field name, type
 | [`priority`](#guardedstruct-conditional_field-sub_field-conditional_field-sub_field-priority){: #guardedstruct-conditional_field-sub_field-conditional_field-sub_field-priority } | `boolean` |  |  |
 | [`error`](#guardedstruct-conditional_field-sub_field-conditional_field-sub_field-error){: #guardedstruct-conditional_field-sub_field-conditional_field-sub_field-error } | `boolean` |  |  |
 | [`authorized_fields`](#guardedstruct-conditional_field-sub_field-conditional_field-sub_field-authorized_fields){: #guardedstruct-conditional_field-sub_field-conditional_field-sub_field-authorized_fields } | `boolean` |  |  |
-| [`main_validator`](#guardedstruct-conditional_field-sub_field-conditional_field-sub_field-main_validator){: #guardedstruct-conditional_field-sub_field-conditional_field-sub_field-main_validator } | `{atom, atom}` |  |  |
+| [`main_validator`](#guardedstruct-conditional_field-sub_field-conditional_field-sub_field-main_validator){: #guardedstruct-conditional_field-sub_field-conditional_field-sub_field-main_validator } | `{atom, atom}` |  | A `{Module, :function}` called with the sub_field's validated attributes, like the section option. A `main_validator/1` defined in the parent module does not run for a sub_field. |
 
 
 ### guardedstruct.conditional_field.sub_field.conditional_field.sub_field.field
@@ -972,7 +984,7 @@ sub_field name, type
 | [`priority`](#guardedstruct-conditional_field-sub_field-sub_field-priority){: #guardedstruct-conditional_field-sub_field-sub_field-priority } | `boolean` |  |  |
 | [`error`](#guardedstruct-conditional_field-sub_field-sub_field-error){: #guardedstruct-conditional_field-sub_field-sub_field-error } | `boolean` |  |  |
 | [`authorized_fields`](#guardedstruct-conditional_field-sub_field-sub_field-authorized_fields){: #guardedstruct-conditional_field-sub_field-sub_field-authorized_fields } | `boolean` |  |  |
-| [`main_validator`](#guardedstruct-conditional_field-sub_field-sub_field-main_validator){: #guardedstruct-conditional_field-sub_field-sub_field-main_validator } | `{atom, atom}` |  |  |
+| [`main_validator`](#guardedstruct-conditional_field-sub_field-sub_field-main_validator){: #guardedstruct-conditional_field-sub_field-sub_field-main_validator } | `{atom, atom}` |  | A `{Module, :function}` called with the sub_field's validated attributes, like the section option. A `main_validator/1` defined in the parent module does not run for a sub_field. |
 
 
 ### guardedstruct.conditional_field.sub_field.sub_field.field
@@ -1186,7 +1198,7 @@ sub_field name, type
 | [`priority`](#guardedstruct-conditional_field-conditional_field-sub_field-priority){: #guardedstruct-conditional_field-conditional_field-sub_field-priority } | `boolean` |  |  |
 | [`error`](#guardedstruct-conditional_field-conditional_field-sub_field-error){: #guardedstruct-conditional_field-conditional_field-sub_field-error } | `boolean` |  |  |
 | [`authorized_fields`](#guardedstruct-conditional_field-conditional_field-sub_field-authorized_fields){: #guardedstruct-conditional_field-conditional_field-sub_field-authorized_fields } | `boolean` |  |  |
-| [`main_validator`](#guardedstruct-conditional_field-conditional_field-sub_field-main_validator){: #guardedstruct-conditional_field-conditional_field-sub_field-main_validator } | `{atom, atom}` |  |  |
+| [`main_validator`](#guardedstruct-conditional_field-conditional_field-sub_field-main_validator){: #guardedstruct-conditional_field-conditional_field-sub_field-main_validator } | `{atom, atom}` |  | A `{Module, :function}` called with the sub_field's validated attributes, like the section option. A `main_validator/1` defined in the parent module does not run for a sub_field. |
 
 
 ### guardedstruct.conditional_field.conditional_field.sub_field.field

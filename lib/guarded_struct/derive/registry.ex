@@ -100,4 +100,21 @@ defmodule GuardedStruct.Derive.Registry do
 
   def known_validate?(name) when is_atom(name), do: MapSet.member?(@validate_ops, name)
   def known_sanitize?(name) when is_atom(name), do: MapSet.member?(@sanitize_ops, name)
+
+  @doc """
+  Like `known_validate?/1`, but `extra` also names ops the built-in set does not
+  hold, such as the ones a `GuardedStruct.Derive.Extension` defines: a list of
+  atoms, `:any` when the ops cannot be listed, or a function returning either, called
+  only when `name` is not a built-in op.
+  """
+  def known_validate?(name, extra) when is_atom(name),
+    do: known_validate?(name) or extra_member?(extra, name)
+
+  @doc "Like `known_sanitize?/1`, with the extra ops of `known_validate?/2`."
+  def known_sanitize?(name, extra) when is_atom(name),
+    do: known_sanitize?(name) or extra_member?(extra, name)
+
+  defp extra_member?(:any, _name), do: true
+  defp extra_member?(extra, name) when is_function(extra, 0), do: extra_member?(extra.(), name)
+  defp extra_member?(extra, name), do: Enum.member?(extra, name)
 end

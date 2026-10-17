@@ -41,7 +41,7 @@ end
 |---|---|---|
 | `field` | struct slot | `:dynamic_field` kind when `dynamic_field` macro used. |
 | `sub_field` | nested submodule (`MyApp.User.Profile` etc.) | Recursive; own `error:`/`authorized_fields:`/`main_validator:`. |
-| `conditional_field` | one runtime-selected child | Children share parent's name. ≤ 1 `priority: true` child. |
+| `conditional_field` | one runtime-selected child | Children share parent's name. `priority: true` on the conditional keeps only the first child's error when none match. |
 | `virtual_field` | input-only, dropped from struct | Validated by main_validator; ideal for `password_confirmation`. No `struct`/`structs`/`priority`. |
 | `dynamic_field` | passthrough map, no key-atomization | Default `validate(map)`. Atom-attack safe. No `struct`/`structs`/`priority`. |
 
@@ -53,7 +53,9 @@ guardedstruct enforce: true,        # cascade to every child without default
               module: MyOther,      # emit struct into nested module
               error: true,          # generate MyApp.User.Error exception
               authorized_fields: true,  # reject unknown top-level keys
-              main_validator: {Checks, :consistency},
+              main_validator: {Checks, :consistency},  # wins over a main_validator/1 in the module
+              validate_derive: MyApp.Validate,         # modules serving unknown ops, before the app config
+              sanitize_derive: MyApp.Sanitize,
               json: true,           # auto-derive Jason/JSON encoder
               auto_wire: true       # (Ash only) inject Change automatically
 ```

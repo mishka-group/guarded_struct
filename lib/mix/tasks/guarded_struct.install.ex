@@ -14,7 +14,7 @@ if Code.ensure_loaded?(Igniter) do
 
     ## What it does
 
-      1. Adds `{:guarded_struct, "~> 0.1.0"}` to `mix.exs` deps (if not already)
+      1. Adds `{:guarded_struct, "~> 0.1.4"}` to `mix.exs` deps (if not already)
       2. Registers a `lint` alias chaining `mix spark.formatter` then `mix format`
       3. Seeds `config :guarded_struct, derive_extensions: []` in `config/config.exs`
          so users have an obvious place to plug in custom validators

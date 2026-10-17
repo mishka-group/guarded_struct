@@ -662,8 +662,8 @@ defmodule GuardedStructTest.DeriveTest do
       field(:id, integer())
       field(:title, String.t(), derives: "validate(not_empty, testv1)")
       field(:name, String.t(), derives: "validate(string, not_empty) sanitize(trim, capitalize)")
-      field(:last_name, String.t(), derives: "sanitize(capitalize_v1")
-      field(:nikname, String.t(), derives: "sanitize(not_exist")
+      field(:last_name, String.t(), derives: "sanitize(capitalize_v1)")
+      field(:nikname, String.t(), derives: "sanitize(not_exist)")
     end
   end
 
@@ -715,8 +715,8 @@ defmodule GuardedStructTest.DeriveTest do
         derives: "validate(string, not_empty) sanitize(trim, capitalize_v2)"
       )
 
-      field(:last_name, String.t(), derives: "sanitize(capitalize_v1")
-      field(:nikname, String.t(), derives: "sanitize(not_exist")
+      field(:last_name, String.t(), derives: "sanitize(capitalize_v1)")
+      field(:nikname, String.t(), derives: "sanitize(not_exist)")
     end
   end
 
@@ -981,6 +981,124 @@ defmodule GuardedStructTest.DeriveTest do
     end
   end
 
+  describe "default_when_nil through the derive pipeline" do
+    alias GuardedStruct.Derive
+    alias GuardedStruct.Validate
+
+    defmodule DefaultWhenNil do
+      use GuardedStruct
+
+      guardedstruct do
+        field(:priority, integer(), derives: "sanitize(default_when_nil=0, clamp=[0, 100])")
+        field(:level, integer(), derives: "sanitize(default_when_nil=500, clamp=[0, 100])")
+        field(:count, integer(), derives: "sanitize(default_when_nil=0) validate(integer)")
+        field(:name, String.t(), derives: "sanitize(default_when_nil=anonymous, upcase)")
+        field(:active, boolean(), derives: "sanitize(default_when_nil=false)")
+        field(:offset, integer(), derives: "sanitize(default_when_nil=-1)")
+        field(:scores, list(), derives: "sanitize(each=[default_when_nil=0])")
+        field(:tag, String.t(), derives: "sanitize(upcase, default_when_nil=fill)")
+      end
+    end
+
+    defmodule NilStaysNil do
+      use GuardedStruct
+
+      guardedstruct do
+        field(:empty, String.t(), derives: "sanitize(default_when_empty=filled)")
+        field(:upper, String.t(), derives: "sanitize(upcase) validate(string)")
+        field(:shown, integer(), derives: "sanitize(default_when_nil=nil) validate(integer)")
+        field(:limited, integer(), derives: "sanitize(clamp=[0, 10]) validate(min_len=3)")
+      end
+    end
+
+    test "a nil field takes the default" do
+      assert {:ok, %DefaultWhenNil{priority: 0}} = DefaultWhenNil.builder(%{priority: nil})
+    end
+
+    test "a field missing from the input takes the default" do
+      assert {:ok, %DefaultWhenNil{priority: 0, offset: -1, active: false, name: "ANONYMOUS"}} =
+               DefaultWhenNil.builder(%{})
+    end
+
+    test "the ops written after it run on the default" do
+      assert {:ok, %DefaultWhenNil{level: 100}} = DefaultWhenNil.builder(%{level: nil})
+      assert {:ok, %DefaultWhenNil{name: "ANONYMOUS"}} = DefaultWhenNil.builder(%{name: nil})
+    end
+
+    test "an op written before it runs on the default as well" do
+      assert {:ok, %DefaultWhenNil{tag: "FILL"}} = DefaultWhenNil.builder(%{tag: nil})
+      assert {:ok, %DefaultWhenNil{tag: "FILL"}} = DefaultWhenNil.builder(%{})
+    end
+
+    test "the validate group runs on the default too" do
+      assert {:ok, %DefaultWhenNil{count: 0}} = DefaultWhenNil.builder(%{count: nil})
+    end
+
+    test "a value that is there is left alone" do
+      assert {:ok, %DefaultWhenNil{priority: 7, level: 100, name: "MISHKA", active: true}} =
+               DefaultWhenNil.builder(%{priority: 7, level: 700, name: "mishka", active: true})
+    end
+
+    test "false is a value, not a missing one" do
+      assert {:ok, %DefaultWhenNil{active: false}} = DefaultWhenNil.builder(%{active: false})
+    end
+
+    test "string keys fill the same way" do
+      assert {:ok, %DefaultWhenNil{priority: 0, count: 3}} =
+               DefaultWhenNil.builder(%{"priority" => nil, "count" => 3})
+    end
+
+    test "each=[default_when_nil=...] still fills the nil items of a list" do
+      assert {:ok, %DefaultWhenNil{scores: [1, 0, 3]}} =
+               DefaultWhenNil.builder(%{scores: [1, nil, 3]})
+    end
+
+    test "the other ops keep skipping a nil field" do
+      assert {:ok, %NilStaysNil{empty: nil, upper: nil, shown: nil, limited: nil}} =
+               NilStaysNil.builder(%{})
+
+      assert {:ok, %NilStaysNil{empty: nil, upper: nil}} =
+               NilStaysNil.builder(%{empty: nil, upper: nil})
+    end
+
+    test "default_when_nil=nil has nothing to fill with" do
+      assert {:ok, %NilStaysNil{shown: nil}} = NilStaysNil.builder(%{shown: nil})
+    end
+
+    test "Derive.derive/1 fills a key that is not in the data" do
+      input = %{field: :a, derive_ops: %{sanitize: [{:default_when_nil, 3}]}}
+
+      assert {:ok, %{a: 3, b: 1}} = Derive.derive({:ok, %{b: 1}, [input]})
+    end
+
+    test "Derive.derive/1 takes the default from the first group that has one" do
+      ops = [
+        %{sanitize: [:trim]},
+        %{sanitize: [{:default_when_nil, 9}]}
+      ]
+
+      input = %{field: :a, derive_ops: ops, hint: ["first", "second"]}
+
+      assert {:ok, %{a: 9}} = Derive.derive({:ok, %{a: nil}, [input]})
+    end
+
+    test "Derive.derive/1 leaves a nil field with other ops alone" do
+      input = %{field: :a, derive_ops: %{sanitize: [:trim], validate: [:string]}}
+
+      assert {:ok, %{a: nil}} = Derive.derive({:ok, %{a: nil}, [input]})
+    end
+
+    test "Validate.run/2 fills a nil value" do
+      assert {:ok, 0} = Validate.run("sanitize(default_when_nil=0)", nil)
+      assert {:ok, 100} = Validate.run("sanitize(default_when_nil=500, clamp=[0, 100])", nil)
+      assert {:ok, nil} = Validate.run("sanitize(upcase) validate(string)", nil)
+    end
+
+    test "Validate.field/3 fills a nil value" do
+      assert {:ok, 0} = Validate.field(DefaultWhenNil, :priority, nil)
+    end
+  end
+
   describe "named regex aliases" do
     test ":slug accepts kebab-case lowercase" do
       assert ValidationDerive.validate(:slug, "my-slug-1", :name) == "my-slug-1"
@@ -1217,6 +1335,88 @@ defmodule GuardedStructTest.DeriveTest do
       assert "12:00:00" = ValidationDerive.validate(:time_struct, "12:00:00", :t)
 
       assert {:error, :t, :time_struct, _} = ValidationDerive.validate(:time_struct, "noon", :t)
+    end
+  end
+
+  describe "struct values through builder/1" do
+    defmodule StructValues do
+      use GuardedStruct
+
+      guardedstruct do
+        field(:time, term(), derives: "validate(time_struct)")
+        field(:uri, term(), derives: "validate(struct)")
+        field(:date, term(), derives: "validate(date_struct)")
+        field(:utc, term(), derives: "validate(utc_datetime)")
+        field(:naive, term(), derives: "validate(naive_datetime)")
+        field(:range, term(), derives: "validate(range)")
+        field(:raw, term())
+        field(:times, term(), derives: "validate(each=[time_struct])")
+
+        sub_field(:nested, struct()) do
+          field(:time, term(), derives: "validate(time_struct)")
+          field(:uri, term())
+        end
+      end
+    end
+
+    test "validate(time_struct) accepts a %Time{}" do
+      assert {:ok, %StructValues{time: ~T[10:00:00]}} =
+               StructValues.builder(%{time: ~T[10:00:00]})
+    end
+
+    test "validate(struct) accepts a %URI{}" do
+      uri = URI.parse("https://example.com/x")
+      assert {:ok, %StructValues{uri: ^uri}} = StructValues.builder(%{uri: uri})
+    end
+
+    test "a field without derives keeps the struct it was given" do
+      uri = URI.parse("https://example.com")
+      range = 1..3
+
+      assert {:ok, %StructValues{raw: ~T[10:00:00]}} = StructValues.builder(%{raw: ~T[10:00:00]})
+      assert {:ok, %StructValues{raw: ^uri}} = StructValues.builder(%{raw: uri})
+      assert {:ok, %StructValues{raw: ^range}} = StructValues.builder(%{raw: range})
+    end
+
+    test "Date, DateTime and NaiveDateTime stay structs" do
+      date = ~D[2026-01-02]
+      utc = ~U[2026-01-02 03:04:05Z]
+      naive = ~N[2026-01-02 03:04:05]
+
+      assert {:ok, %StructValues{date: ^date, utc: ^utc, naive: ^naive}} =
+               StructValues.builder(%{date: date, utc: utc, naive: naive})
+    end
+
+    test "a struct is still refused where the derive does not accept it" do
+      assert {:error, errors} = StructValues.builder(%{time: ~D[2026-01-02]})
+      assert Enum.any?(errors, &(&1.field == :time and &1.action == :time_struct))
+
+      assert {:error, errors} = StructValues.builder(%{uri: %{host: "example.com"}})
+      assert Enum.any?(errors, &(&1.field == :uri and &1.action == :struct))
+    end
+
+    test "each=[time_struct] over a list of %Time{}" do
+      times = [~T[10:00:00], ~T[11:00:00]]
+      assert {:ok, %StructValues{times: ^times}} = StructValues.builder(%{times: times})
+    end
+
+    test "the structs inside a sub_field are kept too" do
+      uri = URI.parse("https://example.com")
+
+      assert {:ok, %StructValues{nested: %StructValues.Nested{time: ~T[10:00:00], uri: ^uri}}} =
+               StructValues.builder(%{nested: %{time: ~T[10:00:00], uri: uri}})
+    end
+
+    test "string keys do not change that" do
+      uri = URI.parse("https://example.com")
+
+      assert {:ok, %StructValues{time: ~T[10:00:00], uri: ^uri}} =
+               StructValues.builder(%{"time" => ~T[10:00:00], "uri" => uri})
+    end
+
+    test "a struct is still taken as the whole input" do
+      assert {:ok, %StructValues{raw: ~T[10:00:00]}} =
+               StructValues.builder(%StructValues{raw: ~T[10:00:00]})
     end
   end
 

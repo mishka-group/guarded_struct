@@ -163,6 +163,31 @@ defmodule GuardedStructTest.CoreKeysTest do
     def is_stuff?(_data), do: false
   end
 
+  defmodule FromStruct do
+    use GuardedStruct
+
+    guardedstruct do
+      field(:username, String.t())
+      field(:user_id, String.t(), from: "root::username")
+
+      sub_field(:profile, struct()) do
+        field(:nickname, String.t(), from: "root::username")
+        field(:city, String.t())
+        field(:place, String.t(), from: "city")
+      end
+    end
+  end
+
+  defmodule OnStruct do
+    use GuardedStruct
+
+    guardedstruct do
+      field(:role, String.t())
+      field(:role_id, String.t(), on: "root::role")
+      field(:admin_id, String.t(), domain: "!role=String[admin]")
+    end
+  end
+
   ############# (▰˘◡˘▰) Core Key GuardedStructTest Tests (▰˘◡˘▰) ##############
 
   test "normal on core key" do
@@ -1031,5 +1056,54 @@ defmodule GuardedStructTest.CoreKeysTest do
                   id: ":test"
                 }, :edit}
              )
+  end
+
+  describe "from core key" do
+    test "a source with a value replaces the value the caller sent" do
+      {:ok, %FromStruct{username: "mishka", user_id: "mishka"}} =
+        assert FromStruct.builder(%{username: "mishka", user_id: "sent_by_caller"})
+    end
+
+    test "a missing or nil source keeps the field's own value" do
+      {:ok, %FromStruct{user_id: "sent_by_caller"}} =
+        assert FromStruct.builder(%{user_id: "sent_by_caller"})
+
+      {:ok, %FromStruct{user_id: "sent_by_caller"}} =
+        assert FromStruct.builder(%{username: nil, user_id: "sent_by_caller"})
+
+      {:ok, %FromStruct{user_id: nil}} = assert FromStruct.builder(%{})
+    end
+
+    test "root starts at the whole input, any other path at the field's own map" do
+      {:ok, %FromStruct{profile: %FromStruct.Profile{nickname: "mishka", place: "Tehran"}}} =
+        assert FromStruct.builder(%{
+                 username: "mishka",
+                 profile: %{nickname: "sent_by_caller", city: "Tehran", place: "sent_by_caller"}
+               })
+    end
+  end
+
+  describe "on core key" do
+    test "only the presence of the path is checked, not its value" do
+      {:ok, %OnStruct{role: "user", role_id: "r1"}} =
+        assert OnStruct.builder(%{role: "user", role_id: "r1"})
+
+      {:ok, %OnStruct{role: "admin", role_id: "r1"}} =
+        assert OnStruct.builder(%{role: "admin", role_id: "r1"})
+
+      {:error, [%{field: :role_id, action: :dependent_keys}]} =
+        assert OnStruct.builder(%{role_id: "r1"})
+    end
+
+    test "domain compares the value of the other field" do
+      {:ok, %OnStruct{admin_id: "a1"}} =
+        assert OnStruct.builder(%{role: "admin", admin_id: "a1"})
+
+      {:error, [%{field: :admin_id, action: :domain_parameters}]} =
+        assert OnStruct.builder(%{role: "user", admin_id: "a1"})
+
+      {:error, [%{field: :admin_id, action: :domain_parameters}]} =
+        assert OnStruct.builder(%{admin_id: "a1"})
+    end
   end
 end

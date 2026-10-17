@@ -37,6 +37,10 @@ Live source of truth: `lib/guarded_struct/derive/registry.ex`. Current set:
 `:username`, `:full_name`, `:enum`, `:equal`, `:custom`, `:either`, `:record`,
 `:string_float`, `:string_integer`, `:some_string_float`, `:some_string_integer`.
 
+**Optional packages:** `:email` needs `email_checker`; `:tell`, `:geo_url` and
+`:location` need `ex_url`; `tell=<code>` also needs `ex_phone_number`. A missing
+package makes the op return an error that names it.
+
 ## Pipe-friendly direct API
 
 ```elixir

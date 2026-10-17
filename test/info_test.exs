@@ -390,4 +390,112 @@ defmodule GuardedStructTest.InfoTest do
       assert nick_meta.enforce == false
     end
   end
+
+  describe "GuardedStruct.Info — pattern-keyed (regex field) modules" do
+    test "fields/1 lists the declared patterns instead of raising" do
+      assert [%Regex{} = pattern] = Info.fields(HeadersMap)
+      assert Regex.source(pattern) == "^X-[A-Z][A-Za-z\\-]*$"
+    end
+
+    test "fields/1 lists every pattern of a module that has several" do
+      assert [%Regex{}, %Regex{}] =
+               Info.fields(GuardedStructTest.Fixtures.PatternMap.MultiPattern)
+    end
+
+    test "field_kind/2 is :pattern_field for a key a pattern matches" do
+      assert Info.field_kind(HeadersMap, :"X-Api-Key") == :pattern_field
+    end
+
+    test "field_kind/2 is nil for a key no pattern matches" do
+      assert Info.field_kind(HeadersMap, :name) == nil
+      assert Info.field_kind(HeadersMap, :"x-lowercase") == nil
+    end
+
+    test "field/2 answers with the metadata of the pattern that matches" do
+      assert %{kind: :pattern_field, pattern: %Regex{}} = Info.field(HeadersMap, :"X-Api-Key")
+      assert Info.field(HeadersMap, :name) == nil
+    end
+
+    test "field?/2 follows the patterns" do
+      assert Info.field?(HeadersMap, :"X-Tenant-Id")
+      refute Info.field?(HeadersMap, :name)
+    end
+
+    test "the other lookups answer for a matching key" do
+      assert Info.field_default(HeadersMap, :"X-Api-Key") == nil
+      assert Info.field_derives(HeadersMap, :"X-Api-Key") == "validate(string)"
+      assert Info.field_validator(HeadersMap, :"X-Api-Key") == nil
+      refute Info.virtual?(HeadersMap, :"X-Api-Key")
+      refute Info.dynamic?(HeadersMap, :"X-Api-Key")
+    end
+
+    test "a key matched by the first pattern of several reads that pattern's metadata" do
+      alias GuardedStructTest.Fixtures.PatternMap.MultiPattern
+
+      assert %{pattern: pattern} = Info.field(MultiPattern, :shard_1)
+      assert Regex.match?(pattern, "shard_1")
+      assert %{pattern: backup} = Info.field(MultiPattern, :backup_2)
+      assert Regex.match?(backup, "backup_2")
+    end
+
+    test "a module of plain fields is not looked up by pattern" do
+      assert Info.field_kind(EverythingUser, :"X-Api-Key") == nil
+    end
+
+    test "describe/1 still reports the same kind" do
+      assert [%{kind: :pattern_field}] = Info.describe(HeadersMap).fields
+    end
+  end
+
+  describe "GuardedStruct.Info — enforce_keys(:all)" do
+    defmodule DeepEnforce do
+      use GuardedStruct
+
+      guardedstruct do
+        field(:id, String.t(), enforce: true)
+        field(:note, String.t())
+
+        sub_field(:profile, struct(), enforce: true) do
+          field(:name, String.t(), enforce: true)
+          field(:bio, String.t(), enforce: false)
+
+          sub_field(:address, struct()) do
+            field(:city, String.t(), enforce: true)
+            field(:zip, String.t())
+          end
+        end
+
+        sub_field(:optional, struct()) do
+          field(:flag, String.t())
+        end
+      end
+    end
+
+    test "a sub_field lists only the keys of its own that are enforced" do
+      assert [%{address: [:city]}, :password, :id] = EverythingUser.enforce_keys(:all)
+    end
+
+    test "at every depth" do
+      assert [%{profile: [%{address: [:city]}, :name]}, :id] = DeepEnforce.enforce_keys(:all)
+    end
+
+    test "a sub_field that is not enforced is not listed" do
+      refute Enum.any?(DeepEnforce.enforce_keys(:all), &match?(%{optional: _}, &1))
+    end
+
+    test "keys(:all) still lists every key" do
+      assert [
+               :id,
+               :note,
+               %{profile: [:name, :bio, %{address: [:city, :zip]}]},
+               %{optional: [:flag]}
+             ] =
+               DeepEnforce.keys(:all)
+    end
+
+    test "the nested list holds the same keys as the sub_field module's own enforce_keys/0" do
+      assert DeepEnforce.Profile.enforce_keys() == [:address, :name]
+      assert DeepEnforce.Profile.Address.enforce_keys() == [:city]
+    end
+  end
 end

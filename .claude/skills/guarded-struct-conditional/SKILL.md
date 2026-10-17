@@ -26,7 +26,7 @@ end
 
 | Modifier | Effect |
 |---|---|
-| `priority: true` on one child | Short-circuit when this child wins. ≤ 1 per parent. |
+| `priority: true` on the `conditional_field` | When no child matches, keep only the first child's error. Children are always tried in order. |
 | `structs: true` on a child or inner conditional | Iterate a list; apply children element-wise. |
 | `hint: "label"` on a child | Propagated into error maps as `__hint__:` for debugging. |
 | `validator: {VAL, :is_map_data}` on an inner conditional | Gate descent: only enter when input is a map. |

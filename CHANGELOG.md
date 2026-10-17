@@ -1,3 +1,56 @@
+# Changelog for GuardedStruct 0.1.4
+
+> The documented behaviour is now the real behaviour: every option and op the docs promised works, and a derive string that used to be dropped silently fails to compile.
+
+**Tracking PR**: [#15](https://github.com/mishka-group/guarded_struct/pull/15)
+
+### Bugs:
+
+- Fix `main_validator: {Mod, :fun}` on the section and on a `sub_field` — it was never called, only a `main_validator/1` defined in the module ran. The option now wins; a `main_validator/1` in the module still runs when the option is not set
+- Fix the `validate_derive` / `sanitize_derive` section options — only the application config was used at runtime. The modules of the section option (and of its `sub_field`s) are tried first, the application config serves the ops they leave unhandled. `Validate.field/4` and `Validate.partial/2` read them too
+- Fix `sanitize(default_when_nil=...)` — it never filled a `nil` or missing field because derives skip `nil`. It now does, and every op of the string then runs on the default, wherever it sits in the string; every other op still skips `nil`
+- Fix the derive parser silently dropping operands: `equal=Type::value` (`equal=Integer::1`, `String::`, `Float::`, `Atom::`, `Map::`, `Tuple::`), negative numbers (`min_len=-2`, `clamp=[-10, 10]`, `default_when_empty=-1`), floats and other literals (`default_when_nil=false`). They are parsed now; an operand that can't be parsed, a derives string the Elixir parser refuses (such as `enum=Atom[a, b]`) and `enum=Integer[...]` / `equal=Integer::...` values that aren't numbers raise `Spark.Error.DslError` at compile time. A field whose derives were all dropped is no longer set to `nil`
+- Fix the derive parser silently dropping a group it cannot use: one that is not `sanitize(...)` or `validate(...)` (`validte(string)`, `foo`) was skipped, and a group with no closing `)` (`validate(string`) was closed for you. Both raise `Spark.Error.DslError` that names the bad part when the module compiles, and `Validate.run/2` returns the `:bad_parameters` error. An empty or blank string stays a no-op. A string that relied on the missing `)` needs it written
+- Fix a `validate()` / `sanitize()` group with no ops setting the field to `nil` — the value is kept
+- Fix `equal=String::value` never matching once pre-evaluated
+- Fix `builder/1` turning every struct other than `Date`, `DateTime` and `NaiveDateTime` into a plain map, which made `validate(time_struct)` / `validate(struct)` fail for `%Time{}` / `%URI{}`. Structs are kept intact
+- Fix extension ops inside `each=[...]` / `optional=[...]` being a compile error (`unknown validate op`) while `either=[...]` accepted them. Ops of the module's `derive_extensions:`, of the global config and (when a `validate_derive` / `sanitize_derive` is set) of those modules are accepted
+- Fix `domain:` rules not being evaluated inside a `GuardedStruct.AshResource` resource — the extension now runs `ParseDomain` (and `ParseCoreKeys`) like the standalone DSL
+- Fix the optional packages `ex_url`, `ex_phone_number` and `email_checker` being detected while GuardedStruct itself compiled. When it compiled before them, as in a `Mix.install` that lists it first, `validate(tell)`, `validate(tell=98)`, `validate(geo_url)`, `validate(location)` and `validate(email)` all failed with `Unexpected type error`. The package is looked up when the op runs, and an op whose package is missing returns an error that names the package to add
+- Fix `Validate.run/2` skipping the checks a module makes of its derive strings: `validate(max_len=foo)` returned `{:ok, value}`, so did a string the parser refuses such as `validate(enum=Atom[a, b])`, and `validate(equal=Integer::abc)` raised `ArgumentError`. It now returns `{:error, [%{field: :__value__, action: :bad_parameters, message: ...}]}` for each of them. The inner ops of `each=[...]` / `optional=[...]` may be the ops of the global derive extensions, or any name when a `validate_derive` / `sanitize_derive` is configured
+- Fix the Ash extension not accepting `guardedstruct opts do … end`, `sub_field name, type, opts do … end` and `conditional_field name, type, opts do … end` — `undefined function sub_field/4` — although the docs show them and `use GuardedStruct` takes them. They work in a resource now, next to the Spark form that sets each option as a setter at the top of its block (`auto_wire true`); the `@derives` decorator stays standalone-only
+- Fix `dynamic_field` inside a `sub_field` not being identity-preserved: the parent converted its keys (`"role"` came back as `:role`). Keys stay as given in a `sub_field` of any depth, a list `sub_field`, a `struct:` module and a `conditional_field`'s `sub_field`; `Validate.partial/2` keeps them too
+- Fix `GuardedStruct.Info.fields/1` raising `KeyError` on a pattern-keyed (regex) module — it lists the patterns. `field_kind/2` returns `:pattern_field` for a key a pattern matches, and `field/2` / `field?/2` follow the patterns
+- Fix `enforce_keys(:all)` listing every key of a `sub_field` instead of only the enforced ones
+- Fix the `validator:` error of a pattern-keyed field missing `:field` — it carries `field: :__map__` like the other errors of the module
+
+### Docs:
+
+- Fix `auto` being documented as filling only missing values — in `:add` mode it replaces a value the caller sent; `:edit` keeps it. The Livebook's example labels were inverted
+- Fix `from` being documented as filling a field only when it is unset — a source that holds a value replaces the field's own value, a missing or `nil` source keeps it
+- Fix `on` being documented as comparing a value (`on: "role=admin"`) and as emitting a `:domain_parameters` error — it only checks that the path is present and emits `:dependent_keys`; `domain` compares the value
+- Fix `validate(url)` being documented as needing `ex_url` (it needs no package) and `validate(tell=98)` as needing only `ex_url` (it also needs `ex_phone_number`); document that the order of the optional dependencies does not matter
+- Fix `priority: true` being documented on a child — it works on the `conditional_field` and keeps only the first child's error when none match
+- Fix the README example that wrote a `sanitize(...)` group after `validate(...)`; every `sanitize` group runs before every `validate` group
+- Fix the verifiers being documented as rejecting the module — they only warn at compile time and the module still compiles
+- Fix `usage-rules/api.md`: `Diff.diff/2` returns `{:changed, old, new}` and the raising form is `builder(attrs, true)`
+- Fix the `domain` example `Atom[admin::moderator]` to `Atom[admin, moderator]`
+- Fix `no_control` being documented as stripping every control character — tab, LF and CR are kept
+- Fix `html_sanitize_ex` being documented as optional; the minimum is Elixir 1.17 and the Livebook's `Mix.install` versions install
+- Fix the `custom=[Mod, :ok?]` sample in `usage-rules/ash.md` (the op was dropped); document `main_validator` on a `sub_field`, the `validate_derive` / `sanitize_derive` precedence, the operand forms and `Info` on pattern-keyed modules
+- Document `main_validator`, `validate_derive` and `sanitize_derive` in the DSL cheat sheets
+
+### Tests:
+
+- Add the tests for each of the fixes above: `derive_operands_test.exs`, `derive_section_options_test.exs` and new cases in the parser, op-param, registry, derive, extension, validator, Ash, dynamic, Info and pattern-map suites, `core_keys_test.exs` for `from`, `on` and `domain`, `optional_packages_test.exs` for a missing or late package, `validate_run_derive_test.exs` for a wrong derive string in `Validate.run/2`, and the option forms of the Ash extension in `ash_resource_test.exs` and `ash_resource_change_test.exs`
+
+### Dependencies:
+
+- Update `ash` 3.33.11 → 3.36.1, `spark` 2.7.3 → 2.7.8, `sourceror` 1.12.3 → 1.12.4 (and `decimal` 3.2.0, `ex_ast` 0.16.0, `makeup` 1.2.3, `req` 0.7.5, `spitfire` 0.4.3, `sweet_xml` master)
+- Raise the dev/test requirements to `{:ash, "~> 3.36"}` and `{:sourceror, "~> 1.12"}`
+
+---
+
 # Changelog for GuardedStruct 0.1.0
 
 > We are delighted to introduce v0.1.0 — a from-scratch rewrite of the macro core on top of [Spark](https://hex.pm/packages/spark). Every existing 0.0.x public API is preserved. Bump the dep, run `mix deps.get`, and existing tests stay green.
@@ -33,7 +86,7 @@
 - Add `each=[ops]` combinator on both sanitize and validate — applies inner ops to every element of a list; validate error message reports failing indices.
 - Add `optional=[ops]` validator wrapper — passes `nil` through, runs inner ops on non-nil values.
 - Add list hygiene sanitizers — `:uniq`, `:compact`, `:reject_empty`, `:sort`.
-- Add string hygiene sanitizers — `:squish` (collapse runs of whitespace + trim), `:no_control` (strip ASCII control chars), `:no_zero_width` (strip zero-width unicode).
+- Add string hygiene sanitizers — `:squish` (collapse runs of whitespace + trim), `:no_control` (strip ASCII control chars, but keep tab, LF and CR), `:no_zero_width` (strip zero-width unicode).
 - Add `:rich_text_safe` sanitizer — sugar that composes `:no_zero_width` + `:no_control` in one named op for template/content/bio fields; non-binary inputs pass through untouched.
 - Add named regex validators — `:slug`, `:hostname`, `:port_number`, `:hex_color`, `:semver`. Patterns are anchored, bounded, and ReDoS-safe; compiled once at module load.
 - Add `:language_code` validator — BCP-47 / ISO 639-1 shape (e.g. `en`, `en-US`, `zh-Hant`, `pt-BR`). Anchored regex, case-insensitive, primary 2–3 letters + optional `-subtag` segments (2–8 alnum each).
@@ -114,7 +167,7 @@
 - Add `{:sourceror, "~> 1.7", only: [:dev, :test]}` (required by Spark.Formatter) [#13](https://github.com/mishka-group/guarded_struct/pull/13)
 - Add `{:igniter, "~> 0.8", only: [:dev, :test]}` (installer mix task) [#13](https://github.com/mishka-group/guarded_struct/pull/13)
 - Add `{:ash, "~> 3.0", only: [:dev, :test]}` (real Ash integration suite — not a runtime dep) [#13](https://github.com/mishka-group/guarded_struct/pull/13)
-- All optional deps unchanged (`html_sanitize_ex`, `email_checker`, `ex_url`, `ex_phone_number`, `sweet_xml`) [#13](https://github.com/mishka-group/guarded_struct/pull/13)
+- `html_sanitize_ex` is a required dependency; the optional deps are unchanged (`email_checker`, `ex_url`, `ex_phone_number`, `sweet_xml`) [#13](https://github.com/mishka-group/guarded_struct/pull/13)
 
 ---
 

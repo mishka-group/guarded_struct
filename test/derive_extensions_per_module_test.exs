@@ -429,4 +429,307 @@ defmodule GuardedStructTest.DeriveExtensionsPerModuleTest do
       end
     end
   end
+
+  # ---------------- 9. Extension ops inside each=[...] / optional=[...] ----------------
+
+  describe "extension ops inside each=[...] and optional=[...]" do
+    defmodule ComboDerives do
+      use GuardedStruct.Derive.Extension
+
+      derives do
+        validator :combo_ok, fn input -> is_binary(input) and input != "" end
+
+        sanitizer :combo_shout, fn
+          input when is_binary(input) -> String.upcase(input) <> "!"
+          input -> input
+        end
+      end
+    end
+
+    defmodule OpenValidate do
+      def validate(:open_op, input, _field), do: input
+    end
+
+    defmodule OpenSanitize do
+      def sanitize(input, :open_op), do: input
+    end
+
+    # Another test file leaves `validate_derive` / `sanitize_derive` in the
+    # application config, which lets any inner op through.
+    setup do
+      previous = %{
+        validate_derive: Application.get_env(:guarded_struct, :validate_derive),
+        sanitize_derive: Application.get_env(:guarded_struct, :sanitize_derive)
+      }
+
+      Application.delete_env(:guarded_struct, :validate_derive)
+      Application.delete_env(:guarded_struct, :sanitize_derive)
+
+      on_exit(fn ->
+        for {key, value} <- previous, value do
+          Application.put_env(:guarded_struct, key, value)
+        end
+      end)
+
+      :ok
+    end
+
+    defp compile(source) do
+      name = "Combinator#{System.unique_integer([:positive])}"
+      {{:module, module, _binary, _}, _binding} = Code.eval_string(source.(name))
+      module
+    end
+
+    defp module_source(opt, derive) do
+      fn name ->
+        """
+        defmodule #{name} do
+          use GuardedStruct#{opt}
+
+          guardedstruct do
+            field(:value, term(), derives: #{inspect(derive)})
+          end
+        end
+        """
+      end
+    end
+
+    test "validate each=[...] runs the per-module extension on every item" do
+      module =
+        compile(
+          module_source(
+            ", derive_extensions: [#{inspect(ComboDerives)}]",
+            "validate(list, each=[combo_ok])"
+          )
+        )
+
+      assert {:ok, _} = module.builder(%{value: ["a", "b"]})
+      assert {:error, errors} = module.builder(%{value: ["a", ""]})
+      assert Enum.any?(errors, &(&1.action == :combo_ok and &1.__index__ == 1))
+    end
+
+    test "validate optional=[...] lets nil through and checks the rest" do
+      module =
+        compile(
+          module_source(
+            ", derive_extensions: [#{inspect(ComboDerives)}]",
+            "validate(optional=[combo_ok])"
+          )
+        )
+
+      assert {:ok, _} = module.builder(%{value: nil})
+      assert {:ok, _} = module.builder(%{value: "a"})
+      assert {:error, errors} = module.builder(%{value: ""})
+      assert Enum.any?(errors, &(&1.action == :combo_ok))
+    end
+
+    test "sanitize each=[...] runs the extension's sanitizer on every item" do
+      module =
+        compile(
+          module_source(
+            ", derive_extensions: [#{inspect(ComboDerives)}]",
+            "sanitize(each=[combo_shout])"
+          )
+        )
+
+      assert {:ok, %{value: ["A!", "B!"]}} = module.builder(%{value: ["a", "b"]})
+    end
+
+    test "an extension op next to a built-in one, and nested combinators" do
+      module =
+        compile(
+          module_source(
+            ", derive_extensions: [#{inspect(ComboDerives)}]",
+            "validate(each=[string, optional=[combo_ok]])"
+          )
+        )
+
+      assert {:ok, _} = module.builder(%{value: ["a", "b"]})
+    end
+
+    test "the ops of the global config count when there is no per-module opt" do
+      Application.put_env(:guarded_struct, :derive_extensions, [GlobalDerives, ComboDerives])
+
+      module = compile(module_source("", "validate(each=[uuid7, combo_ok])"))
+
+      assert {:ok, _} = module.builder(%{value: ["a"]})
+      assert {:error, _} = module.builder(%{value: [1]})
+    end
+
+    test ":config brings the global ops in next to the per-module ones" do
+      module =
+        compile(
+          module_source(
+            ", derive_extensions: [:config, #{inspect(ComboDerives)}]",
+            "validate(each=[uuid7, combo_ok])"
+          )
+        )
+
+      assert {:ok, _} = module.builder(%{value: ["a"]})
+    end
+
+    test "inside a sub_field" do
+      source = fn name ->
+        """
+        defmodule #{name} do
+          use GuardedStruct, derive_extensions: [#{inspect(ComboDerives)}]
+
+          guardedstruct do
+            sub_field(:inner, struct()) do
+              field(:tags, list(), derives: "validate(each=[combo_ok])")
+            end
+          end
+        end
+        """
+      end
+
+      module = compile(source)
+
+      assert {:ok, _} = module.builder(%{inner: %{tags: ["a"]}})
+      assert {:error, _} = module.builder(%{inner: %{tags: [""]}})
+    end
+
+    test "an op no extension defines still raises, with an extension in play" do
+      assert_raise Spark.Error.DslError, ~r/unknown validate op :combo_typo inside `each`/, fn ->
+        compile(
+          module_source(
+            ", derive_extensions: [#{inspect(ComboDerives)}]",
+            "validate(each=[combo_typo])"
+          )
+        )
+      end
+
+      assert_raise Spark.Error.DslError, ~r/unknown sanitize op :combo_typo inside `each`/, fn ->
+        compile(
+          module_source(
+            ", derive_extensions: [#{inspect(ComboDerives)}]",
+            "sanitize(each=[combo_typo])"
+          )
+        )
+      end
+    end
+
+    test "a validator is not a sanitizer: each side only knows its own ops" do
+      assert_raise Spark.Error.DslError, ~r/unknown sanitize op :combo_ok/, fn ->
+        compile(
+          module_source(
+            ", derive_extensions: [#{inspect(ComboDerives)}]",
+            "sanitize(each=[combo_ok])"
+          )
+        )
+      end
+
+      assert_raise Spark.Error.DslError, ~r/unknown validate op :combo_shout/, fn ->
+        compile(
+          module_source(
+            ", derive_extensions: [#{inspect(ComboDerives)}]",
+            "validate(each=[combo_shout])"
+          )
+        )
+      end
+    end
+
+    test "derive_extensions: [] leaves the global ops out" do
+      Application.put_env(:guarded_struct, :derive_extensions, [ComboDerives])
+
+      assert_raise Spark.Error.DslError, ~r/unknown validate op :combo_ok/, fn ->
+        compile(module_source(", derive_extensions: []", "validate(each=[combo_ok])"))
+      end
+    end
+
+    test "an op of another module's per-module opt is not visible" do
+      assert_raise Spark.Error.DslError, ~r/unknown validate op :ksuid/, fn ->
+        compile(
+          module_source(
+            ", derive_extensions: [#{inspect(ComboDerives)}]",
+            "validate(each=[ksuid])"
+          )
+        )
+      end
+    end
+
+    test "a validate_derive section option opens the validate side" do
+      module =
+        compile(fn name ->
+          """
+          defmodule #{name} do
+            use GuardedStruct
+
+            guardedstruct validate_derive: #{inspect(OpenValidate)} do
+              field(:value, term(), derives: "validate(each=[open_op])")
+            end
+          end
+          """
+        end)
+
+      assert {:ok, _} = module.builder(%{value: ["a"]})
+    end
+
+    test "a sanitize_derive section option opens the sanitize side, not the validate side" do
+      source = fn derive ->
+        fn name ->
+          """
+          defmodule #{name} do
+            use GuardedStruct
+
+            guardedstruct sanitize_derive: #{inspect(OpenSanitize)} do
+              field(:value, term(), derives: #{inspect(derive)})
+            end
+          end
+          """
+        end
+      end
+
+      module = compile(source.("sanitize(each=[open_op])"))
+      assert {:ok, _} = module.builder(%{value: ["a"]})
+
+      assert_raise Spark.Error.DslError, ~r/unknown validate op :open_op/, fn ->
+        compile(source.("validate(each=[open_op])"))
+      end
+    end
+
+    test "a validate_derive application config opens the validate side" do
+      Application.put_env(:guarded_struct, :validate_derive, OpenValidate)
+
+      module = compile(module_source("", "validate(each=[open_op])"))
+
+      assert {:ok, _} = module.builder(%{value: ["a"]})
+    end
+  end
+
+  # ---------------- 10. Validate.field/4 and Validate.partial/2 ----------------
+
+  describe "Validate.field/4 and Validate.partial/2 resolve the module's extensions" do
+    alias GuardedStruct.Validate
+
+    defmodule PerModuleValidate do
+      use GuardedStruct, derive_extensions: [LocalDerives]
+
+      guardedstruct do
+        field(:my_slug, String.t(), derives: "validate(my_slug)")
+      end
+    end
+
+    test "field/3 uses the per-module opt, not the global config" do
+      assert {:ok, "local:x"} = Validate.field(PerModuleValidate, :my_slug, "local:x")
+
+      assert {:error, [%{action: :my_slug}]} =
+               Validate.field(PerModuleValidate, :my_slug, "global:x")
+    end
+
+    test "partial/2 uses the per-module opt, not the global config" do
+      assert {:ok, %{my_slug: "local:x"}} =
+               Validate.partial(PerModuleValidate, %{my_slug: "local:x"})
+
+      assert {:error, [%{action: :my_slug}]} =
+               Validate.partial(PerModuleValidate, %{my_slug: "global:x"})
+    end
+
+    test "the process is left as it was found" do
+      Validate.field(PerModuleValidate, :my_slug, "local:x")
+      Validate.partial(PerModuleValidate, %{my_slug: "local:x"})
+
+      assert GuardedStruct.Derive.Extension.current_module() == nil
+    end
+  end
 end

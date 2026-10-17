@@ -54,9 +54,11 @@ defmodule GuardedStruct.Info do
   Return the user-declared field, sub_field, virtual_field, dynamic_field
   and conditional_field names in declaration order. Works on both the
   top-level module and any generated sub_field submodule.
+
+  A pattern-keyed module has no names, so it lists its declared regex patterns.
   """
   def fields(module) do
-    module.__fields__() |> Enum.map(& &1.name) |> Enum.uniq()
+    module.__fields__() |> Enum.map(&(Map.get(&1, :name) || &1.pattern)) |> Enum.uniq()
   end
 
   @doc "Return the list of enforced field names."
@@ -68,12 +70,21 @@ defmodule GuardedStruct.Info do
   """
   def fields_meta(module), do: module.__fields__()
 
-  @doc "Return the field metadata for a single name, or `nil` if absent."
-  def field(module, name) when is_atom(name), do: module.__field_meta__(name)
+  @doc """
+  Return the field metadata for a single name, or `nil` if absent. A
+  pattern-keyed module answers with the metadata of the first declared pattern
+  that matches the name.
+  """
+  def field(module, name) when is_atom(name) do
+    case module.__field_meta__(name) do
+      nil -> pattern_field(module, name)
+      meta -> meta
+    end
+  end
 
   @doc "True if the field exists on this module (or any sub_field cascade)."
   def field?(module, name) when is_atom(name) do
-    name in module.keys() or not is_nil(module.__field_meta__(name))
+    name in module.keys() or not is_nil(field(module, name))
   end
 
   # ────────────────────────────────────────────────────────────────────────
@@ -169,6 +180,13 @@ defmodule GuardedStruct.Info do
   """
   def pattern_keyed?(module),
     do: Map.get(module.__information__(), :shape) == :pattern_map
+
+  defp pattern_field(module, name) do
+    if pattern_keyed?(module) do
+      key = Atom.to_string(name)
+      Enum.find(module.__fields__(), &Regex.match?(&1.pattern, key))
+    end
+  end
 
   defp names_of_kind(module, kind) do
     module.__fields__() |> Enum.filter(&(&1.kind == kind)) |> Enum.map(& &1.name)
@@ -322,8 +340,10 @@ defmodule GuardedStruct.Info do
   # For the top-level module, every section option is reachable via the
   # Spark-generated accessor — including ones the user didn't declare
   # (default applies, or `:error` for non-default options). For sub_field
-  # submodules, only `authorized_fields` and `json` are tracked in the
-  # local `__information__/0.options` map; everything else is `nil`.
+  # submodules, `authorized_fields`, `main_validator` (the sub_field's own),
+  # `validate_derive`, `sanitize_derive` (inherited from the root) and `json`
+  # are tracked in the local `__information__/0.options` map; everything else
+  # is `nil`.
   defp section_options(module, info) do
     if info.path == [] do
       %{
@@ -346,9 +366,9 @@ defmodule GuardedStruct.Info do
         module: nil,
         error: nil,
         authorized_fields: Map.get(sub_opts, :authorized_fields),
-        main_validator: nil,
-        validate_derive: nil,
-        sanitize_derive: nil,
+        main_validator: Map.get(sub_opts, :main_validator),
+        validate_derive: Map.get(sub_opts, :validate_derive),
+        sanitize_derive: Map.get(sub_opts, :sanitize_derive),
         json: Map.get(sub_opts, :json)
       }
     end

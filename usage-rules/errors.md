@@ -79,12 +79,17 @@ MyApp.User.builder(%{}, true)
 
 ## Compile-time errors
 
-Spark verifiers and the derive parser surface as `Spark.Error.DslError`
-with `path:` (DSL location) and `module:` (caller) — these never reach
-runtime. Triggers:
+The derive parser surfaces as `Spark.Error.DslError` with `path:` (DSL
+location) and `module:` (caller) — these never reach runtime. Triggers:
 
-* Malformed `derives:` string.
-* Unknown sanitize/validate op (and not declared in any registered extension).
+* Malformed `derives:` string, or an operand that can't be parsed.
+* A bad parameter (`max_len=foo`, `min_len=-2`, `equal=Integer::abc`).
+* Unknown sanitize/validate op inside `each=[...]` / `optional=[...]` (and not
+  declared in any registered extension).
+
+Spark verifiers report through the same error type but only **warn**: the
+module still compiles. Triggers:
+
 * `validator: {Mod, :fn}` not exported.
 * `auto: {Mod, :fn}` not exported.
 * `struct: AnotherMod` cycle.
