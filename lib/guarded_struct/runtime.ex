@@ -385,9 +385,6 @@ defmodule GuardedStruct.Runtime do
     else
       {:error, errs} when is_list(errs) ->
         handle_error({:error, errs}, module, error?)
-
-      {:error, err} ->
-        handle_error({:error, [err]}, module, error?)
     end
   end
 
