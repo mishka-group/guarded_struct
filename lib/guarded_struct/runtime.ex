@@ -157,7 +157,6 @@ defmodule GuardedStruct.Runtime do
     do: %{result: :error, error_count: length(errs)}
 
   defp telemetry_result({:error, _}), do: %{result: :error, error_count: 1}
-  defp telemetry_result(_), do: %{}
 
   @spec build_pattern_map(module(), map(), boolean()) ::
           {:ok, map()} | {:error, list()}
