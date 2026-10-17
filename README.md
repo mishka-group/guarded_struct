@@ -253,7 +253,7 @@ guardedstruct json: true do
 end
 ```
 
-Auto-derives `Jason.Encoder` when `:jason` is in deps, falling back to the built-in `JSON.Encoder` on Elixir 1.18+. No-op if neither is present.
+Auto-derives `Jason.Encoder` when `:jason` is in deps, falling back to the built-in `JSON.Encoder`. No-op if neither is present.
 
 </details>
 
@@ -277,7 +277,7 @@ def deps do
 end
 ```
 
-`spark`, `splode`, `telemetry` and `html_sanitize_ex` come with it; they are required dependencies. Elixir `~> 1.17` is the minimum.
+`spark`, `splode`, `telemetry` and `html_sanitize_ex` come with it; they are required dependencies. Elixir `~> 1.20` is the minimum.
 
 Fetch and compile:
 
@@ -293,7 +293,7 @@ Upgrading from `0.0.x`? Existing code keeps working unchanged — see [`CHANGELO
 Pull in only what you need:
 
 ```elixir
-{:jason, "~> 1.4"}            # for `json: true` (Elixir < 1.18, otherwise built-in JSON works)
+{:jason, "~> 1.4"}            # for `json: true` through Jason (the built-in JSON works without it)
 {:ash, "~> 3.0"}              # for the Ash extension
 {:email_checker, "~> 0.2"}    # for `validate(email)` (DNS lookup; non-atomic)
 {:ex_url, "~> 2.0"}           # for `validate(tell)`, `validate(geo_url)` and `validate(location)`
@@ -537,12 +537,12 @@ flowchart TD
 
 | Dependency | Required version | Required? |
 |---|---|---|
-| Elixir | `~> 1.17` | ✅ |
+| Elixir | `~> 1.20` | ✅ |
 | Spark | `~> 2.7` | ✅ |
 | Splode | `~> 0.3` | ✅ (errors module) |
 | Telemetry | `~> 1.0` | ✅ |
 | html_sanitize_ex | `~> 1.5` | ✅ (`sanitize(strip_tags/basic_html/html5)`) |
-| Jason | `~> 1.4` | ⚪ optional (`json: true` on Elixir < 1.18) |
+| Jason | `~> 1.4` | ⚪ optional (`json: true` uses it when present) |
 | email_checker | `~> 0.2` | ⚪ optional (`validate(email)` with DNS) |
 | ex_url | `~> 2.0` | ⚪ optional (`validate(tell)`, `validate(geo_url)`, `validate(location)`) |
 | ex_phone_number | `~> 0.4` | ⚪ optional (`validate(tell=98)`, with ex_url) |

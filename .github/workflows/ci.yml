@@ -18,17 +18,8 @@ jobs:
       matrix:
         include:
           - pair:
-              elixir: "1.17.3"
-              otp: "27.1.2"
-          - pair:
-              elixir: "1.18.4"
-              otp: "27.1.2"
-          - pair:
-              elixir: "1.18.4"
-              otp: "28.1.1"
-          - pair:
-              elixir: "1.19.5"
-              otp: "28.1.1"
+              elixir: "1.20.4"
+              otp: "29.1.2"
 
     runs-on: ubuntu-latest
 

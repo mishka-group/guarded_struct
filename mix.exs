@@ -8,7 +8,7 @@ defmodule GuardedStruct.MixProject do
     [
       app: :guarded_struct,
       version: @version,
-      elixir: "~> 1.17",
+      elixir: "~> 1.20",
       name: "GuardedStruct",
       elixirc_paths: elixirc_paths(Mix.env()),
       consolidate_protocols: Mix.env() != :test,

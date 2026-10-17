@@ -1,3 +1,7 @@
+# Unreleased
+
+- GuardedStruct now requires Elixir 1.20, and CI runs Elixir 1.20.4 / OTP 29.1.2 only. On 1.20 `Float.parse/1` returns `:error` for a number out of float range (older versions raised), so `sanitize(string_float)` and `sanitize(string_integer)` answer every string without a `rescue`
+
 # Changelog for GuardedStruct 0.1.4
 
 > The documented behaviour is now the real behaviour: every option and op the docs promised works, and a derive string that used to be dropped silently fails to compile.
