@@ -60,8 +60,6 @@ defmodule GuardedStruct.Derive.Parser do
   defp syntax_error_message({_meta, message, token}) when is_binary(message),
     do: first_line("#{message}#{token}")
 
-  defp syntax_error_message(other), do: inspect(other)
-
   defp first_line(message), do: message |> String.split("\n", parts: 2) |> hd()
 
   defp quote_operand_values(input), do: rewrite_operands(input, "")
