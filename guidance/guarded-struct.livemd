@@ -1971,6 +1971,8 @@ MyApp.Resources.User.__guarded_change__(%{name: "Alice", email: "alice@x.com"})
 # => {:ok, %{name: "Alice", email: "alice@x.com"}}
 ```
 
+Options take both forms here: `guardedstruct auto_wire: true do ... end`, or `auto_wire true` as the first line of the block, the way Ash's own sections set options. `sub_field` and `conditional_field` take both forms as well.
+
 The pipeline lives under the `__guarded_*__` namespace so it doesn't clash with Ash's own callbacks. The `Change` module bridges `__guarded_change__/1` into the changeset pipeline — runs sanitize + validate on every `:create` and `:update`.
 
 ### Auto-wire (Option B)

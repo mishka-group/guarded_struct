@@ -57,7 +57,26 @@ guardedstruct auto_wire: true, authorized_fields: true do
 end
 ```
 
-Options can also be set as setters at the top of the block (`auto_wire true`).
+The Spark form works too: each option is a setter at the top of its own block.
+Both give the same options, and a resource can mix them.
+
+```elixir
+guardedstruct do
+  auto_wire true
+  authorized_fields true
+
+  sub_field :profile, :map do
+    authorized_fields true
+    field :nickname, :string
+  end
+
+  conditional_field :contact, :any do
+    priority true
+    field :contact, :string, derives: "validate(email_r)"
+  end
+end
+```
+
 The one difference is the `@derives` decorator: it is for `use GuardedStruct`
 only. Write `derives:` on the field inside a resource.
 

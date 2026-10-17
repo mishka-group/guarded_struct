@@ -95,6 +95,37 @@ defmodule GuardedStructTest.AshResourceTest do
     end
   end
 
+  defmodule FakeAshWithSetters do
+    use FakeFramework
+
+    guardedstruct do
+      main_validator({FakeChecks, :verify})
+      authorized_fields(true)
+
+      field(:name, :string, derives: "sanitize(trim)")
+
+      sub_field(:profile, :map) do
+        authorized_fields(true)
+        main_validator({FakeChecks, :verify})
+
+        field(:name, :string, derives: "sanitize(trim)")
+
+        sub_field(:address, :map) do
+          structs(true)
+
+          field(:city, :string, derives: "sanitize(trim, downcase)")
+        end
+      end
+
+      conditional_field(:contact, :any) do
+        priority(true)
+
+        field(:contact, :string, derives: "validate(string, email_r)", hint: "email")
+        field(:contact, :integer, derives: "validate(integer)", hint: "phone")
+      end
+    end
+  end
+
   describe "Ash extension generates introspection functions" do
     test "__guarded_information__/0 returns the metadata map" do
       info = FakeAshResource.__guarded_information__()
@@ -339,6 +370,47 @@ defmodule GuardedStructTest.AshResourceTest do
 
       assert {:error, [%{field: :contact, action: :conditionals, errors: [%{__hint__: "email"}]}]} =
                FakeAshWithForms.__guarded_change__(%{contact: %{}})
+    end
+  end
+
+  describe "options as setters in the block" do
+    test "the section's setters set the same options as guardedstruct opts do" do
+      assert FakeAshWithSetters.__guarded_information__().options ==
+               FakeAshWithForms.__guarded_information__().options
+    end
+
+    test "the section's authorized_fields and main_validator apply" do
+      assert {:error, [%{field: :name, action: :main_validator}]} =
+               FakeAshWithSetters.__guarded_change__(%{name: "blocked"})
+
+      assert {:error, [%{field: :other, action: :authorized_fields}]} =
+               FakeAshWithSetters.__guarded_change__(%{name: "ok", other: 1})
+    end
+
+    test "sub_field setters keep the options and nest" do
+      assert {:ok, %{profile: %{name: "mishka", address: [%{city: "tehran"}, %{city: "rasht"}]}}} =
+               FakeAshWithSetters.__guarded_change__(%{
+                 profile: %{
+                   name: "  mishka ",
+                   address: [%{city: " Tehran "}, %{city: "RASHT"}]
+                 }
+               })
+
+      assert {:error, [%{field: :profile}]} =
+               FakeAshWithSetters.__guarded_change__(%{profile: %{name: "ok", extra: 1}})
+
+      assert {:error, [%{field: :profile}]} =
+               FakeAshWithSetters.__guarded_change__(%{profile: %{name: "blocked"}})
+    end
+
+    test "conditional_field setters keep the options and its children" do
+      assert {:ok, %{contact: "a@mishka.group"}} =
+               FakeAshWithSetters.__guarded_change__(%{contact: "a@mishka.group"})
+
+      assert {:ok, %{contact: 98}} = FakeAshWithSetters.__guarded_change__(%{contact: 98})
+
+      assert {:error, [%{field: :contact, action: :conditionals, errors: [%{__hint__: "email"}]}]} =
+               FakeAshWithSetters.__guarded_change__(%{contact: %{}})
     end
   end
 end

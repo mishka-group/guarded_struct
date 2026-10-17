@@ -56,6 +56,17 @@ defmodule GuardedStruct.AshResource do
 
       # no `changes do ... end` block needed — the transformer added it
 
+  The same option can be a setter at the top of the block, the Spark form:
+
+      guardedstruct do
+        auto_wire true
+        field :email, :string, derives: "sanitize(trim) validate(email_r)"
+      end
+
+  `sub_field` and `conditional_field` take both forms as well:
+  `sub_field :profile, :map, authorized_fields: true do ... end`, or
+  `authorized_fields true` as the first line of its block.
+
   Under the hood this calls `Ash.Resource.Builder.add_change/3` from a Spark
   transformer that runs after our codegen. The result is identical to writing
   the `changes do change ... end` block by hand — Ash's introspection sees
