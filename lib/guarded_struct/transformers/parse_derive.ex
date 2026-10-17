@@ -167,14 +167,6 @@ defmodule GuardedStruct.Transformers.ParseDerive do
     end
   end
 
-  defp parse_or_raise(other, field_name, ctx) do
-    raise Spark.Error.DslError,
-      message:
-        "invalid derives on field #{inspect(field_name)}: expected a string, got #{inspect(other)}",
-      path: [:guardedstruct, :field, field_name, :derives],
-      module: ctx.module
-  end
-
   # The ops `each=` / `optional=` accept besides the built-in ones: the derive
   # extensions the module resolves to, or anything when a `validate_derive` /
   # `sanitize_derive` module is configured. Resolved only if an inner op is not built in.
