@@ -63,6 +63,16 @@ defmodule GuardedStructTest.DeriveTest do
     346.6 = assert SanitizerDerive.sanitize(346.6, :string_integer)
   end
 
+  test "sanitize(:string_float/:string_integer) answers every string without raising" do
+    for input <- ["", "-", ".", "1e400", String.duplicate("9", 400), <<0xFF, 0xFE>>, "<?x", "<b>"] do
+      assert is_float(SanitizerDerive.sanitize(input, :string_float)), inspect(input)
+      assert is_integer(SanitizerDerive.sanitize(input, :string_integer)), inspect(input)
+    end
+
+    assert 0.0 = SanitizerDerive.sanitize("abc", :string_float)
+    assert 0 = SanitizerDerive.sanitize("abc", :string_integer)
+  end
+
   ############## (▰˘◡˘▰) Validation Derive (▰˘◡˘▰) ##############
   test "validate(:string, input, field)" do
     "Mishka" = assert ValidationDerive.validate(:string, "Mishka", :title)

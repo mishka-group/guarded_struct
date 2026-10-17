@@ -53,47 +53,31 @@ defmodule GuardedStruct.Derive.SanitizerDerive do
     end
 
     def sanitize(input, :string_float) when is_binary(input) do
-      input
-      |> sanitize(:strip_tags)
-      |> Float.parse()
-      |> case do
+      case input |> sanitize(:strip_tags) |> Float.parse() do
         :error -> 0.0
         {converted_float, _} -> converted_float
       end
-    rescue
-      _ -> 0.0
     end
 
     def sanitize(input, :string_integer) when is_binary(input) do
-      input
-      |> sanitize(:strip_tags)
-      |> Integer.parse()
-      |> case do
+      case input |> sanitize(:strip_tags) |> Integer.parse() do
         :error -> 0
         {converted_integer, _} -> converted_integer
       end
-    rescue
-      _ -> 0
     end
   else
     def sanitize(input, :string_float) when is_binary(input) do
-      Float.parse(input)
-      |> case do
+      case Float.parse(input) do
         :error -> 0.0
         {converted_float, _} -> converted_float
       end
-    rescue
-      _ -> 0.0
     end
 
     def sanitize(input, :string_integer) when is_binary(input) do
-      Integer.parse(input)
-      |> case do
+      case Integer.parse(input) do
         :error -> 0
         {converted_integer, _} -> converted_integer
       end
-    rescue
-      _ -> 0
     end
   end
 
