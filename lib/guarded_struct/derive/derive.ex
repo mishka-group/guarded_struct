@@ -3,9 +3,11 @@ defmodule GuardedStruct.Derive do
 
   alias GuardedStruct.Derive.{Extension, SanitizerDerive, ValidationDerive}
 
+  @type derive_ops :: nil | map() | [map() | nil | []]
+
   @type derive_input :: %{
           required(:field) => atom(),
-          required(:derive_ops) => map(),
+          required(:derive_ops) => derive_ops(),
           optional(:hint) => any()
         }
 

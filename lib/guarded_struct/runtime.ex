@@ -1088,7 +1088,7 @@ defmodule GuardedStruct.Runtime do
         {:ok, value}
 
       true ->
-        input = %{field: name, derive: str, derive_ops: ops}
+        input = %{field: name, derive_ops: ops}
 
         case Derive.derive({:ok, %{name => value}, [input]}) do
           {:ok, %{^name => sanitized}} -> {:ok, sanitized}
@@ -1274,7 +1274,7 @@ defmodule GuardedStruct.Runtime do
 
         cond do
           is_nil(ops) and is_nil(str) -> []
-          true -> [%{field: f.name, derive: str, derive_ops: ops}]
+          true -> [%{field: f.name, derive_ops: ops}]
         end
       end)
 
