@@ -23,6 +23,12 @@
 - Fix `GuardedStruct.Info.fields/1` raising `KeyError` on a pattern-keyed (regex) module — it lists the patterns. `field_kind/2` returns `:pattern_field` for a key a pattern matches, and `field/2` / `field?/2` follow the patterns
 - Fix `enforce_keys(:all)` listing every key of a `sub_field` instead of only the enforced ones
 - Fix the `validator:` error of a pattern-keyed field missing `:field` — it carries `field: :__map__` like the other errors of the module
+- Fix `GuardedStruct.Runtime.build_pattern_map/3` being typed to take a map: the generated `builder/2` of a pattern-keyed module also passes the keyed and typed tuple forms and gets `:bad_parameters` back, so Dialyzer reported every such module in the project that uses the library. The second argument is any term
+- Fix the input type of `GuardedStruct.Derive.derive/1`: it had no `:derive` key and took a map as `derive_ops`, while the builder and `Validate.run/2` passed the key and `derive_ops` may be a list of maps or `nil`. Dialyzer reported the call as one that cannot succeed. The key, which nothing read, is no longer passed
+
+### Refactors:
+
+- Remove four clauses no input reaches: the catch-alls of `Parser.syntax_error_message/1` and `Runtime.telemetry_result/1`, the non-list error clause of the build pipeline, and the non-string clause of `ParseDerive.parse_or_raise/3` (the schema types `derives:` and `derive:` as `:string`)
 
 ### Docs:
 
@@ -43,11 +49,13 @@
 ### Tests:
 
 - Add the tests for each of the fixes above: `derive_operands_test.exs`, `derive_section_options_test.exs` and new cases in the parser, op-param, registry, derive, extension, validator, Ash, dynamic, Info and pattern-map suites, `core_keys_test.exs` for `from`, `on` and `domain`, `optional_packages_test.exs` for a missing or late package, `validate_run_derive_test.exs` for a wrong derive string in `Validate.run/2`, and the option forms of the Ash extension in `ash_resource_test.exs` and `ash_resource_change_test.exs`
+- Add the keyed and typed tuple forms of `builder/1` on a pattern-keyed module to `pattern_map_test.exs`
 
 ### Dependencies:
 
 - Update `ash` 3.33.11 → 3.36.1, `spark` 2.7.3 → 2.7.8, `sourceror` 1.12.3 → 1.12.4 (and `decimal` 3.2.0, `ex_ast` 0.16.0, `makeup` 1.2.3, `req` 0.7.5, `spitfire` 0.4.3, `sweet_xml` master)
 - Raise the dev/test requirements to `{:ash, "~> 3.36"}` and `{:sourceror, "~> 1.12"}`
+- Add `{:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false}` and a `dialyzer` project config (`plt_add_apps: [:mix]`); `mix dialyzer` runs in `:test`, where the optional packages and the fixtures are, and reports no warnings
 
 ---
 

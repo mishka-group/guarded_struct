@@ -18,7 +18,8 @@ defmodule GuardedStruct.MixProject do
       description: description(),
       package: package(),
       source_url: @source_url,
-      docs: docs()
+      docs: docs(),
+      dialyzer: dialyzer()
     ]
   end
 
@@ -39,6 +40,11 @@ defmodule GuardedStruct.MixProject do
 
   def application do
     [extra_applications: [:logger]]
+  end
+
+  # `mix dialyzer` runs in :test, where the optional packages and the fixtures are.
+  def cli do
+    [preferred_envs: [dialyzer: :test]]
   end
 
   defp elixirc_paths(:test), do: ["lib", "test/support"]
@@ -65,6 +71,10 @@ defmodule GuardedStruct.MixProject do
         "Changelog" => "#{@source_url}/blob/master/CHANGELOG.md"
       }
     ]
+  end
+
+  defp dialyzer do
+    [plt_add_apps: [:mix]]
   end
 
   defp docs do
@@ -134,6 +144,8 @@ defmodule GuardedStruct.MixProject do
       {:sourceror, "~> 1.12", only: [:dev, :test]},
       # document
       {:ex_doc, "~> 0.40.1", only: :dev, runtime: false},
+      # static analysis: `mix dialyzer`
+      {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false},
 
       # property-based testing
       {:stream_data, "~> 1.1", only: [:dev, :test]},

@@ -157,9 +157,8 @@ defmodule GuardedStruct.Runtime do
     do: %{result: :error, error_count: length(errs)}
 
   defp telemetry_result({:error, _}), do: %{result: :error, error_count: 1}
-  defp telemetry_result(_), do: %{}
 
-  @spec build_pattern_map(module(), map(), boolean()) ::
+  @spec build_pattern_map(module(), term(), boolean()) ::
           {:ok, map()} | {:error, list()}
   def build_pattern_map(module, attrs, error?)
 
@@ -386,9 +385,6 @@ defmodule GuardedStruct.Runtime do
     else
       {:error, errs} when is_list(errs) ->
         handle_error({:error, errs}, module, error?)
-
-      {:error, err} ->
-        handle_error({:error, [err]}, module, error?)
     end
   end
 
@@ -1088,7 +1084,7 @@ defmodule GuardedStruct.Runtime do
         {:ok, value}
 
       true ->
-        input = %{field: name, derive: str, derive_ops: ops}
+        input = %{field: name, derive_ops: ops}
 
         case Derive.derive({:ok, %{name => value}, [input]}) do
           {:ok, %{^name => sanitized}} -> {:ok, sanitized}
@@ -1274,7 +1270,7 @@ defmodule GuardedStruct.Runtime do
 
         cond do
           is_nil(ops) and is_nil(str) -> []
-          true -> [%{field: f.name, derive: str, derive_ops: ops}]
+          true -> [%{field: f.name, derive_ops: ops}]
         end
       end)
 

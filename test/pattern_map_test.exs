@@ -55,6 +55,13 @@ defmodule GuardedStructTest.PatternMapTest do
       assert {:error, [%{action: :bad_parameters}]} = ShardsMap.builder(nil)
     end
 
+    test "rejects the keyed and typed tuple forms of builder/1" do
+      attrs = %{"shard_1" => %{node: "10.0.0.1"}}
+
+      assert {:error, [%{action: :bad_parameters}]} = ShardsMap.builder({:root, attrs})
+      assert {:error, [%{action: :bad_parameters}]} = ShardsMap.builder({:root, attrs, :add})
+    end
+
     test "per-value validation runs through the target struct" do
       {:error, errs} = ShardsMap.builder(%{"shard_1" => %{node: "not-an-ip"}})
 

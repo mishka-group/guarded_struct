@@ -48,7 +48,7 @@ defmodule GuardedStruct.Validate do
         {:ok, value}
 
       {:ok, ops} ->
-        input = %{field: :__value__, derive: derive_string, derive_ops: ops}
+        input = %{field: :__value__, derive_ops: ops}
 
         case Derive.derive({:ok, %{__value__: value}, [input]}) do
           {:ok, %{__value__: validated}} -> {:ok, validated}
