@@ -17,6 +17,7 @@ defmodule GuardedStruct.MixProject do
       aliases: aliases(),
       description: description(),
       package: package(),
+      homepage_url: "https://mishka.tools/guarded-struct",
       source_url: @source_url,
       docs: docs(),
       dialyzer: dialyzer()
@@ -63,12 +64,15 @@ defmodule GuardedStruct.MixProject do
       licenses: ["Apache-2.0"],
       maintainers: ["Shahryar Tavakkoli"],
       links: %{
-        "Mishka" => "https://mishka.tools",
+        "GuardedStruct" => "https://mishka.tools/guarded-struct",
+        "Official document" => "https://mishka.tools/guarded-struct/docs",
         "GitHub" => @source_url,
-        "LiveBook document" => "#{@source_url}/blob/master/guidance/guarded-struct.livemd",
+        "Changelog" => "#{@source_url}/blob/master/CHANGELOG.md",
         "Sponsor" => "https://github.com/sponsors/mishka-group",
-        "Security policy" => "#{@source_url}/blob/master/SECURITY.md",
-        "Changelog" => "#{@source_url}/blob/master/CHANGELOG.md"
+        "Contributors" => "#{@source_url}/graphs/contributors",
+        "Mishka" => "https://mishka.tools",
+        "LiveBook document" => "#{@source_url}/blob/master/guidance/guarded-struct.livemd",
+        "Security policy" => "#{@source_url}/blob/master/SECURITY.md"
       }
     ]
   end
