@@ -165,7 +165,8 @@ defmodule GuardedStruct.MixProject do
       {:sweet_xml,
        github: "kbrw/sweet_xml", branch: "master", override: true, optional: true, only: :test},
       {:igniter, "~> 0.8.0", only: [:dev, :test]},
-      {:ash, "~> 3.36", only: [:dev, :test]}
+      {:ash, "~> 3.36", only: [:dev, :test]},
+      {:mix_audit, "~> 2.1", only: [:dev, :test], runtime: false}
     ]
   end
 end

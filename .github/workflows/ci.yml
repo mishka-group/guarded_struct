@@ -42,6 +42,10 @@ jobs:
           mix deps.get
           mix deps.compile
 
+      # mix_audit; Hex's own audit is hex-audit.yml.
+      - name: Audit dependencies
+        run: mix deps.audit
+
       - name: Run test with temporary information
         run: |
           mix test --trace
