@@ -164,10 +164,7 @@ defmodule GuardedStruct.AshResource.Change do
         force_change_attributes(changeset, transformed_attrs)
 
       {:error, errs} when is_list(errs) ->
-        errs
-        |> maybe_filter_required(changeset.action_type)
-        |> Enum.flat_map(&to_ash_errors(&1, []))
-        |> Enum.reduce(changeset, fn err, cs -> add_error(cs, err) end)
+        add_guarded_errors(changeset, maybe_filter_required(errs, changeset.action_type))
     end
   end
 
@@ -194,12 +191,7 @@ defmodule GuardedStruct.AshResource.Change do
         if errs == [] do
           :ok
         else
-          cs =
-            errs
-            |> Enum.flat_map(&to_ash_errors(&1, []))
-            |> Enum.reduce(changeset, fn err, c -> add_error(c, err) end)
-
-          {:ok, cs}
+          {:ok, add_guarded_errors(changeset, errs)}
         end
     end
   end
@@ -221,8 +213,12 @@ defmodule GuardedStruct.AshResource.Change do
   defp force_change_attributes(changeset, attrs),
     do: apply(Ash.Changeset, :force_change_attributes, [changeset, attrs])
 
-  defp add_error(changeset, err),
-    do: apply(Ash.Changeset, :add_error, [changeset, err])
+  # `Ash.Changeset.add_error/2` takes the whole list and adds the errors in
+  # order, each as its own error.
+  defp add_guarded_errors(changeset, errs) do
+    errors = Enum.flat_map(errs, &to_ash_errors(&1, []))
+    apply(Ash.Changeset, :add_error, [changeset, errors])
+  end
 
   # A `sub_field` or `conditional_field` error holds the errors of its fields
   # under `:errors`. Each becomes its own error, with the names of the fields it
