@@ -583,7 +583,11 @@ defmodule GuardedStructTest.AshResources.WithNestedDefaults do
 
     conditional_field :contact, :any, priority: true do
       field :contact, :string, derives: "validate(string, email_r)", hint: "email"
-      field :contact, :integer, derives: "validate(integer)", hint: "phone"
+
+      sub_field :contact, :map, hint: "phone" do
+        field :number, :string, derives: "validate(string, not_empty)"
+        field :country, :string, default: "+98"
+      end
     end
   end
 

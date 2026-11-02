@@ -918,7 +918,7 @@ defmodule GuardedStructTest.AshIntegrationTest do
 
     test "a conditional_field that matches no child is an invalid attribute at its field" do
       assert {:error, %Ash.Error.Invalid{errors: [%InvalidAttribute{} = error]}} =
-               create_nested(%{contact: %{}})
+               create_nested(%{contact: 12})
 
       assert %{field: :contact, path: [], vars: [validation: :email_r]} = error
     end
@@ -932,6 +932,85 @@ defmodule GuardedStructTest.AshIntegrationTest do
                |> Ash.update()
 
       assert %{field: :every, path: [:options, :schedule]} = error
+    end
+  end
+
+  describe "sub_field defaults through Ash.create/1" do
+    test "a partial sub_field is stored with the defaults of the fields left out" do
+      assert {:ok, record} = create_nested(%{options: %{pages: " publish "}})
+
+      assert record.options == %{
+               authors: "connect",
+               pages: "publish",
+               comments: false,
+               schedule: nil
+             }
+
+      assert {:ok, built} = WithNestedDefaults.Options.builder(%{pages: " publish "})
+      assert record.options == Map.from_struct(built)
+    end
+
+    test "an empty sub_field is stored with every default" do
+      assert {:ok, %{options: options}} = create_nested(%{options: %{}})
+      assert options == %{authors: "connect", pages: "draft", comments: false, schedule: nil}
+    end
+
+    test "a sub_field inside a sub_field gets its defaults too" do
+      assert {:ok, %{options: options}} = create_nested(%{options: %{schedule: %{hour: 5}}})
+      assert options.schedule == %{every: "day", hour: 5}
+      refute is_struct(options.schedule)
+    end
+
+    test "every item of a list sub_field gets its defaults" do
+      assert {:ok, %{steps: steps}} =
+               create_nested(%{steps: [%{kind: "post"}, %{kind: "page", limit: 2}]})
+
+      assert steps == [%{kind: "post", limit: 10}, %{kind: "page", limit: 2}]
+    end
+
+    test "a key the sub_field does not declare is kept, as before" do
+      assert {:ok, %{steps: [step]}} = create_nested(%{steps: [%{kind: "post", note: "x"}]})
+      assert step == %{kind: "post", limit: 10, note: "x"}
+    end
+
+    test "an update stores the defaults too" do
+      assert {:ok, record} = create_nested(%{options: %{pages: "publish"}})
+
+      assert {:ok, updated} =
+               record
+               |> Ash.Changeset.for_update(:update, %{options: %{authors: "create"}})
+               |> Ash.update()
+
+      assert updated.options == %{
+               authors: "create",
+               pages: "draft",
+               comments: false,
+               schedule: nil
+             }
+    end
+
+    test "a conditional_field's sub_field gets its defaults too" do
+      assert {:ok, %{contact: contact}} = create_nested(%{contact: %{number: "0912"}})
+      assert contact == %{number: "0912", country: "+98"}
+
+      assert {:ok, %{contact: "a@mishka.group"}} = create_nested(%{contact: "a@mishka.group"})
+    end
+
+    test "__guarded_change__/1 fills them and still returns plain maps" do
+      assert {:ok, %{options: options, steps: [step]}} =
+               WithNestedDefaults.__guarded_change__(%{
+                 options: %{schedule: %{}},
+                 steps: [%{kind: "page"}]
+               })
+
+      assert options == %{
+               authors: "connect",
+               pages: "draft",
+               comments: false,
+               schedule: %{every: "day", hour: 3}
+             }
+
+      assert step == %{kind: "page", limit: 10}
     end
   end
 

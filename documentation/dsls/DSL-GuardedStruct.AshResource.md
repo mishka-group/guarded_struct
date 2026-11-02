@@ -109,6 +109,9 @@ structs from `builder/1`.
     # {:ok, %{profile: %{address: %{geo: %{lat: 1.0, lng: 2.0}}}}}
     #                              ^^^^ plain map, NOT a struct
 
+Each map starts from the `sub_field`'s defaults, the ones `builder/1`
+fills in: a field left out is stored with its `default:`, or `nil`.
+
 This matches Ash's `:map` attribute type, so validated output drops
 directly into `changeset.attributes` without conversion. Implementation
 is a process-local flag — concurrency-safe (sibling processes don't see

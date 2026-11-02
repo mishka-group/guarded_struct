@@ -331,15 +331,20 @@ defmodule GuardedStruct.Runtime do
       # The Ash-extension entry point (`validate/3`) sets `:guarded_as_map?`
       # on the process dict, forcing every nested build to return a map
       # rather than a struct — regardless of the `build_struct?` arg the
-      # submodule passes in via its own `builder/1`. Short-circuit:
-      # `build_struct? = false` is the original non-struct path (`validate/3`
-      # itself), so we don't need to consult the dict in that case.
-      wrap_as_struct? =
-        build_struct? and not Process.get(:guarded_as_map?, false)
+      # submodule passes in via its own `builder/1`. The map starts from the
+      # struct's defaults, the ones `struct/2` fills for `builder/1`.
+      # Short-circuit: `build_struct? = false` is the original non-struct path
+      # (`validate/3` itself), so we don't need to consult the dict in that case.
+      as_map? = build_struct? and Process.get(:guarded_as_map?, false)
 
       wrap = fn merged ->
         merged = Map.drop(merged, virtual_names)
-        if wrap_as_struct?, do: struct(module, merged), else: merged
+
+        cond do
+          as_map? -> module |> struct() |> Map.from_struct() |> Map.merge(merged)
+          build_struct? -> struct(module, merged)
+          true -> merged
+        end
       end
 
       {derive_errors, struct_value} =

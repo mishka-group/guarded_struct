@@ -2,6 +2,7 @@
 
 - GuardedStruct now requires Elixir 1.20, and CI runs Elixir 1.20.4 / OTP 29.1.2 only. On 1.20 `Float.parse/1` returns `:error` for a number out of float range (older versions raised), so `sanitize(string_float)` and `sanitize(string_integer)` answer every string without a `rescue`
 - Fix a `GuardedStruct.AshResource` action returning `Ash.Error.Unknown` for a bad value inside a `sub_field` or a `conditional_field`: `GuardedStruct.AshResource.Change` handed the nested error to Ash as it was. Each error inside it is now an `Ash.Error.Changes.InvalidAttribute` at its own field, with the names of the `sub_field`s it sits in as its `path` (`field: :pages, path: [:options]`), so the action returns `Ash.Error.Invalid` and a form can place the error on the nested field. A `conditional_field`'s errors are at the field itself
+- Fix a `GuardedStruct.AshResource` resource storing a `sub_field` without its defaults: `__guarded_change__/1` returned only the keys that were sent, while the generated `builder/1` fills each field left out with its `default:`. The map of a `sub_field` at any depth, a list `sub_field` and a `conditional_field`'s `sub_field` now starts from the same defaults, so `options: %{pages: "publish"}` is stored as `%{pages: "publish", authors: "connect", ...}`. A key the `sub_field` does not declare is kept as before
 
 # Changelog for GuardedStruct 0.1.4
 

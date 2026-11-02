@@ -151,6 +151,19 @@ depth** for nested `sub_field` values — never structs. This matches Ash's `:ma
 attribute type so output drops directly into `changeset.attributes` without
 conversion. Implemented via a process-local flag set at the top of `validate/3`.
 
+Each map starts from the `sub_field`'s defaults, the ones `builder/1` fills in,
+so a field left out is stored with its `default:`, or `nil`:
+
+```elixir
+sub_field :options, :map do
+  field :pages, :string, default: "draft"
+  field :comments, :boolean, default: false
+end
+
+MyResource.__guarded_change__(%{options: %{comments: true}})
+# {:ok, %{options: %{pages: "draft", comments: true}}}
+```
+
 ## Error shape
 
 Errors from `__guarded_change__/1` follow the canonical
