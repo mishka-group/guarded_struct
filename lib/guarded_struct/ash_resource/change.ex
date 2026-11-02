@@ -59,25 +59,14 @@ defmodule GuardedStruct.AshResource.Change do
   path. Both produce identical results.
   """
 
+  # The functions Ash reads from a change module, the ones `use Ash.Resource.Change`
+  # generates. They are written by hand because Ash is not a compile dependency of
+  # GuardedStruct, so the macro is not there when this module compiles.
   def has_change?, do: true
-  def has_atomic?, do: true
   def has_batch_change?, do: true
   def has_before_batch?, do: false
   def has_after_batch?, do: false
-  def has_after_action?, do: false
-  def has_before_action?, do: false
-  def has_validate?, do: false
-  def has_around_action?, do: false
-  def has_init?, do: true
-
   def atomic?, do: true
-  def batch_change?, do: true
-  def before_batch?, do: false
-  def after_batch?, do: false
-  def after_action?, do: false
-  def before_action?, do: false
-  def validate?, do: false
-  def around_action?, do: false
 
   @doc false
   def init(opts), do: {:ok, opts}
