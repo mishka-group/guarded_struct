@@ -12,8 +12,11 @@ defmodule GuardedStructTest.AshIntegrationTest do
     AtomicEligibleUser,
     AtomicWithCounter,
     WithDomainRule,
-    WithSectionRules
+    WithSectionRules,
+    WithNestedDefaults
   }
+
+  alias Ash.Error.Changes.InvalidAttribute
 
   describe "sanitize end-to-end through Ash.create/1" do
     test "trim + downcase normalize an email before insert (manual wiring)" do
@@ -857,6 +860,85 @@ defmodule GuardedStructTest.AshIntegrationTest do
 
       assert inspect(err) =~ "nickname is blocked"
     end
+  end
+
+  describe "sub_field errors through Ash.create/1" do
+    test "a bad value is an invalid attribute at its field, under the sub_field's path" do
+      assert {:error, %Ash.Error.Invalid{errors: [%InvalidAttribute{} = error]}} =
+               create_nested(%{options: %{pages: "maybe"}})
+
+      assert %{field: :pages, path: [:options], vars: [validation: :enum]} = error
+      assert error.message =~ "pages"
+    end
+
+    test "a bad value two sub_fields deep keeps the whole path" do
+      assert {:error, %Ash.Error.Invalid{errors: [%InvalidAttribute{} = error]}} =
+               create_nested(%{options: %{schedule: %{every: "month"}}})
+
+      assert %{field: :every, path: [:options, :schedule]} = error
+    end
+
+    test "a bad item of a list sub_field is placed under the list" do
+      assert {:error, %Ash.Error.Invalid{errors: [%InvalidAttribute{} = error]}} =
+               create_nested(%{steps: [%{kind: "post"}, %{kind: "video"}]})
+
+      assert %{field: :kind, path: [:steps]} = error
+    end
+
+    test "a sub_field's own derive error is at the sub_field" do
+      assert {:error, %Ash.Error.Invalid{errors: [%InvalidAttribute{} = error]}} =
+               create_nested(%{steps: []})
+
+      assert %{field: :steps, path: [], vars: [validation: :not_empty]} = error
+    end
+
+    test "a key the sub_field does not know is an invalid attribute under it" do
+      assert {:error, %Ash.Error.Invalid{errors: [%InvalidAttribute{} = error]}} =
+               create_nested(%{options: %{mode: "x"}})
+
+      assert %{field: :mode, path: [:options], vars: [validation: :authorized_fields]} = error
+    end
+
+    test "every bad value is reported, next to a bad value at the top" do
+      assert {:error, %Ash.Error.Invalid{errors: errors}} =
+               create_nested(%{
+                 source: String.duplicate("s", 30),
+                 options: %{authors: "invite", pages: "maybe", schedule: %{hour: 30}}
+               })
+
+      assert Enum.all?(errors, &match?(%InvalidAttribute{}, &1))
+
+      assert errors |> Enum.map(&{&1.path, &1.field}) |> Enum.sort() == [
+               {[], :source},
+               {[:options], :authors},
+               {[:options], :pages},
+               {[:options, :schedule], :hour}
+             ]
+    end
+
+    test "a conditional_field that matches no child is an invalid attribute at its field" do
+      assert {:error, %Ash.Error.Invalid{errors: [%InvalidAttribute{} = error]}} =
+               create_nested(%{contact: %{}})
+
+      assert %{field: :contact, path: [], vars: [validation: :email_r]} = error
+    end
+
+    test "an update maps them the same way" do
+      assert {:ok, record} = create_nested(%{})
+
+      assert {:error, %Ash.Error.Invalid{errors: [%InvalidAttribute{} = error]}} =
+               record
+               |> Ash.Changeset.for_update(:update, %{options: %{schedule: %{every: "month"}}})
+               |> Ash.update()
+
+      assert %{field: :every, path: [:options, :schedule]} = error
+    end
+  end
+
+  defp create_nested(attrs) do
+    WithNestedDefaults
+    |> Ash.Changeset.for_create(:create, Map.merge(%{source: "wordpress"}, attrs))
+    |> Ash.create()
   end
 
   defp valid_atomic_input(overrides \\ %{}) do

@@ -157,6 +157,22 @@ Errors from `__guarded_change__/1` follow the canonical
 `%{field, action, message}` shape. `Change` converts each into an
 `Ash.Error.Changes.InvalidAttribute` exception via `add_error/2`.
 
+A `sub_field` error holds the errors of its fields
+(`%{field: :options, errors: [%{field: :pages, ...}]}`). Each of them becomes
+its own `InvalidAttribute` at the nested field, with the names of the
+`sub_field`s it sits in as its `path`, so a form can place it:
+
+```elixir
+{:error,
+ %Ash.Error.Invalid{
+   errors: [%Ash.Error.Changes.InvalidAttribute{field: :pages, path: [:options]}]
+ }}
+```
+
+The path of a list `sub_field` names the list, not the item. A
+`conditional_field`'s errors, and a `sub_field`'s own `derives:` or `validator:`
+errors, are at that field with the path it sits in.
+
 ## `each=[<type-op>]` is dead on typed array attributes
 
 `Ash.create/1` runs **attribute casting before changes**. When an attribute

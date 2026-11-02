@@ -166,7 +166,8 @@ defmodule GuardedStruct.AshResource.Change do
       {:error, errs} when is_list(errs) ->
         errs
         |> maybe_filter_required(changeset.action_type)
-        |> Enum.reduce(changeset, fn err, cs -> add_error(cs, to_ash_error(err)) end)
+        |> Enum.flat_map(&to_ash_errors(&1, []))
+        |> Enum.reduce(changeset, fn err, cs -> add_error(cs, err) end)
     end
   end
 
@@ -193,7 +194,11 @@ defmodule GuardedStruct.AshResource.Change do
         if errs == [] do
           :ok
         else
-          cs = Enum.reduce(errs, changeset, fn err, c -> add_error(c, to_ash_error(err)) end)
+          cs =
+            errs
+            |> Enum.flat_map(&to_ash_errors(&1, []))
+            |> Enum.reduce(changeset, fn err, c -> add_error(c, err) end)
+
           {:ok, cs}
         end
     end
@@ -219,18 +224,37 @@ defmodule GuardedStruct.AshResource.Change do
   defp add_error(changeset, err),
     do: apply(Ash.Changeset, :add_error, [changeset, err])
 
-  defp to_ash_error(%{field: field, message: message} = err) do
-    apply(Ash.Error.Changes.InvalidAttribute, :exception, [
-      [
-        field: field,
-        message: message,
-        value: Map.get(err, :value),
-        vars: vars_for(err)
-      ]
-    ])
+  # A `sub_field` or `conditional_field` error holds the errors of its fields
+  # under `:errors`. Each becomes its own error, with the names of the fields it
+  # is nested in as its `path`, so a form can place it on the nested field. An
+  # error named like the field holding it is about that field itself and keeps
+  # its path: a `conditional_field` child, or a `sub_field`'s own derive or
+  # validator.
+  defp to_ash_errors(%{field: field, errors: errors}, path)
+       when is_map(errors) or (is_list(errors) and errors != []) do
+    errors
+    |> List.wrap()
+    |> Enum.flat_map(fn
+      %{field: ^field} = err -> to_ash_errors(err, path)
+      err -> to_ash_errors(err, path ++ [field])
+    end)
   end
 
-  defp to_ash_error(other), do: other
+  defp to_ash_errors(%{field: field, message: message} = err, path) do
+    [
+      apply(Ash.Error.Changes.InvalidAttribute, :exception, [
+        [
+          field: field,
+          message: message,
+          value: Map.get(err, :value),
+          path: path,
+          vars: vars_for(err)
+        ]
+      ])
+    ]
+  end
+
+  defp to_ash_errors(other, _path), do: [other]
 
   defp vars_for(%{action: action}) when is_atom(action), do: [validation: action]
   defp vars_for(_), do: []
