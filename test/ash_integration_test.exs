@@ -1014,6 +1014,61 @@ defmodule GuardedStructTest.AshIntegrationTest do
     end
   end
 
+  describe "sub_field errors and defaults through bulk actions" do
+    test "bulk_create stores each row's defaults and places a bad nested value under its row" do
+      result =
+        Ash.bulk_create(
+          [
+            %{source: "a", options: %{pages: "publish"}},
+            %{source: "b", options: %{pages: "maybe"}}
+          ],
+          WithNestedDefaults,
+          :create,
+          return_records?: true,
+          return_errors?: true,
+          stop_on_error?: false
+        )
+
+      assert [%{source: "a", options: options}] = result.records
+      assert options == %{authors: "connect", pages: "publish", comments: false, schedule: nil}
+
+      assert [%Ash.Error.Invalid{errors: [%InvalidAttribute{} = error]}] = result.errors
+      assert %{field: :pages, path: [1, :options]} = error
+    end
+
+    test "bulk_update stores the defaults and places a bad nested value, atomic or streamed" do
+      require Ash.Query
+
+      # Ash puts the row's index first on a streamed update.
+      for {strategy, path} <- [atomic: [:options, :schedule], stream: [0, :options, :schedule]] do
+        assert {:ok, record} = create_nested(%{})
+        query = Ash.Query.filter(WithNestedDefaults, id == ^record.id)
+
+        assert %{status: :success, records: [updated]} =
+                 Ash.bulk_update(query, :update, %{options: %{pages: "publish"}},
+                   strategy: strategy,
+                   return_records?: true,
+                   return_errors?: true
+                 )
+
+        assert updated.options == %{
+                 authors: "connect",
+                 pages: "publish",
+                 comments: false,
+                 schedule: nil
+               }
+
+        assert %{status: :error, errors: [%Ash.Error.Invalid{errors: [error]}]} =
+                 Ash.bulk_update(query, :update, %{options: %{schedule: %{every: "month"}}},
+                   strategy: strategy,
+                   return_errors?: true
+                 )
+
+        assert %InvalidAttribute{field: :every, path: ^path} = error
+      end
+    end
+  end
+
   defp create_nested(attrs) do
     WithNestedDefaults
     |> Ash.Changeset.for_create(:create, Map.merge(%{source: "wordpress"}, attrs))
