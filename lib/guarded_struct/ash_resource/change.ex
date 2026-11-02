@@ -216,7 +216,7 @@ defmodule GuardedStruct.AshResource.Change do
   # `Ash.Changeset.add_error/2` takes the whole list and adds the errors in
   # order, each as its own error.
   defp add_guarded_errors(changeset, errs) do
-    errors = Enum.flat_map(errs, &to_ash_errors(&1, []))
+    errors = Enum.flat_map(errs, &to_ash_errors/1)
     apply(Ash.Changeset, :add_error, [changeset, errors])
   end
 
@@ -226,31 +226,28 @@ defmodule GuardedStruct.AshResource.Change do
   # error named like the field holding it is about that field itself and keeps
   # its path: a `conditional_field` child, or a `sub_field`'s own derive or
   # validator.
-  defp to_ash_errors(%{field: field, errors: errors}, path)
+  defp to_ash_errors(%{field: field, errors: errors})
        when is_map(errors) or (is_list(errors) and errors != []) do
     errors
     |> List.wrap()
     |> Enum.flat_map(fn
-      %{field: ^field} = err -> to_ash_errors(err, path)
-      err -> to_ash_errors(err, path ++ [field])
+      %{field: ^field} = err -> to_ash_errors(err)
+      err -> err |> to_ash_errors() |> set_path([field])
     end)
   end
 
-  defp to_ash_errors(%{field: field, message: message} = err, path) do
+  defp to_ash_errors(%{field: field, message: message} = err) do
     [
       apply(Ash.Error.Changes.InvalidAttribute, :exception, [
-        [
-          field: field,
-          message: message,
-          value: Map.get(err, :value),
-          path: path,
-          vars: vars_for(err)
-        ]
+        [field: field, message: message, value: Map.get(err, :value), vars: vars_for(err)]
       ])
     ]
   end
 
-  defp to_ash_errors(other, _path), do: [other]
+  defp to_ash_errors(other), do: [other]
+
+  # `Ash.Error.set_path/2` puts the path in front of the one the errors have.
+  defp set_path(errors, path), do: apply(Ash.Error, :set_path, [errors, path])
 
   defp vars_for(%{action: action}) when is_atom(action), do: [validation: action]
   defp vars_for(_), do: []
