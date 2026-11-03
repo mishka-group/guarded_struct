@@ -15,7 +15,7 @@
 ---
 
 > [!NOTE]
-> **Status — `0.1.4`.** v0.1.0 rewrote the macro core on [Spark](https://hex.pm/packages/spark). Every existing 0.0.x API keeps working unchanged. Track every change in [`CHANGELOG.md`](./CHANGELOG.md).
+> **Status — `0.1.5`.** v0.1.0 rewrote the macro core on [Spark](https://hex.pm/packages/spark). Every existing 0.0.x API keeps working unchanged. Track every change in [`CHANGELOG.md`](./CHANGELOG.md).
 
 ---
 
@@ -272,7 +272,7 @@ Add to your `mix.exs`:
 ```elixir
 def deps do
   [
-    {:guarded_struct, "~> 0.1.4"}
+    {:guarded_struct, "~> 0.1.5"}
   ]
 end
 ```
