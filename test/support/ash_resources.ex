@@ -539,3 +539,72 @@ defmodule GuardedStructTest.AshResources.WithDomainRule do
     attribute :settings, :map, public?: true
   end
 end
+
+defmodule GuardedStructTest.AshResources.WithNestedDefaults do
+  @moduledoc """
+  Resource whose sub_fields have defaults: a map, a map inside it and a list,
+  next to a conditional_field.
+  """
+  use Ash.Resource,
+    domain: GuardedStructTest.Support.TestDomain,
+    data_layer: Ash.DataLayer.Ets,
+    extensions: [GuardedStruct.AshResource]
+
+  ets do
+    private? true
+  end
+
+  guardedstruct do
+    auto_wire true
+
+    field :source, :string, derives: "sanitize(trim) validate(string, not_empty, max_len=20)"
+
+    sub_field :options, :map, authorized_fields: true do
+      field :authors, :string,
+        default: "connect",
+        derives: "sanitize(trim) validate(enum=String[connect::create])"
+
+      field :pages, :string,
+        default: "draft",
+        derives: "sanitize(trim) validate(enum=String[draft::publish])"
+
+      field :comments, :boolean, default: false, derives: "validate(boolean)"
+
+      sub_field :schedule, :map do
+        field :every, :string, default: "day", derives: "validate(enum=String[day::week])"
+        field :hour, :integer, default: 3, derives: "validate(integer, min_len=0, max_len=23)"
+      end
+    end
+
+    sub_field :steps, :map, structs: true, derives: "validate(list, not_empty)" do
+      field :kind, :string, derives: "validate(enum=String[post::page])"
+      field :limit, :integer, default: 10, derives: "validate(integer, min_len=1)"
+    end
+
+    conditional_field :contact, :any, priority: true do
+      field :contact, :string, derives: "validate(string, email_r)", hint: "email"
+
+      sub_field :contact, :map, hint: "phone" do
+        field :number, :string, derives: "validate(string, not_empty)"
+        field :country, :string, default: "+98"
+      end
+    end
+  end
+
+  actions do
+    defaults [:read, :destroy]
+    create :create, accept: [:source, :options, :steps, :contact]
+
+    update :update do
+      accept [:options]
+    end
+  end
+
+  attributes do
+    uuid_primary_key :id
+    attribute :source, :string, public?: true
+    attribute :options, :map, public?: true
+    attribute :steps, {:array, :map}, public?: true
+    attribute :contact, :term, public?: true
+  end
+end

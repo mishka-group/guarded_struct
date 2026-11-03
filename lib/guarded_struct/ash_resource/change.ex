@@ -59,25 +59,14 @@ defmodule GuardedStruct.AshResource.Change do
   path. Both produce identical results.
   """
 
+  # The functions Ash reads from a change module, the ones `use Ash.Resource.Change`
+  # generates. They are written by hand because Ash is not a compile dependency of
+  # GuardedStruct, so the macro is not there when this module compiles.
   def has_change?, do: true
-  def has_atomic?, do: true
   def has_batch_change?, do: true
   def has_before_batch?, do: false
   def has_after_batch?, do: false
-  def has_after_action?, do: false
-  def has_before_action?, do: false
-  def has_validate?, do: false
-  def has_around_action?, do: false
-  def has_init?, do: true
-
   def atomic?, do: true
-  def batch_change?, do: true
-  def before_batch?, do: false
-  def after_batch?, do: false
-  def after_action?, do: false
-  def before_action?, do: false
-  def validate?, do: false
-  def around_action?, do: false
 
   @doc false
   def init(opts), do: {:ok, opts}
@@ -164,9 +153,7 @@ defmodule GuardedStruct.AshResource.Change do
         force_change_attributes(changeset, transformed_attrs)
 
       {:error, errs} when is_list(errs) ->
-        errs
-        |> maybe_filter_required(changeset.action_type)
-        |> Enum.reduce(changeset, fn err, cs -> add_error(cs, to_ash_error(err)) end)
+        add_guarded_errors(changeset, maybe_filter_required(errs, changeset.action_type))
     end
   end
 
@@ -193,8 +180,7 @@ defmodule GuardedStruct.AshResource.Change do
         if errs == [] do
           :ok
         else
-          cs = Enum.reduce(errs, changeset, fn err, c -> add_error(c, to_ash_error(err)) end)
-          {:ok, cs}
+          {:ok, add_guarded_errors(changeset, errs)}
         end
     end
   end
@@ -216,21 +202,41 @@ defmodule GuardedStruct.AshResource.Change do
   defp force_change_attributes(changeset, attrs),
     do: apply(Ash.Changeset, :force_change_attributes, [changeset, attrs])
 
-  defp add_error(changeset, err),
-    do: apply(Ash.Changeset, :add_error, [changeset, err])
-
-  defp to_ash_error(%{field: field, message: message} = err) do
-    apply(Ash.Error.Changes.InvalidAttribute, :exception, [
-      [
-        field: field,
-        message: message,
-        value: Map.get(err, :value),
-        vars: vars_for(err)
-      ]
-    ])
+  # `Ash.Changeset.add_error/2` takes the whole list and adds the errors in
+  # order, each as its own error.
+  defp add_guarded_errors(changeset, errs) do
+    errors = Enum.flat_map(errs, &to_ash_errors/1)
+    apply(Ash.Changeset, :add_error, [changeset, errors])
   end
 
-  defp to_ash_error(other), do: other
+  # A `sub_field` or `conditional_field` error holds the errors of its fields
+  # under `:errors`. Each becomes its own error, with the names of the fields it
+  # is nested in as its `path`, so a form can place it on the nested field. An
+  # error named like the field holding it is about that field itself and keeps
+  # its path: a `conditional_field` child, or a `sub_field`'s own derive or
+  # validator.
+  defp to_ash_errors(%{field: field, errors: errors})
+       when is_map(errors) or (is_list(errors) and errors != []) do
+    errors
+    |> List.wrap()
+    |> Enum.flat_map(fn
+      %{field: ^field} = err -> to_ash_errors(err)
+      err -> err |> to_ash_errors() |> set_path([field])
+    end)
+  end
+
+  defp to_ash_errors(%{field: field, message: message} = err) do
+    [
+      apply(Ash.Error.Changes.InvalidAttribute, :exception, [
+        [field: field, message: message, value: Map.get(err, :value), vars: vars_for(err)]
+      ])
+    ]
+  end
+
+  defp to_ash_errors(other), do: [other]
+
+  # `Ash.Error.set_path/2` puts the path in front of the one the errors have.
+  defp set_path(errors, path), do: apply(Ash.Error, :set_path, [errors, path])
 
   defp vars_for(%{action: action}) when is_atom(action), do: [validation: action]
   defp vars_for(_), do: []

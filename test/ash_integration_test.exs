@@ -12,8 +12,11 @@ defmodule GuardedStructTest.AshIntegrationTest do
     AtomicEligibleUser,
     AtomicWithCounter,
     WithDomainRule,
-    WithSectionRules
+    WithSectionRules,
+    WithNestedDefaults
   }
+
+  alias Ash.Error.Changes.InvalidAttribute
 
   describe "sanitize end-to-end through Ash.create/1" do
     test "trim + downcase normalize an email before insert (manual wiring)" do
@@ -857,6 +860,219 @@ defmodule GuardedStructTest.AshIntegrationTest do
 
       assert inspect(err) =~ "nickname is blocked"
     end
+  end
+
+  describe "sub_field errors through Ash.create/1" do
+    test "a bad value is an invalid attribute at its field, under the sub_field's path" do
+      assert {:error, %Ash.Error.Invalid{errors: [%InvalidAttribute{} = error]}} =
+               create_nested(%{options: %{pages: "maybe"}})
+
+      assert %{field: :pages, path: [:options], vars: [validation: :enum]} = error
+      assert error.message =~ "pages"
+    end
+
+    test "a bad value two sub_fields deep keeps the whole path" do
+      assert {:error, %Ash.Error.Invalid{errors: [%InvalidAttribute{} = error]}} =
+               create_nested(%{options: %{schedule: %{every: "month"}}})
+
+      assert %{field: :every, path: [:options, :schedule]} = error
+    end
+
+    test "a bad item of a list sub_field is placed under the list" do
+      assert {:error, %Ash.Error.Invalid{errors: [%InvalidAttribute{} = error]}} =
+               create_nested(%{steps: [%{kind: "post"}, %{kind: "video"}]})
+
+      assert %{field: :kind, path: [:steps]} = error
+    end
+
+    test "a sub_field's own derive error is at the sub_field" do
+      assert {:error, %Ash.Error.Invalid{errors: [%InvalidAttribute{} = error]}} =
+               create_nested(%{steps: []})
+
+      assert %{field: :steps, path: [], vars: [validation: :not_empty]} = error
+    end
+
+    test "a key the sub_field does not know is an invalid attribute under it" do
+      assert {:error, %Ash.Error.Invalid{errors: [%InvalidAttribute{} = error]}} =
+               create_nested(%{options: %{mode: "x"}})
+
+      assert %{field: :mode, path: [:options], vars: [validation: :authorized_fields]} = error
+    end
+
+    test "every bad value is reported, next to a bad value at the top" do
+      assert {:error, %Ash.Error.Invalid{errors: errors}} =
+               create_nested(%{
+                 source: String.duplicate("s", 30),
+                 options: %{authors: "invite", pages: "maybe", schedule: %{hour: 30}}
+               })
+
+      assert Enum.all?(errors, &match?(%InvalidAttribute{}, &1))
+
+      assert errors |> Enum.map(&{&1.path, &1.field}) |> Enum.sort() == [
+               {[], :source},
+               {[:options], :authors},
+               {[:options], :pages},
+               {[:options, :schedule], :hour}
+             ]
+    end
+
+    test "a conditional_field that matches no child is an invalid attribute at its field" do
+      assert {:error, %Ash.Error.Invalid{errors: [%InvalidAttribute{} = error]}} =
+               create_nested(%{contact: 12})
+
+      assert %{field: :contact, path: [], vars: [validation: :email_r]} = error
+    end
+
+    test "an update maps them the same way" do
+      assert {:ok, record} = create_nested(%{})
+
+      assert {:error, %Ash.Error.Invalid{errors: [%InvalidAttribute{} = error]}} =
+               record
+               |> Ash.Changeset.for_update(:update, %{options: %{schedule: %{every: "month"}}})
+               |> Ash.update()
+
+      assert %{field: :every, path: [:options, :schedule]} = error
+    end
+  end
+
+  describe "sub_field defaults through Ash.create/1" do
+    test "a partial sub_field is stored with the defaults of the fields left out" do
+      assert {:ok, record} = create_nested(%{options: %{pages: " publish "}})
+
+      assert record.options == %{
+               authors: "connect",
+               pages: "publish",
+               comments: false,
+               schedule: nil
+             }
+
+      assert {:ok, built} = WithNestedDefaults.Options.builder(%{pages: " publish "})
+      assert record.options == Map.from_struct(built)
+    end
+
+    test "an empty sub_field is stored with every default" do
+      assert {:ok, %{options: options}} = create_nested(%{options: %{}})
+      assert options == %{authors: "connect", pages: "draft", comments: false, schedule: nil}
+    end
+
+    test "a sub_field inside a sub_field gets its defaults too" do
+      assert {:ok, %{options: options}} = create_nested(%{options: %{schedule: %{hour: 5}}})
+      assert options.schedule == %{every: "day", hour: 5}
+      refute is_struct(options.schedule)
+    end
+
+    test "every item of a list sub_field gets its defaults" do
+      assert {:ok, %{steps: steps}} =
+               create_nested(%{steps: [%{kind: "post"}, %{kind: "page", limit: 2}]})
+
+      assert steps == [%{kind: "post", limit: 10}, %{kind: "page", limit: 2}]
+    end
+
+    test "a key the sub_field does not declare is kept, as before" do
+      assert {:ok, %{steps: [step]}} = create_nested(%{steps: [%{kind: "post", note: "x"}]})
+      assert step == %{kind: "post", limit: 10, note: "x"}
+    end
+
+    test "an update stores the defaults too" do
+      assert {:ok, record} = create_nested(%{options: %{pages: "publish"}})
+
+      assert {:ok, updated} =
+               record
+               |> Ash.Changeset.for_update(:update, %{options: %{authors: "create"}})
+               |> Ash.update()
+
+      assert updated.options == %{
+               authors: "create",
+               pages: "draft",
+               comments: false,
+               schedule: nil
+             }
+    end
+
+    test "a conditional_field's sub_field gets its defaults too" do
+      assert {:ok, %{contact: contact}} = create_nested(%{contact: %{number: "0912"}})
+      assert contact == %{number: "0912", country: "+98"}
+
+      assert {:ok, %{contact: "a@mishka.group"}} = create_nested(%{contact: "a@mishka.group"})
+    end
+
+    test "__guarded_change__/1 fills them and still returns plain maps" do
+      assert {:ok, %{options: options, steps: [step]}} =
+               WithNestedDefaults.__guarded_change__(%{
+                 options: %{schedule: %{}},
+                 steps: [%{kind: "page"}]
+               })
+
+      assert options == %{
+               authors: "connect",
+               pages: "draft",
+               comments: false,
+               schedule: %{every: "day", hour: 3}
+             }
+
+      assert step == %{kind: "page", limit: 10}
+    end
+  end
+
+  describe "sub_field errors and defaults through bulk actions" do
+    test "bulk_create stores each row's defaults and places a bad nested value under its row" do
+      result =
+        Ash.bulk_create(
+          [
+            %{source: "a", options: %{pages: "publish"}},
+            %{source: "b", options: %{pages: "maybe"}}
+          ],
+          WithNestedDefaults,
+          :create,
+          return_records?: true,
+          return_errors?: true,
+          stop_on_error?: false
+        )
+
+      assert [%{source: "a", options: options}] = result.records
+      assert options == %{authors: "connect", pages: "publish", comments: false, schedule: nil}
+
+      assert [%Ash.Error.Invalid{errors: [%InvalidAttribute{} = error]}] = result.errors
+      assert %{field: :pages, path: [1, :options]} = error
+    end
+
+    test "bulk_update stores the defaults and places a bad nested value, atomic or streamed" do
+      require Ash.Query
+
+      # Ash puts the row's index first on a streamed update.
+      for {strategy, path} <- [atomic: [:options, :schedule], stream: [0, :options, :schedule]] do
+        assert {:ok, record} = create_nested(%{})
+        query = Ash.Query.filter(WithNestedDefaults, id == ^record.id)
+
+        assert %{status: :success, records: [updated]} =
+                 Ash.bulk_update(query, :update, %{options: %{pages: "publish"}},
+                   strategy: strategy,
+                   return_records?: true,
+                   return_errors?: true
+                 )
+
+        assert updated.options == %{
+                 authors: "connect",
+                 pages: "publish",
+                 comments: false,
+                 schedule: nil
+               }
+
+        assert %{status: :error, errors: [%Ash.Error.Invalid{errors: [error]}]} =
+                 Ash.bulk_update(query, :update, %{options: %{schedule: %{every: "month"}}},
+                   strategy: strategy,
+                   return_errors?: true
+                 )
+
+        assert %InvalidAttribute{field: :every, path: ^path} = error
+      end
+    end
+  end
+
+  defp create_nested(attrs) do
+    WithNestedDefaults
+    |> Ash.Changeset.for_create(:create, Map.merge(%{source: "wordpress"}, attrs))
+    |> Ash.create()
   end
 
   defp valid_atomic_input(overrides \\ %{}) do
