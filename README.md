@@ -111,6 +111,8 @@ field :slug, :string
 
 Every `sanitize(...)` group runs before every `validate(...)` group, in the order written, wherever the groups sit in the string. Operands are read strictly: a negative number (`min_len=-2`), a float, a boolean or `equal=Type::value` is parsed, and anything the parser can't read is a compile-time `Spark.Error.DslError` instead of being dropped.
 
+Sanitizing fails closed: a sanitizer that raises fails its field with a `:sanitize` error ("could not be sanitized") instead of keeping the raw value, and the exception is logged with its stacktrace, never the value. An op that nothing serves raises `ArgumentError`.
+
 - 🧩 **Combinators** — `optional=` wraps any inner ops, passing `nil` through; `each=` runs inner ops over every element of a list; both nest arbitrarily and accept ops from your `Derive.Extension` modules.
 - 🎯 **All ops parsed at compile time** — runtime reads pre-built op-maps from `__fields__/0`; zero `Code.eval_string` on the hot path.
 - 🧰 **`@derives` decorator** — alternative to inline `derives:` for keeping fields short.

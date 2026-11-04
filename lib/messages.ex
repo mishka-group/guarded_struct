@@ -105,6 +105,7 @@ defmodule GuardedStruct.Messages do
   @callback ipv6(any()) :: message()
   @callback ip(any()) :: message()
   @callback language_code(any()) :: message()
+  @callback sanitize(any()) :: message()
 
   @optional_callbacks required_fields: 0,
                       authorized_fields: 0,
@@ -182,7 +183,8 @@ defmodule GuardedStruct.Messages do
                       time_struct: 1,
                       ipv6: 1,
                       ip: 1,
-                      language_code: 1
+                      language_code: 1,
+                      sanitize: 1
 
   @doc false
   # Get idea from https://github.com/pow-auth/pow/blob/main/lib/pow/phoenix/messages.ex
@@ -268,6 +270,7 @@ defmodule GuardedStruct.Messages do
       def ipv6(field), do: unquote(__MODULE__).ipv6(field)
       def ip(field), do: unquote(__MODULE__).ip(field)
       def language_code(field), do: unquote(__MODULE__).language_code(field)
+      def sanitize(field), do: unquote(__MODULE__).sanitize(field)
 
       defoverridable unquote(__MODULE__)
     end
@@ -477,6 +480,8 @@ defmodule GuardedStruct.Messages do
     do:
       "Invalid language code in the #{field} field — expected a BCP-47 / ISO 639-1 shape (e.g. en, en-US, zh-Hant)"
 
+  def sanitize(field), do: "The #{field} field could not be sanitized"
+
   # Helpers
   #
   # Per-key direct-call clauses are generated from the callback list so the
@@ -553,7 +558,8 @@ defmodule GuardedStruct.Messages do
     :port_number,
     :hex_color,
     :semver,
-    :each
+    :each,
+    :sanitize
   ]
 
   for fun <- @zero_arity_messages do

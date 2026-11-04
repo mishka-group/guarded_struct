@@ -61,6 +61,18 @@ docs), but the string form above is the canonical input.
 
 Arg order is **pipe-friendly**: `SanitizerDerive.sanitize(value, :op)`.
 
+Sanitizing fails closed. A sanitizer that raises (a built-in op, a derive
+extension or a `sanitize_derive` module) never lets the raw value through: the
+field fails with `%{field: field, action: :sanitize, message: "The <field> field
+could not be sanitized"}`, which an Ash action returns as an `InvalidAttribute`
+at the field, and the exception is logged at error level with its stacktrace,
+never the value. An op that nothing serves raises `ArgumentError`. Called
+directly, `SanitizerDerive.sanitize/2` raises in both cases.
+
+A `sanitize_derive` module hands an op on to the next module by returning `nil`
+or by having no `sanitize/2` clause that matches. When no module serves the op,
+that is the `ArgumentError` above.
+
 ## Built-in validate ops (`GuardedStruct.Derive.Registry.@validate_ops`)
 
 Type guards: `:string`, `:integer`, `:float`, `:number`, `:list`, `:map`,
