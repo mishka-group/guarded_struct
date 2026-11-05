@@ -1,8 +1,9 @@
-# Unreleased
+# Changelog for GuardedStruct 0.1.6
 
 - Fix a sanitizer that raises letting the raw value through. A `sanitize_derive` module or a derive extension that raised kept the input unsanitized, and a built-in op that raised (such as `sanitize(rich_text_safe)` on invalid UTF-8) crashed the build. Sanitizing now fails closed: the field fails with `%{action: :sanitize, message: "The <field> field could not be sanitized"}`, which an Ash action returns as an `InvalidAttribute` at the field, and the exception is logged at error level with its stacktrace, without the arguments of each call, so the value is never logged. The message is `sanitize/1` of the message backend. `SanitizerDerive.sanitize/2` called directly raises the exception
 - An op that nothing serves raises `ArgumentError`, in a `derives` string and from `SanitizerDerive.sanitize/2`, instead of passing the value through unchanged. A `sanitize_derive` module still hands an op on to the next one by returning `nil` or by having no `sanitize/2` clause that matches; when none serves it, that is the `ArgumentError`. A built-in op still passes a value of another type through (`sanitize(html5)` on an integer)
 - Remove `SanitizerDerive.validate_pattern/3`, which turned the exception of a `sanitize_derive` module into `nil`
+- The lock is on the newest Hex releases: `ecto` 3.14.3 and `nimble_options` 1.2.0
 
 # Changelog for GuardedStruct 0.1.5
 

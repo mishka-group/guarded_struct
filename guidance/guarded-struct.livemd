@@ -2,7 +2,7 @@
 
 ```elixir
 Mix.install([
-  {:guarded_struct, "~> 0.1.5"},
+  {:guarded_struct, "~> 0.1.6"},
 
   # Optional dependencies, It’s recommended to create your own
   # custom validation and sanitization functions instead of
