@@ -53,6 +53,11 @@ The arg order is `(value, op)`. The same convention extends to
 `Extension.dispatch_sanitize(input, op)` and to user-defined extension
 sanitizer callbacks (`__sanitize__(input, op)`).
 
+Sanitizing fails closed: a sanitizer that raises fails the field with a
+`:sanitize` error (the exception is logged, the value is not), and an op that
+nothing serves raises `ArgumentError`. Called directly, `sanitize/2` raises in
+both cases.
+
 ## Five accepted input syntaxes
 
 All normalize to the same internal op map:

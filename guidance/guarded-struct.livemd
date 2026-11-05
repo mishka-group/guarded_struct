@@ -380,6 +380,8 @@ end
 
 #### Sanitize
 
+Sanitizing fails closed: when a sanitizer raises, the field fails with a `:sanitize` error ("The title field could not be sanitized") instead of keeping the raw value, and the exception is logged with its stacktrace, never the value. An op that no built-in op, derive extension or `sanitize_derive` module serves raises `ArgumentError`.
+
 | How to use                  | Dependencies              | Description                                                         |
 | --------------------------- | ------------------------- | ------------------------------------------------------------------- |
 | `"sanitize(trim)"`          | NO                        | Trim your string                                                    |
@@ -488,6 +490,8 @@ NormalDeriveStruct.builder(%{title: :mishka})
 * `sanitize_derive` - It can be just one module or a list of modules
 
 The modules of the section option are tried first, in the order you list them; the Application env of the same name stays the fallback for every op they do not handle. The section option works on the module, on every `sub_field` of it and on `Validate.field/3`.
+
+A sanitize module hands an op on to the next one by returning `nil` or by having no `sanitize/2` clause that matches. When no module serves a sanitize op, building raises `ArgumentError`; when a module raises, the field fails with a `:sanitize` error.
 
 - First set Application env:
 

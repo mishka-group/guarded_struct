@@ -247,8 +247,12 @@ defmodule GuardedStructTest.DeriveSectionOptionsTest do
     end
 
     test "a module without the option only has the application config" do
-      assert {:ok, %NoSectionOptions{sanitized: "x", app_sanitized: "x|app"}} =
-               NoSectionOptions.builder(%{sanitized: "x", app_sanitized: "x"})
+      assert {:ok, %NoSectionOptions{app_sanitized: "x|app"}} =
+               NoSectionOptions.builder(%{app_sanitized: "x"})
+
+      assert_raise ArgumentError, ~r/:section_op/, fn ->
+        NoSectionOptions.builder(%{sanitized: "x"})
+      end
     end
   end
 

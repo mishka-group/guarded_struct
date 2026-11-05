@@ -73,7 +73,9 @@ The function passed to `validator/2` may return:
 
 ## Sanitizer return contract
 
-Return value replaces the input. Sanitizers run before validators.
+Return value replaces the input. Sanitizers run before validators. A sanitizer
+that raises fails the field with a `:sanitize` error instead of keeping the
+input, and the exception is logged with its stacktrace.
 
 ## Compile-time shadow warning
 

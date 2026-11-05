@@ -214,7 +214,9 @@ defmodule GuardedStruct.Dsl do
           "A module, or a list of modules, whose `sanitize/2` serves the `sanitize(...)` ops " <>
             "the built-in ones and the derive extensions do not know. They are tried before " <>
             "the `:sanitize_derive` application config, which still serves the ops they do " <>
-            "not handle."
+            "not handle. A module hands an op on by returning `nil` or by having no matching " <>
+            "`sanitize/2` clause. An op no module serves raises `ArgumentError`, and a module " <>
+            "that raises fails the field with a `:sanitize` error."
       ],
       json: [
         type: :boolean,

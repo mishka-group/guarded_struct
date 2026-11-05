@@ -19,7 +19,16 @@ defmodule GuardedStruct.Derive.ValidationDerive do
   # `US`/`419`, variant `1996`, etc.). Anchored + bounded — ReDoS-safe.
   @language_code_regex ~r/^[a-zA-Z]{2,3}(?:-[a-zA-Z0-9]{2,8})*$/
 
+  @doc """
+  Runs the validate ops of a field and returns `{value, errors}`. A field whose
+  sanitizer raised arrives as its `:sanitize` error (see
+  `GuardedStruct.Derive.SanitizerDerive.call/2`) and is reported as that error,
+  without running the validate ops.
+  """
   @spec call({atom(), any()}, list(any()), String.t()) :: {any(), any()}
+  def call({field, {:error, field, :sanitize, _message} = error}, _actions, hint),
+    do: {nil, [build_error_map(field, error, hint)]}
+
   def call({_field, input}, nil, _hint), do: {input, []}
   def call({_field, input}, [], _hint), do: {input, []}
 

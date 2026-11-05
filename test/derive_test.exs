@@ -42,7 +42,9 @@ defmodule GuardedStructTest.DeriveTest do
   end
 
   test "sanitize(:not_exist, input)" do
-    "<p>Hi Shahryar</p>" = assert SanitizerDerive.sanitize("<p>Hi Shahryar</p>", :not_exist)
+    assert_raise ArgumentError, ~r/:not_exist/, fn ->
+      SanitizerDerive.sanitize("<p>Hi Shahryar</p>", :not_exist)
+    end
   end
 
   test "sanitize(:string_float, input)" do
@@ -689,15 +691,18 @@ defmodule GuardedStructTest.DeriveTest do
        id: 1,
        name: "Shahryar",
        last_name: "Tavakkoli",
-       nikname: "test"
+       nikname: nil
      }} =
       assert TestCustomeDerive.builder(%{
                id: 1,
                title: "Mishka",
                name: " shahryar ",
-               last_name: "tavakkoli",
-               nikname: "test"
+               last_name: "tavakkoli"
              })
+
+    assert_raise ArgumentError, ~r/:not_exist/, fn ->
+      TestCustomeDerive.builder(%{nikname: "test"})
+    end
 
     {:error,
      [
@@ -737,15 +742,18 @@ defmodule GuardedStructTest.DeriveTest do
        id: 1,
        name: "Shahryar",
        last_name: "Tavakkoli",
-       nikname: "test"
+       nikname: nil
      }} =
       assert TestCustomListDerive.builder(%{
                id: 1,
                title: "Mishka",
                name: " shahryar ",
-               last_name: "tavakkoli",
-               nikname: "test"
+               last_name: "tavakkoli"
              })
+
+    assert_raise ArgumentError, ~r/:not_exist/, fn ->
+      TestCustomListDerive.builder(%{nikname: "test"})
+    end
   end
 
   defmodule TestEitherValidationDerive do
