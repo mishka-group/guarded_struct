@@ -71,7 +71,7 @@ defmodule GuardedStructTest.DeriveTest do
       assert is_integer(SanitizerDerive.sanitize(input, :string_integer)), inspect(input)
     end
 
-    assert 0.0 = SanitizerDerive.sanitize("abc", :string_float)
+    assert +0.0 = SanitizerDerive.sanitize("abc", :string_float)
     assert 0 = SanitizerDerive.sanitize("abc", :string_integer)
   end
 
