@@ -1,6 +1,7 @@
 # Changelog for GuardedStruct 0.1.8
 
 - Fix `validate(not_nil_value)` letting an explicit `nil` through: a field given as `nil` skipped every op, so the one op made to refuse `nil` never ran, and `enforce: true` only asks for the key. It now runs on a `nil` value and the field fails with `%{action: :not_nil_value}`. Every other op still skips a `nil` field, and `sanitize(default_when_nil=...)` still replaces it first
+- Fix a field that failed its `validator:` or its `sub_field` reporting a second error from its `derives`: the field was dropped to its default and derived again, so `not_nil_value` (or any check of the default) added an unrelated error. A field that already failed is no longer derived
 
 # Changelog for GuardedStruct 0.1.7
 

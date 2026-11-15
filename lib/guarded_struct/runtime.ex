@@ -326,6 +326,12 @@ defmodule GuardedStruct.Runtime do
 
       all_errors = sub_errors ++ validator_errors
 
+      # A field that already failed its validator or its sub_field has no value left to derive:
+      # its derives would run on the default and report a second, unrelated error
+      # (`not_nil_value` on the nil it was dropped to).
+      failed = MapSet.new(all_errors, & &1.field)
+      derivable? = &(not MapSet.member?(failed, &1.name))
+
       virtual_names = Map.get(info, :virtual_keys, [])
 
       # The Ash-extension entry point (`validate/3`) sets `:guarded_as_map?`
@@ -356,7 +362,8 @@ defmodule GuardedStruct.Runtime do
             # Virtuals are dropped by `wrap.()`, so this is the one chance
             # to validate them. Defaults aren't relevant here (virtuals
             # don't get default-substituted through struct/2).
-            virtual_meta = Enum.map(virtual_names, &module.__field_meta__/1)
+            virtual_meta =
+              virtual_names |> Enum.map(&module.__field_meta__/1) |> Enum.filter(derivable?)
 
             virtual_errs =
               case run_derives(merged, virtual_meta) do
@@ -367,7 +374,11 @@ defmodule GuardedStruct.Runtime do
             # Pass 2 — wrap into struct (so struct/2 applies field defaults),
             # then derive on the wrapped struct for NON-virtual fields.
             sv = wrap.(merged)
-            non_virtual_meta = Enum.reject(fields_meta, &(&1[:kind] == :virtual_field))
+
+            non_virtual_meta =
+              fields_meta
+              |> Enum.reject(&(&1[:kind] == :virtual_field))
+              |> Enum.filter(derivable?)
 
             case run_derives(sv, non_virtual_meta) do
               {:ok, derived} -> {virtual_errs, derived}
