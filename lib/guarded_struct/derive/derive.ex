@@ -33,11 +33,12 @@ defmodule GuardedStruct.Derive do
   end
 
   # A nil value skips every op except `sanitize(default_when_nil=...)`, which
-  # replaces it; the whole derive string then runs on that default.
+  # replaces it (the whole derive string then runs on that default), and
+  # `validate(not_nil_value)`, whose only job is to refuse it.
   defp update(nil, ops, hint, input, acc) do
     case nil_default(ops) do
       {:ok, default} -> update(default, ops, hint, input, acc)
-      :none -> acc
+      :none -> refuse_nil(ops, hint, input, acc)
     end
   end
 
@@ -87,6 +88,23 @@ defmodule GuardedStruct.Derive do
 
     if errors == [], do: processed, else: {:error, errors}
   end
+
+  defp refuse_nil(ops, hint, input, acc) do
+    case :not_nil_value in validate_ops(ops) do
+      true ->
+        Map.put(
+          acc,
+          input.field,
+          run_one(%{validate: [:not_nil_value]}, input.field, nil, hint)
+        )
+
+      false ->
+        acc
+    end
+  end
+
+  defp validate_ops(ops),
+    do: ops |> List.wrap() |> Enum.flat_map(&(&1 |> get_in_ops(:validate) |> List.wrap()))
 
   defp nil_default(ops) do
     ops

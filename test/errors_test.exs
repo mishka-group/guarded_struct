@@ -43,4 +43,21 @@ defmodule GuardedStructTest.ErrorsTest do
     e = Unknown.exception(error: %{weird: 1}, message: "weird thing")
     assert Exception.message(e) == "weird thing"
   end
+
+  test "a nested struct's errors become child errors of its field" do
+    error =
+      GuardedStruct.Errors.from_tuple(
+        {:error, [%{field: :items, errors: [%{field: :amount, action: :price, message: "bad"}]}]}
+      )
+
+    assert %GuardedStruct.Errors.Invalid{
+             errors: [
+               %GuardedStruct.Errors.Validation{
+                 field: :items,
+                 action: :nested,
+                 child_errors: [%GuardedStruct.Errors.Validation{field: :amount, action: :price}]
+               }
+             ]
+           } = error
+  end
 end

@@ -54,6 +54,18 @@ defmodule GuardedStruct.Errors do
     )
   end
 
+  # A `struct:` / `structs:` field or a `sub_field` reports its own errors under `errors:`,
+  # without an action of its own.
+  defp to_splode(%{field: field, errors: child_errors} = m)
+       when is_list(child_errors) and not is_map_key(m, :action) do
+    GuardedStruct.Errors.Validation.exception(
+      field: field,
+      action: :nested,
+      message: "The #{field} field has invalid values",
+      child_errors: Enum.map(child_errors, &to_splode/1)
+    )
+  end
+
   defp to_splode(%{field: field, action: action} = m) do
     GuardedStruct.Errors.Validation.exception(
       field: field,
