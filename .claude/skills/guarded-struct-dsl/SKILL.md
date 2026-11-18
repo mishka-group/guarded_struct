@@ -40,7 +40,7 @@ end
 | Entity | Generates | Notes |
 |---|---|---|
 | `field` | struct slot | `:dynamic_field` kind when `dynamic_field` macro used. |
-| `sub_field` | nested submodule (`MyApp.User.Profile` etc.) | Recursive; own `error:`/`authorized_fields:`/`main_validator:`. |
+| `sub_field` | nested submodule (`MyApp.User.Profile` etc.) | Recursive; own `error:`/`authorized_fields:`/`main_validator:`; `doc:` is its `@moduledoc` (`false` hides it). |
 | `conditional_field` | one runtime-selected child | Children share parent's name. `priority: true` on the conditional keeps only the first child's error when none match. |
 | `virtual_field` | input-only, dropped from struct | Validated by main_validator; ideal for `password_confirmation`. No `struct`/`structs`/`priority`. |
 | `dynamic_field` | passthrough map, no key-atomization | Default `validate(map)`. Atom-attack safe. No `struct`/`structs`/`priority`. |

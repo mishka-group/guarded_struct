@@ -1,6 +1,7 @@
 # Changelog for GuardedStruct 0.1.9
 
 - Fix a `struct:`, `structs:` or `sub_field` field given a value of the wrong shape being kept in the struct unbuilt and unchecked (`lines: "garbage"`, `address: 5`, `rates: %{...}` all came back `{:ok, ...}`). A list field (`structs: Mod` or a `sub_field` with `structs: true`) now refuses anything but a list with `%{action: :type}`, and a one-struct field (`struct: Mod` or a `sub_field`) anything but a map with `%{action: :bad_parameters}`. A `sub_field` with `structs: true` given one map no longer builds a single struct
+- A `sub_field` takes a `doc:` option, the `@moduledoc` of the module it generates, so `Code.fetch_docs/1` and ExDoc show it (`sub_field :transaction, struct(), doc: "One movement of the balance." do ... end`). `doc: false` hides the module from the docs. It works on a list `sub_field`, a `sub_field` inside a `sub_field` and a `conditional_field`'s `sub_field`; a value other than a string or `false` fails to compile with `Spark.Error.DslError`. Without `doc:` the module has no `@moduledoc`, as before
 
 # Changelog for GuardedStruct 0.1.8
 

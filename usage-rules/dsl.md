@@ -44,6 +44,10 @@ Same options as `field` plus:
 * `main_validator: {Mod, :fn}` — runs after every nested field validates, with the
   sub_field's own attrs. A `main_validator/1` of the parent module does not run
   for a sub_field.
+* `doc: "..."` — the `@moduledoc` of the generated submodule, so `Code.fetch_docs/1`
+  and ExDoc show it. `doc: false` hides the submodule (`@moduledoc false`); with no
+  `doc:` it has no `@moduledoc`. Works on a list `sub_field` and on a
+  `conditional_field`'s `sub_field` (its numbered module, e.g. `Plan1`).
 
 Children: nested `field`, `sub_field`, `conditional_field`.
 

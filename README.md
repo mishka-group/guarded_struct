@@ -336,7 +336,7 @@ defmodule Account do
   guardedstruct do
     field :name, :string, enforce: true
 
-    sub_field :owner, struct(), enforce: true do
+    sub_field :owner, struct(), enforce: true, doc: "The person who owns the account." do
       field :email, :string, enforce: true, derives: "validate(email_r)"
       field :role, :string, default: "owner"
     end
@@ -361,6 +361,8 @@ Account.builder(%{name: "Acme", owner: %{email: "z@a.io"},
                   plan: %{tier: "custom", seats: 50}})
 # => {:ok, %Account{plan: %Account.Plan1{tier: "custom", seats: 50}, ...}}
 ```
+
+Each `sub_field` is a real module (`Account.Owner`). Its `doc:` option becomes that module's `@moduledoc`, so ExDoc and `Code.fetch_docs/1` show it; `doc: false` hides the module from the docs, and with no `doc:` it has no `@moduledoc`.
 
 ### 🪝 Custom validators / sanitizers
 
