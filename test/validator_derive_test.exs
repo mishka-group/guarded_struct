@@ -177,12 +177,14 @@ defmodule GuardedStructTest.ValidatorDeriveTest do
       end
     end
 
-    {:error,
-     [
-       %{message: _msg1, field: :name, action: :not_empty},
-       %{message: _msg2, field: :title, action: :type},
-       %{message: _msg3, field: :title, action: :not_empty}
-     ]} = assert TestStructWithValidationDerive.builder(%{name: "", title: ""})
+    {:error, errs} = assert TestStructWithValidationDerive.builder(%{name: "", title: ""})
+
+    # `Enum.sort_by/2` is stable, so each field keeps its own derive order.
+    assert [
+             %{message: _msg1, field: :name, action: :not_empty},
+             %{message: _msg2, field: :title, action: :type},
+             %{message: _msg3, field: :title, action: :not_empty}
+           ] = Enum.sort_by(errs, & &1.field)
 
     defmodule TestStructWithValidationDerive1 do
       use GuardedStruct

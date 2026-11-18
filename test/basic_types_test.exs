@@ -12,6 +12,17 @@ defmodule GuardedStructTest.BasicTypesTest do
     TestStructWithAlias
   }
 
+  # Defined at the test module's top level so the `%TestStructBuilder{}` literal below
+  # compiles after the module exists, whatever order the tests run in.
+  defmodule TestStructBuilder do
+    use GuardedStruct
+
+    guardedstruct do
+      field(:name, String.t(), enforce: true)
+      field(:title, String.t())
+    end
+  end
+
   {_module_name, bytecode_noalias, _file_path} = :code.get_object_code(TestStructNoAlias)
 
   {_module_name, bytecode_opaque, _file_path} = :code.get_object_code(OpaqueTestStruct)
@@ -137,15 +148,6 @@ defmodule GuardedStructTest.BasicTypesTest do
   end
 
   test "create builder function to test enforce keys and normal keys" do
-    defmodule TestStructBuilder do
-      use GuardedStruct
-
-      guardedstruct do
-        field(:name, String.t(), enforce: true)
-        field(:title, String.t())
-      end
-    end
-
     {:error, errs} = assert TestStructBuilder.builder(%{title: "user"})
 
     assert Enum.any?(errs, &match?(%{field: :name, action: :required_fields}, &1))

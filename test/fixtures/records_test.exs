@@ -371,20 +371,20 @@ defmodule GuardedStructFixtures.RecordsTest do
       # derive — :user (validate(record=user)) AND :event_kind (enum) both fail.
       bad_rec = Records.address(street: "x", city: "y", zip: "z")
 
-      assert Records.UserEvent.builder(%{event_kind: :exploded, user: bad_rec}) ==
-               {:error,
-                [
-                  %{
-                    message: "The user field is not a valid Erlang record (a tagged tuple).",
-                    field: :user,
-                    action: :record
-                  },
-                  %{
-                    message: "Your sent data form event_kind field is not in the allowed list",
-                    field: :event_kind,
-                    action: :enum
-                  }
-                ]}
+      assert {:error, errs} = Records.UserEvent.builder(%{event_kind: :exploded, user: bad_rec})
+
+      assert Enum.sort_by(errs, & &1.field) == [
+               %{
+                 message: "Your sent data form event_kind field is not in the allowed list",
+                 field: :event_kind,
+                 action: :enum
+               },
+               %{
+                 message: "The user field is not a valid Erlang record (a tagged tuple).",
+                 field: :user,
+                 action: :record
+               }
+             ]
     end
 
     test "all-three derive failures (user, trace, event_kind) → 3 errors" do
