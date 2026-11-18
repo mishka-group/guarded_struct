@@ -287,7 +287,7 @@ defmodule GuardedStructTest.PatternMapTest do
       {:error, errors} =
         WithValidator.builder(%{"k_1" => "bad", "k_2" => "short", "nope" => "x"})
 
-      assert errors == [
+      assert Enum.sort_by(errors, & &1.key) == [
                %{field: :__map__, key: "k_1", action: :validator, message: "k_1 is bad"},
                %{field: :__map__, key: "k_2", action: :validator, message: "k_2 is short"},
                %{

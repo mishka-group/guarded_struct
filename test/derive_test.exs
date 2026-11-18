@@ -1704,10 +1704,9 @@ defmodule GuardedStructTest.DeriveTest do
     end
 
     test ":past_datetime — DateTime.utc_now() at exact instant passes (inclusive eq)" do
-      # Construct an instant slightly in the past so that even on the fastest
-      # machine `utc_now()` is strictly >= it. Verifies the [:lt, :eq] branch.
+      # An instant taken before the validator reads its own `utc_now()`, so the
+      # validator's clock is always >= it. Verifies the [:lt, :eq] branch.
       now = DateTime.utc_now()
-      :timer.sleep(2)
       assert ^now = ValidationDerive.validate(:past_datetime, now, :ts)
     end
 
