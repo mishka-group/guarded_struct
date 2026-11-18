@@ -147,7 +147,7 @@ defmodule GuardedStruct.MixProject do
       # required by Spark.Formatter for `mix format` and `mix spark.formatter`
       {:sourceror, "~> 1.12", only: [:dev, :test]},
       # document
-      {:ex_doc, "~> 0.40.1", only: :dev, runtime: false},
+      {:ex_doc, "~> 0.40.1", only: [:dev, :test], runtime: false},
       # static analysis: `mix dialyzer`
       {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false},
 
