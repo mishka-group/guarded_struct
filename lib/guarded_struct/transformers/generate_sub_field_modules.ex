@@ -105,9 +105,52 @@ defmodule GuardedStruct.Transformers.GenerateSubFieldModules do
     file = file_for(sf)
     line = line_for(sf)
 
-    Transformer.async_compile(dsl_state, fn ->
+    refuse_taken_name!(submodule, sf.name, dsl_state)
+
+    dsl_state
+    |> remember_generated(submodule, sf.name)
+    |> Transformer.async_compile(fn ->
       Module.create(submodule, body, file: file, line: line)
     end)
+  end
+
+  # Raises when the generated name belongs to another module, so the generated module does
+  # not silently replace the user's own one: a module nested in the parent (the compiler
+  # loads those lazily, so only the env lists them) or one already loaded.
+  defp refuse_taken_name!(submodule, name, dsl_state) do
+    nested = dsl_state |> Transformer.get_persisted(:env) |> context_modules()
+
+    if submodule in nested or
+         (Code.ensure_loaded?(submodule) and not generated_sub_field?(submodule)) do
+      raise Spark.Error.DslError,
+        module: Transformer.get_persisted(dsl_state, :module),
+        path: [:guardedstruct, :sub_field, name],
+        message: taken_name_message(submodule, name)
+    end
+  end
+
+  defp context_modules(%Macro.Env{context_modules: modules}), do: modules
+  defp context_modules(_), do: []
+
+  @doc false
+  # True when `module` is a module a sub_field generated (its info key is not `:root`).
+  def generated_sub_field?(module) do
+    function_exported?(module, :__guarded_information__, 0) and
+      module.__guarded_information__().key != :root
+  end
+
+  @doc false
+  # The error shown when the module name a sub_field generates belongs to another module.
+  def taken_name_message(submodule, name) do
+    "sub_field #{inspect(name)} generates the module #{inspect(submodule)}, but another " <>
+      "module with that name is defined. Rename the sub_field, or keep your module and " <>
+      "point a field at it: field #{inspect(name)}, struct(), struct: #{inspect(submodule)}"
+  end
+
+  # Persists each generated module with its sub_field name for the post-compile check.
+  defp remember_generated(dsl_state, submodule, name) do
+    generated = Transformer.get_persisted(dsl_state, :guarded_sub_field_modules, [])
+    Transformer.persist(dsl_state, :guarded_sub_field_modules, [{submodule, name} | generated])
   end
 
   # The `doc:` option is the generated module's @moduledoc; without it the module has none.

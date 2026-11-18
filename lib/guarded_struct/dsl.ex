@@ -261,6 +261,7 @@ defmodule GuardedStruct.Dsl do
     verifiers: [
       GuardedStruct.Verifiers.VerifyValidatorMFA,
       GuardedStruct.Verifiers.VerifyAutoMFA,
-      GuardedStruct.Verifiers.VerifyNoStructCycles
+      GuardedStruct.Verifiers.VerifyNoStructCycles,
+      GuardedStruct.Verifiers.VerifySubFieldModules
     ]
 end
