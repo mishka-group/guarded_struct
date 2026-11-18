@@ -33,6 +33,7 @@ field :email, :string,
 | `structs` | atom or boolean | List-of items via `Mod.builder/1`, or `true` for list-of-self. |
 | `hint` | string | Label propagated into the field's error maps. |
 | `priority` | boolean | Meaningful on a `conditional_field` only: when no child matches, keep just the first child's error. Ignored on the other entities. |
+| `doc` | string or `false` | What the field holds (Markdown): its row text in the field table of the `t()` docs. `false` leaves the field out of the table. On `field`, `virtual_field`, `dynamic_field`, `conditional_field`; on `sub_field` it is also the module's `@moduledoc` (below). |
 
 ## `sub_field name, type, opts do … end`
 
@@ -53,9 +54,27 @@ Same options as `field` plus:
   `guardedstruct`-level doc option. Giving both `doc:` and the `doc "..."` setter in
   the block fails with `Spark.Error.DslError` (multiple values for `:doc`). The
   generated module name belongs to the sub_field: a module of your own with the same
-  name (nested in the parent, or one already compiled) fails to compile, and one
-  defined later is reported by a verifier. To write that module yourself, use
-  `field :address, struct(), struct: MyApp.Order.Address` instead of a `sub_field`.
+  name next to a `sub_field` **with** a `do` block (nested in the parent, or one
+  already compiled) fails to compile, and one defined later is reported by a
+  verifier.
+
+### A `sub_field` without a `do` block uses your own module
+
+`sub_field :address, struct()` (or `sub_field :items, list(struct()), structs: true`)
+with no `do` block generates nothing: it uses your module of the generated name
+(`MyApp.Order.Address`) as it is, like `field :address, struct(), struct:
+MyApp.Order.Address` (`structs:` in list mode). Your module's `@moduledoc` and
+`@typedoc` stay, and the parent's `t()` links to it. Rules:
+
+* The module must exist and have `builder/1` (any `use GuardedStruct` module);
+  otherwise it fails to compile with `Spark.Error.DslError` ("define … or give the
+  sub_field a do block"). The compiler waits for a module in another file
+  (`Code.ensure_compiled/1`), so the parent depends on it at compile time. A module
+  nested in the parent or one earlier in the same file works too; one *later* in the
+  same file is not compiled yet.
+* `authorized_fields:`, `main_validator:` and `error:` shape a generated module, so
+  they fail to compile here: set them in your module's `guardedstruct`.
+* `doc:` is only the row text in the parent's table.
 
 Children: nested `field`, `sub_field`, `conditional_field`.
 
@@ -151,7 +170,7 @@ Use for shard tables, dynamic configuration.
 
 Every guarded module gains at compile time:
 
-* `defstruct`, `@enforce_keys`, `@type t()` / `@opaque t()`,
+* `defstruct`, `@enforce_keys`, `@type t()` / `@opaque t()` (see "Types and docs"),
 * `keys/0,1`, `enforce_keys/0,1`, `example/0`,
 * `__information__/0`, `__fields__/0`, `__field_meta__/1`,
 * `__guarded_information__/0`, `__guarded_fields__/0`, `__guarded_field_meta__/1`
@@ -161,3 +180,37 @@ Every guarded module gains at compile time:
   `__guarded_has_main_validator__/0`, `__guarded_error_module__/0`,
   `__guarded_derive_extensions_opt__/0`,
 * sub_field submodules with the same surface.
+
+## Types and docs of `t()`
+
+The type of each field in `t()` is precise, so ExDoc links each nested type to its page:
+
+| Field | Type in `t()` |
+|---|---|
+| `field :a, struct(), struct: Mod` | `Mod.t()` |
+| `field :a, list(struct()), structs: Mod` | `[Mod.t()]` |
+| `sub_field :a, struct() do … end` | `Parent.A.t()` (`[Parent.A.t()]` with `structs: true`) |
+| `conditional_field :a, any() do … end` | union of its branches (`String.t() \| Parent.A1.t()`); `[union]` with `structs: true` |
+
+Only a loose declared type is replaced: `struct()`, `map()`, `any()`, `term()`,
+`list()`, a list of those, or a union of them. Any other type you write is kept as
+written (`field :a, Mod.t(), struct: Mod`). A `sub_field` with `doc: false` keeps its
+declared type, as its module has no page. A field that is not enforced adds `| nil`.
+A pattern-keyed module has `@type t() :: %{optional(String.t()) => value types}` unless
+it defines its own `t`.
+
+`t()` gets a generated `@typedoc`: a Markdown table of every field — name, type
+(linked when the field builds a struct), required (`enforce`), default, derives and
+`validator:`, and the field's `doc:`. Virtual fields are in a second table. Generated
+`sub_field` modules get the same. Rules:
+
+* Your own `@typedoc` written above `guardedstruct do` wins; your `@moduledoc` is
+  never changed.
+* A `doc: false` module has no page.
+* ExDoc warns about a link to a module hidden with `@moduledoc false`. A `struct:`
+  module that is hidden makes that warning in `t()`: document the module, or list it
+  in ExDoc's `skip_undefined_reference_warnings_on`.
+* Typespec change for upgrades: a field that said `struct()` now says `Mod.t()`, so
+  Dialyzer checks more. The `struct:` module must define `t()` (every GuardedStruct
+  module does); for a hand-written module without one, write the field's type yourself.
+

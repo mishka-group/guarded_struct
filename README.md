@@ -362,7 +362,21 @@ Account.builder(%{name: "Acme", owner: %{email: "z@a.io"},
 # => {:ok, %Account{plan: %Account.Plan1{tier: "custom", seats: 50}, ...}}
 ```
 
-Each `sub_field` is a real module (`Account.Owner`). Its `doc:` option becomes that module's `@moduledoc`, so ExDoc and `Code.fetch_docs/1` show it; `doc: false` hides the module from the docs, and with no `doc:` it has no `@moduledoc`. The parent's own `@moduledoc` is never changed. The generated module name belongs to the `sub_field`: defining your own `Account.Owner` too fails to compile, so write it yourself and point a field at it (`field :owner, struct(), struct: Account.Owner`) when you want a hand-written module.
+Each `sub_field` is a real module (`Account.Owner`). Its `doc:` option becomes that module's `@moduledoc`, so ExDoc and `Code.fetch_docs/1` show it; `doc: false` hides the module from the docs, and with no `doc:` it has no `@moduledoc`. The parent's own `@moduledoc` is never changed. The generated module name belongs to the `sub_field`: defining your own `Account.Owner` next to a `sub_field :owner ... do` fails to compile.
+
+To write the module yourself, leave out the `do` block: `sub_field :owner, struct()` then uses your `Account.Owner` (any `use GuardedStruct` module with `builder/1`) as it is, like `field :owner, struct(), struct: Account.Owner`, and its own docs stay. With no such module it fails to compile and says to define it or give the `sub_field` a `do` block.
+
+### 📖 Types and docs
+
+The `t()` type of a guarded module says what each field holds: `struct: Mod` is `Mod.t()`, `structs: Mod` is `[Mod.t()]`, a `sub_field` is the `t()` of its module (`Account.Owner.t()`), and a `conditional_field` is the union of its branches (`String.t() | Account.Plan1.t()`). Only a loose type you declared (`struct()`, `map()`, `any()`, `term()`, `list()`) is replaced; any other type stays as you wrote it. ExDoc links each nested type to its page.
+
+`t()` also gets a generated `@typedoc`: a table of every field with its type, whether it is required, its default, its derives and its `doc:`. Give a field a `doc:` to describe it:
+
+```elixir
+field :email, String.t(), enforce: true, doc: "Where the receipts go."
+```
+
+`doc: false` leaves a field out of the table. Your own `@typedoc` above `guardedstruct do` wins, and your `@moduledoc` is never changed.
 
 ### 🪝 Custom validators / sanitizers
 
