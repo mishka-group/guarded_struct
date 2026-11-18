@@ -35,7 +35,25 @@ defmodule GuardedStruct.MixProject do
       "spark.formatter": "spark.formatter --extensions #{@spark_extensions}",
       "spark.cheat_sheets": "spark.cheat_sheets --extensions #{@spark_extensions}",
       lint: ["spark.formatter", "format"],
-      cheat: ["spark.cheat_sheets"]
+      cheat: ["spark.cheat_sheets"],
+      # The full gate, as in every Mishka package: `mix ci` passes before a commit is pushed.
+      ci: [
+        # First: after `compile` Mix has pruned the code path and the Hex archive's task is gone.
+        "hex.audit",
+        "compile --warnings-as-errors",
+        # `.formatter.exs` sets `migrate: true`, so deprecated syntax (`unless`, ...) fails here.
+        "format --check-formatted",
+        # Spark makes the DSL's formatter list and its docs pages; both must be current.
+        "spark.formatter --check",
+        "spark.cheat_sheets --check",
+        "credo --strict",
+        "guarded_struct.credence",
+        "sobelow --config",
+        "deps.audit",
+        "dialyzer",
+        "ex_dna --max-clones 0",
+        "test"
+      ]
     ]
   end
 
@@ -45,7 +63,7 @@ defmodule GuardedStruct.MixProject do
 
   # `mix dialyzer` runs in :test, where the optional packages and the fixtures are.
   def cli do
-    [preferred_envs: [dialyzer: :test]]
+    [preferred_envs: [dialyzer: :test, ci: :test, "guarded_struct.credence": :test]]
   end
 
   defp elixirc_paths(:test), do: ["lib", "test/support"]
@@ -78,7 +96,8 @@ defmodule GuardedStruct.MixProject do
   end
 
   defp dialyzer do
-    [plt_add_apps: [:mix]]
+    # `test/support` holds the `guarded_struct.credence` task, which calls Mix and Credence.
+    [plt_add_apps: [:mix, :ex_unit, :credence]]
   end
 
   defp docs do
@@ -166,7 +185,16 @@ defmodule GuardedStruct.MixProject do
        github: "kbrw/sweet_xml", branch: "master", override: true, optional: true, only: :test},
       {:igniter, "~> 0.8.0", only: [:dev, :test]},
       {:ash, "~> 3.36", only: [:dev, :test]},
-      {:mix_audit, "~> 2.1", only: [:dev, :test], runtime: false}
+      {:mix_audit, "~> 2.1", only: [:dev, :test], runtime: false},
+
+      # `mix ci`: the same checkers as every Mishka package.
+      {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
+      {:ex_slop, "~> 0.4", only: [:dev, :test], runtime: false},
+      {:jump_credo_checks, "~> 0.7", only: [:dev, :test], runtime: false},
+      # `mix guarded_struct.credence` (test/support/mix/tasks) runs its pattern rules.
+      {:credence, "~> 0.8.1", only: [:dev, :test], runtime: false},
+      {:ex_dna, "~> 1.5", only: [:dev, :test], runtime: false},
+      {:sobelow, "~> 0.19", only: [:dev, :test], runtime: false}
     ]
   end
 end

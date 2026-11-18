@@ -17,13 +17,14 @@ permissions:
 
 jobs:
   ci:
-    # Switch to @ci-v1 once mishka-group/mishka_cms#77 is merged and tagged.
     uses: mishka-group/mishka_cms/.github/workflows/mishka-ci.yml@ci-v1
     with:
-      # Today CI compiles, runs `mix deps.audit` and `mix test --trace`; Credo, Dialyzer and ExDNA are not run.
+      # The same checks as `mix ci`: Credo (with ExSlop and Jump's checks), Credence, Sobelow,
+      # Dialyzer, ExDNA with no copied code, the Spark cheat sheets, then the tests.
       elixir: 1.20.5-otp-29
       otp: 29.1.2
-      credo: false
-      dialyzer: false
-      ex_dna: false
+      credence-task: guarded_struct.credence
+      sobelow: true
+      ex-dna-args: --max-clones 0
+      spark-cheat-sheets: true
       test-args: --trace

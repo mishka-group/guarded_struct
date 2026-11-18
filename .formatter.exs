@@ -43,6 +43,9 @@ spark_locals_without_parens = [
   import_deps: [:spark, :ash],
   inputs: ["{mix,.formatter}.exs", "{config,lib,test}/**/*.{ex,exs}"],
   plugins: [Spark.Formatter],
+  # Rewrites deprecated syntax (`unless`, charlists, bitstring modifiers, pipe call parens), so
+  # `mix format --check-formatted` fails on it.
+  migrate: true,
   locals_without_parens: spark_locals_without_parens,
   export: [
     locals_without_parens: spark_locals_without_parens
