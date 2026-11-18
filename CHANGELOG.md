@@ -1,3 +1,9 @@
+# Changelog for GuardedStruct 0.1.10
+
+- `GuardedStruct.Validate.run/2` says in its docs that the derive string is code (its `Map::`, `Tuple::` and `Atom[...]` operands are evaluated): write it yourself and never build it from user input
+- A `custom=Mod,fun` validator, an `equal=Atom::name` check and a `record=tag` check no longer create atoms while validating; a `custom` function that does not exist gives the same error as before
+- `unless` is gone from the code GuardedStruct generates, so a module using it compiles cleanly on Elixir versions that warn about `unless`
+
 # Changelog for GuardedStruct 0.1.9
 
 - Fix a `struct:`, `structs:` or `sub_field` field given a value of the wrong shape being kept in the struct unbuilt and unchecked (`lines: "garbage"`, `address: 5`, `rates: %{...}` all came back `{:ok, ...}`). A list field (`structs: Mod` or a `sub_field` with `structs: true`) now refuses anything but a list with `%{action: :type}`, and a one-struct field (`struct: Mod` or a `sub_field`) anything but a map with `%{action: :bad_parameters}`. A `sub_field` with `structs: true` given one map no longer builds a single struct

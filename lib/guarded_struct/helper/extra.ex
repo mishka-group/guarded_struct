@@ -1,4 +1,9 @@
 defmodule GuardedStruct.Helper.Extra do
+  @moduledoc """
+  Small helpers for structs and validators: random strings, timestamps,
+  username and password checks, and the pieces of an Erlang match spec.
+  """
+
   @alphabet Enum.concat([?0..?9, ?A..?Z, ?a..?z])
   @username_start ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0", "_"]
   @username_alphabet Enum.concat([?0..?9, ?A..?Z, ?a..?z, ~c"_"])
@@ -14,7 +19,7 @@ defmodule GuardedStruct.Helper.Extra do
     |> String.upcase()
   end
 
-  defp random_char_from_alphabet() do
+  defp random_char_from_alphabet do
     Enum.random(@alphabet)
   end
 
@@ -40,6 +45,8 @@ defmodule GuardedStruct.Helper.Extra do
 
   def erlang_fields(tuple, [], _keys, _num), do: tuple
 
+  # The atoms are the match-spec variables `:"$1"`, `:"$2"`, ... counted from the field list.
+  # sobelow_skip ["DOS.StringToAtom"]
   def erlang_fields(tuple, [h | t], keys, num) do
     new_tuple =
       Tuple.insert_at(
@@ -51,7 +58,7 @@ defmodule GuardedStruct.Helper.Extra do
     erlang_fields(new_tuple, t, keys, if(h in keys, do: num + 1, else: num))
   end
 
-  def timestamp() do
+  def timestamp do
     DateTime.utc_now()
     |> DateTime.truncate(:microsecond)
   end
@@ -94,7 +101,7 @@ defmodule GuardedStruct.Helper.Extra do
     |> Enum.all?(&(&1 in allowed_chars))
   end
 
-  def get_unix_time() do
+  def get_unix_time do
     DateTime.utc_now() |> DateTime.to_unix()
   end
 

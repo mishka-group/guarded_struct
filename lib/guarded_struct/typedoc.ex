@@ -11,6 +11,7 @@ defmodule GuardedStruct.Typedoc do
   # branches. The docs of `t()` then link each nested type to its own page.
 
   alias GuardedStruct.Dsl.{ConditionalField, Field, SubField, VirtualField}
+  alias GuardedStruct.Transformers.Codegen
 
   @loose [:struct, :map, :any, :term]
 
@@ -61,10 +62,12 @@ defmodule GuardedStruct.Typedoc do
 
   # The branches of a conditional_field in source order; a sub_field inside it is the
   # numbered module `<Name><index>`, as GenerateSubFieldModules names it.
+  # Module and field names come from the developer's DSL, not from user input.
+  # sobelow_skip ["DOS.BinToAtom"]
   defp conditional_type(%ConditionalField{} = cf, owner) do
     {types, _index} =
       cf
-      |> GuardedStruct.Transformers.Codegen.conditional_children()
+      |> Codegen.conditional_children()
       |> Enum.map_reduce(0, fn
         %SubField{} = sf, index ->
           numbered = :"#{cf.name}#{index + 1}"
@@ -86,7 +89,7 @@ defmodule GuardedStruct.Typedoc do
   defp union([head | rest]), do: {:|, [], [head, union(rest)]}
 
   defp child_alias({:__aliases__, meta, parts}, name),
-    do: {:__aliases__, meta, parts ++ [GuardedStruct.Transformers.Codegen.atom_to_module(name)]}
+    do: {:__aliases__, meta, parts ++ [Codegen.atom_to_module(name)]}
 
   defp remote_t(module), do: {{:., [], [module, :t]}, [], []}
 
@@ -157,10 +160,12 @@ defmodule GuardedStruct.Typedoc do
   # The modules the field builds, whose `t()` the table links to: a `struct:`/`structs:`
   # module, or `{:local, name}` for a sub_field's module under the owner. A generated module
   # with `doc: false` has no page, so it is not linked.
+  # Module and field names come from the developer's DSL, not from user input.
+  # sobelow_skip ["DOS.BinToAtom"]
   defp links(%ConditionalField{} = cf) do
     {links, _index} =
       cf
-      |> GuardedStruct.Transformers.Codegen.conditional_children()
+      |> Codegen.conditional_children()
       |> Enum.flat_map_reduce(0, fn
         %SubField{} = sf, index -> {links(%{sf | name: :"#{cf.name}#{index + 1}"}), index + 1}
         child, index -> {links(child), index}
@@ -259,6 +264,8 @@ defmodule GuardedStruct.Typedoc do
 
   # Each part of a union on its own; a `Mod.t()` or `[Mod.t()]` part whose module the field
   # builds links to that type.
+  # Module and field names come from the developer's DSL, not from user input.
+  # sobelow_skip ["DOS.ModuleConcat"]
   defp type_cell(env, row) do
     links =
       Enum.map(row.links, fn
@@ -296,7 +303,7 @@ defmodule GuardedStruct.Typedoc do
     end)
   end
 
-  defp atom_to_module(name), do: GuardedStruct.Transformers.Codegen.atom_to_module(name)
+  defp atom_to_module(name), do: Codegen.atom_to_module(name)
 
   # Inline code with the table's column separator escaped.
   defp code(text), do: "`" <> escape(text) <> "`"

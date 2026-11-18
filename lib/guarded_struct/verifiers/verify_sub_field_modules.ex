@@ -7,8 +7,8 @@ defmodule GuardedStruct.Verifiers.VerifySubFieldModules do
 
   use Spark.Dsl.Verifier
 
-  alias Spark.Dsl.Verifier
   alias GuardedStruct.Transformers.GenerateSubFieldModules
+  alias Spark.Dsl.Verifier
 
   @impl true
   def verify(dsl_state) do

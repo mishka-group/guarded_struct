@@ -3,9 +3,9 @@ defmodule GuardedStruct.Transformers.GenerateSubFieldModules do
 
   use Spark.Dsl.Transformer
 
-  alias Spark.Dsl.Transformer
-  alias GuardedStruct.Dsl.{SubField, ConditionalField}
+  alias GuardedStruct.Dsl.{ConditionalField, SubField}
   alias GuardedStruct.Transformers.Codegen
+  alias Spark.Dsl.Transformer
 
   @impl true
   def before?(GuardedStruct.Transformers.GenerateBuilder), do: true
@@ -40,10 +40,14 @@ defmodule GuardedStruct.Transformers.GenerateSubFieldModules do
     {:ok, dsl_state}
   end
 
+  # Module and field names come from the developer's DSL, not from user input.
+  # sobelow_skip ["DOS.ModuleConcat"]
   defp resolve_module_ast(parent, {:__aliases__, _, parts}) when is_list(parts) do
     Module.concat([parent | parts])
   end
 
+  # Module and field names come from the developer's DSL, not from user input.
+  # sobelow_skip ["DOS.ModuleConcat"]
   defp resolve_module_ast(parent, name) when is_atom(name), do: Module.concat(parent, name)
 
   defp generate_for_entities(entities, parent_path, inherited, dsl_state) do
@@ -52,14 +56,7 @@ defmodule GuardedStruct.Transformers.GenerateSubFieldModules do
         generate_sub_field(sf, parent_path, inherited, acc)
 
       %ConditionalField{} = cf, acc ->
-        acc =
-          cf.sub_fields
-          |> Enum.with_index(1)
-          |> Enum.reduce(acc, fn {inner_sf, idx}, inner_acc ->
-            numbered_name = "#{cf.name}#{idx}" |> String.to_atom()
-            renamed = %{inner_sf | name: numbered_name}
-            generate_sub_field(renamed, parent_path, inherited, inner_acc)
-          end)
+        acc = generate_numbered_sub_fields(cf, parent_path, inherited, acc)
 
         Enum.reduce(cf.conditional_fields, acc, fn inner_cf, inner_acc ->
           generate_for_entities([inner_cf], parent_path, inherited, inner_acc)
@@ -70,6 +67,22 @@ defmodule GuardedStruct.Transformers.GenerateSubFieldModules do
     end)
   end
 
+  # The sub_fields of a conditional field are numbered by position (`:payload1`,
+  # `:payload2`, ...), so each one gets its own module. The names come from the
+  # developer's DSL at compile time, never from user input.
+  # sobelow_skip ["DOS.StringToAtom"]
+  defp generate_numbered_sub_fields(%ConditionalField{} = cf, parent_path, inherited, dsl_state) do
+    {dsl_state, _next_index} =
+      Enum.reduce(cf.sub_fields, {dsl_state, 1}, fn inner_sf, {acc, index} ->
+        renamed = %{inner_sf | name: String.to_atom("#{cf.name}#{index}")}
+        {generate_sub_field(renamed, parent_path, inherited, acc), index + 1}
+      end)
+
+    dsl_state
+  end
+
+  # Module and field names come from the developer's DSL, not from user input.
+  # sobelow_skip ["DOS.ModuleConcat"]
   defp generate_sub_field(%SubField{} = sf, parent_path, inherited, dsl_state) do
     submodule = Module.concat(parent_path ++ [Codegen.atom_to_module(sf.name)])
 
@@ -222,6 +235,8 @@ defmodule GuardedStruct.Transformers.GenerateSubFieldModules do
     end
   end
 
+  # Module and field names come from the developer's DSL, not from user input.
+  # sobelow_skip ["DOS.StringToAtom"]
   defp info_path(submodule), do: Module.split(submodule) |> Enum.map(&String.to_atom/1)
 
   defp file_for(%{__spark_metadata__: %{anno: anno}}) when is_map(anno),

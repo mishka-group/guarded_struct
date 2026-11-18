@@ -1,7 +1,7 @@
 defmodule GuardedStruct.Transformers.Codegen do
   @moduledoc false
 
-  alias GuardedStruct.Dsl.{Field, SubField, ConditionalField, VirtualField}
+  alias GuardedStruct.Dsl.{ConditionalField, Field, SubField, VirtualField}
 
   @doc """
   Public entry point — also used by the Ash extension's transformer.
@@ -54,24 +54,29 @@ defmodule GuardedStruct.Transformers.Codegen do
 
   defp classify_shape(entities) do
     {atoms, regexes} =
-      Enum.reduce(entities, {[], []}, fn entity, {a, r} ->
-        case entity_name(entity) do
-          name when is_atom(name) and not is_nil(name) -> {[name | a], r}
-          {:regex_pattern, _} = pattern -> {a, [pattern | r]}
-          %Regex{} = pattern -> {a, [pattern | r]}
-          _ -> {a, r}
-        end
-      end)
+      Enum.reduce(entities, {[], []}, &classify_name(entity_name(&1), &2))
 
-    cond do
-      atoms == [] and regexes != [] -> :pattern_map
-      atoms != [] and regexes != [] -> {:mixed, Enum.reverse(atoms), Enum.reverse(regexes)}
-      true -> :struct
-    end
+    shape(Enum.reverse(atoms), Enum.reverse(regexes))
   end
+
+  defp classify_name(name, {atoms, regexes}) when is_atom(name) and not is_nil(name),
+    do: {[name | atoms], regexes}
+
+  defp classify_name({:regex_pattern, _} = pattern, {atoms, regexes}),
+    do: {atoms, [pattern | regexes]}
+
+  defp classify_name(%Regex{} = pattern, {atoms, regexes}), do: {atoms, [pattern | regexes]}
+  defp classify_name(_name, acc), do: acc
+
+  # Atom names make a struct, regex names a pattern map; one module cannot have both.
+  defp shape([], [_ | _]), do: :pattern_map
+  defp shape([_ | _] = atoms, [_ | _] = regexes), do: {:mixed, atoms, regexes}
+  defp shape(_atoms, _regexes), do: :struct
 
   # Pattern-map field names are stored tagged (see ParseDerive). Rebuild the
   # `%Regex{}` for codegen/runtime use.
+  # The pattern is a field-name regex the developer wrote in the DSL.
+  # sobelow_skip ["DOS.Regex"]
   defp pattern_regex({:regex_pattern, source}), do: Regex.compile!(source)
   defp pattern_regex(%Regex{} = regex), do: regex
 
@@ -84,87 +89,72 @@ defmodule GuardedStruct.Transformers.Codegen do
 
     typedoc_rows = Macro.escape(GuardedStruct.Typedoc.rows(entities, enforce_keys))
 
-    json? = Map.get(options, :json, false) == true
-
-    # `json: true` opts into JSON encoding. Precedence:
-    #   1. Jason.Encoder  — if user has `:jason` in their deps
-    #   2. JSON.Encoder   — built-in on Elixir 1.18+
-    #   3. no-op          — neither available
-    derive_json_ast =
-      if json? do
-        quote do
-          cond do
-            Code.ensure_loaded?(Jason.Encoder) -> @derive Jason.Encoder
-            Code.ensure_loaded?(JSON.Encoder) -> @derive JSON.Encoder
-            true -> :ok
-          end
-        end
-      end
-
     example_pairs =
       entities
       |> Enum.reject(&match?(%VirtualField{}, &1))
       |> Enum.uniq_by(& &1.name)
       |> Enum.map(fn entity -> {entity.name, example_value_ast(entity, path)} end)
 
-    conditional_keys =
-      entities
-      |> Enum.filter(&match?(%ConditionalField{}, &1))
-      |> Enum.map(& &1.name)
-      |> Enum.uniq()
-
-    virtual_keys =
-      fields_runtime |> Enum.filter(&(&1.kind == :virtual_field)) |> Enum.map(& &1.name)
-
-    dynamic_keys =
-      fields_runtime |> Enum.filter(&(&1.kind == :dynamic_field)) |> Enum.map(& &1.name)
-
     info_map =
-      escape_runtime(%{
+      %{
         path: path,
         key: if(path == [], do: :root, else: List.last(path)),
         keys: keys,
         enforce_keys: enforce_keys,
-        conditional_keys: conditional_keys,
-        virtual_keys: virtual_keys,
-        dynamic_keys: dynamic_keys,
         options: options
-      })
-
-    # Regex-bearing fields can't be cached in a module attribute (escaping a
-    # compiled regex fails before Elixir 1.19); build them in a def body instead.
-    fields_meta_ast =
-      if contains_regex?(fields_runtime) do
-        quote do
-          def __fields__ do
-            GuardedStruct.Transformers.Codegen.bake_child_modules(
-              unquote(escape_runtime(fields_runtime)),
-              __MODULE__
-            )
-          end
-
-          def __field_meta__(name), do: Enum.find(__fields__(), &(&1.name == name))
-        end
-      else
-        quote do
-          @__guarded_fields__ GuardedStruct.Transformers.Codegen.bake_child_modules(
-                                unquote(Macro.escape(fields_runtime)),
-                                __MODULE__
-                              )
-          def __fields__, do: @__guarded_fields__
-
-          @__guarded_field_meta_map__ Map.new(@__guarded_fields__, fn m -> {m.name, m} end)
-          def __field_meta__(name), do: Map.get(@__guarded_field_meta_map__, name)
-        end
-      end
+      }
+      |> Map.merge(info_keys(entities, fields_runtime))
+      |> escape_runtime()
 
     quote do
-      unquote(derive_json_ast)
+      unquote(json_derive_ast(Map.get(options, :json, false) == true))
       @enforce_keys unquote(enforce_keys)
       defstruct unquote(escape_runtime(defstruct_kw))
 
+      unquote(struct_type_ast(typedoc_rows, opaque?, types))
+
+      unquote(
+        overridable_ast(
+          keys: 0,
+          keys: 1,
+          enforce_keys: 0,
+          enforce_keys: 1,
+          __information__: 0,
+          __fields__: 0,
+          builder: 1,
+          builder: 2
+        )
+      )
+
+      unquote(keys_ast(keys, enforce_keys, info_map))
+      unquote(fields_meta_ast(fields_runtime))
+      unquote(guarded_accessors_ast(keys))
+      unquote(validator_flags_ast())
+      unquote(struct_builder_ast(example_pairs))
+      unquote(error_module_ast(error?))
+    end
+  end
+
+  # `json: true` opts into JSON encoding. Precedence:
+  #   1. Jason.Encoder  — if user has `:jason` in their deps
+  #   2. JSON.Encoder   — built-in on Elixir 1.18+
+  #   3. no-op          — neither available
+  defp json_derive_ast(false), do: nil
+
+  defp json_derive_ast(true) do
+    quote do
+      cond do
+        Code.ensure_loaded?(Jason.Encoder) -> @derive Jason.Encoder
+        Code.ensure_loaded?(JSON.Encoder) -> @derive JSON.Encoder
+        true -> :ok
+      end
+    end
+  end
+
+  defp struct_type_ast(typedoc_rows, opaque?, types) do
+    quote do
       # A @typedoc the user wrote above the guardedstruct block is still pending here; it wins.
-      unless Module.get_attribute(__MODULE__, :typedoc) do
+      if is_nil(Module.get_attribute(__MODULE__, :typedoc)) do
         @typedoc GuardedStruct.Typedoc.render(__ENV__, unquote(typedoc_rows))
       end
 
@@ -173,31 +163,23 @@ defmodule GuardedStruct.Transformers.Codegen do
       else
         @type t() :: %__MODULE__{unquote_splicing(types)}
       end
+    end
+  end
 
-      if Module.defines?(__MODULE__, {:keys, 0}, :def),
-        do: defoverridable(keys: 0)
+  @doc """
+  Makes each of `functions` (a keyword list of name and arity) overridable when
+  the module defined it before the generated code, so the generated one replaces it.
+  """
+  def overridable_ast(functions) do
+    quote do
+      for {name, arity} <- unquote(functions),
+          Module.defines?(__MODULE__, {name, arity}, :def),
+          do: defoverridable([{name, arity}])
+    end
+  end
 
-      if Module.defines?(__MODULE__, {:keys, 1}, :def),
-        do: defoverridable(keys: 1)
-
-      if Module.defines?(__MODULE__, {:enforce_keys, 0}, :def),
-        do: defoverridable(enforce_keys: 0)
-
-      if Module.defines?(__MODULE__, {:enforce_keys, 1}, :def),
-        do: defoverridable(enforce_keys: 1)
-
-      if Module.defines?(__MODULE__, {:__information__, 0}, :def),
-        do: defoverridable(__information__: 0)
-
-      if Module.defines?(__MODULE__, {:__fields__, 0}, :def),
-        do: defoverridable(__fields__: 0)
-
-      if Module.defines?(__MODULE__, {:builder, 1}, :def),
-        do: defoverridable(builder: 1)
-
-      if Module.defines?(__MODULE__, {:builder, 2}, :def),
-        do: defoverridable(builder: 2)
-
+  defp keys_ast(keys, enforce_keys, info_map) do
+    quote do
       def keys, do: unquote(keys)
       def keys(:all), do: GuardedStruct.Runtime.all_keys(__MODULE__)
       def keys(field) when is_atom(field), do: field in unquote(keys)
@@ -209,24 +191,68 @@ defmodule GuardedStruct.Transformers.Codegen do
       def __information__ do
         Map.put(unquote(info_map), :module, __MODULE__)
       end
+    end
+  end
 
-      unquote(fields_meta_ast)
+  # Regex-bearing fields can't be cached in a module attribute (escaping a
+  # compiled regex fails before Elixir 1.19); build them in a def body instead.
+  defp fields_meta_ast(fields_runtime) do
+    if contains_regex?(fields_runtime) do
+      quote do
+        def __fields__ do
+          GuardedStruct.Transformers.Codegen.bake_child_modules(
+            unquote(escape_runtime(fields_runtime)),
+            __MODULE__
+          )
+        end
 
+        def __field_meta__(name), do: Enum.find(__fields__(), &(&1.name == name))
+      end
+    else
+      quote do
+        @__guarded_fields__ GuardedStruct.Transformers.Codegen.bake_child_modules(
+                              unquote(Macro.escape(fields_runtime)),
+                              __MODULE__
+                            )
+        def __fields__, do: @__guarded_fields__
+
+        @__guarded_field_meta_map__ Map.new(@__guarded_fields__, fn m -> {m.name, m} end)
+        def __field_meta__(name), do: Map.get(@__guarded_field_meta_map__, name)
+      end
+    end
+  end
+
+  defp guarded_accessors_ast(keys) do
+    quote do
       def __guarded_information__, do: __information__()
       def __guarded_fields__, do: __fields__()
       def __guarded_field_meta__(name), do: __field_meta__(name)
       def __guarded_atom_lookup__, do: unquote(Macro.escape(atom_lookup_for(keys)))
+    end
+  end
 
+  @doc """
+  Generates `__guarded_has_validator__/0` and `__guarded_has_main_validator__/0`,
+  which tell the runtime whether to call the module's `validator/2` and
+  `main_validator/1`, plus a nil `__guarded_derive_extensions_opt__/0` when the
+  module has none.
+  """
+  def validator_flags_ast do
+    quote do
       @__guarded_has_validator__ Module.defines?(__MODULE__, {:validator, 2}, :def)
       def __guarded_has_validator__, do: @__guarded_has_validator__
 
       @__guarded_has_main_validator__ Module.defines?(__MODULE__, {:main_validator, 1}, :def)
       def __guarded_has_main_validator__, do: @__guarded_has_main_validator__
 
-      unless Module.defines?(__MODULE__, {:__guarded_derive_extensions_opt__, 0}, :def) do
+      if not Module.defines?(__MODULE__, {:__guarded_derive_extensions_opt__, 0}, :def) do
         def __guarded_derive_extensions_opt__, do: nil
       end
+    end
+  end
 
+  defp struct_builder_ast(example_pairs) do
+    quote do
       def builder(attrs_or_input, error \\ false)
 
       def builder({_, _} = input, error),
@@ -240,7 +266,11 @@ defmodule GuardedStruct.Transformers.Codegen do
 
       @doc "A sample %#{inspect(__MODULE__)}{} populated from defaults + type-based fallbacks."
       def example, do: struct(__MODULE__, unquote(example_pairs))
+    end
+  end
 
+  defp error_module_ast(error?) do
+    quote do
       if unquote(error?) do
         defmodule Error do
           defexception [:errors, :term]
@@ -262,6 +292,24 @@ defmodule GuardedStruct.Transformers.Codegen do
     end
   end
 
+  @doc """
+  The field names `__information__/0` lists by kind: conditional, virtual and dynamic.
+  """
+  def info_keys(entities, fields_runtime) do
+    %{
+      conditional_keys:
+        entities
+        |> Enum.filter(&match?(%ConditionalField{}, &1))
+        |> Enum.map(& &1.name)
+        |> Enum.uniq(),
+      virtual_keys: runtime_names(fields_runtime, :virtual_field),
+      dynamic_keys: runtime_names(fields_runtime, :dynamic_field)
+    }
+  end
+
+  defp runtime_names(fields_runtime, kind),
+    do: for(%{kind: ^kind, name: name} <- fields_runtime, do: name)
+
   defp build_pattern_map_body(entities, error?, _path, options) do
     patterns = Enum.map(entities, &pattern_regex(&1.name))
     typedoc_rows = Macro.escape(GuardedStruct.Typedoc.pattern_rows(entities))
@@ -272,22 +320,7 @@ defmodule GuardedStruct.Transformers.Codegen do
       |> Enum.uniq_by(&Macro.to_string/1)
       |> Enum.reduce(fn type, acc -> {:|, [], [acc, type]} end)
 
-    fields_runtime =
-      Enum.map(entities, fn %Field{} = f ->
-        %{
-          kind: :pattern_field,
-          pattern: pattern_regex(f.name),
-          type: Macro.to_string(f.type),
-          enforce: f.enforce,
-          derive: f.derives || f.derive,
-          __derive_ops__: f.__derive_ops__,
-          validator: f.validator,
-          struct: f.struct,
-          structs: f.structs,
-          hint: f.hint,
-          default: f.default
-        }
-      end)
+    fields_runtime = Enum.map(entities, &pattern_field_runtime/1)
 
     info_map =
       escape_runtime(%{
@@ -303,14 +336,40 @@ defmodule GuardedStruct.Transformers.Codegen do
 
     quote do
       # A module that names its own `t` keeps it.
-      unless Module.defines_type?(__MODULE__, {:t, 0}) do
-        unless Module.get_attribute(__MODULE__, :typedoc) do
+      if not Module.defines_type?(__MODULE__, {:t, 0}) do
+        if is_nil(Module.get_attribute(__MODULE__, :typedoc)) do
           @typedoc GuardedStruct.Typedoc.render(__ENV__, unquote(typedoc_rows))
         end
 
         @type t() :: %{optional(String.t()) => unquote(value_type)}
       end
 
+      unquote(pattern_keys_ast(info_map, fields_runtime))
+      unquote(guarded_accessors_ast([]))
+      unquote(validator_flags_ast())
+      unquote(pattern_builder_ast())
+      unquote(error_module_ast(error?))
+    end
+  end
+
+  defp pattern_field_runtime(%Field{} = f) do
+    %{
+      kind: :pattern_field,
+      pattern: pattern_regex(f.name),
+      type: Macro.to_string(f.type),
+      enforce: f.enforce,
+      derive: f.derives || f.derive,
+      __derive_ops__: f.__derive_ops__,
+      validator: f.validator,
+      struct: f.struct,
+      structs: f.structs,
+      hint: f.hint,
+      default: f.default
+    }
+  end
+
+  defp pattern_keys_ast(info_map, fields_runtime) do
+    quote do
       def keys, do: []
       def keys(_), do: false
       def enforce_keys, do: []
@@ -323,22 +382,11 @@ defmodule GuardedStruct.Transformers.Codegen do
       def __fields__, do: unquote(escape_runtime(fields_runtime))
 
       def __field_meta__(_), do: nil
+    end
+  end
 
-      def __guarded_information__, do: __information__()
-      def __guarded_fields__, do: __fields__()
-      def __guarded_field_meta__(_), do: nil
-      def __guarded_atom_lookup__, do: %{}
-
-      @__guarded_has_validator__ Module.defines?(__MODULE__, {:validator, 2}, :def)
-      def __guarded_has_validator__, do: @__guarded_has_validator__
-
-      @__guarded_has_main_validator__ Module.defines?(__MODULE__, {:main_validator, 1}, :def)
-      def __guarded_has_main_validator__, do: @__guarded_has_main_validator__
-
-      unless Module.defines?(__MODULE__, {:__guarded_derive_extensions_opt__, 0}, :def) do
-        def __guarded_derive_extensions_opt__, do: nil
-      end
-
+  defp pattern_builder_ast do
+    quote do
       def example, do: %{}
 
       def builder(attrs, error \\ false)
@@ -354,25 +402,6 @@ defmodule GuardedStruct.Transformers.Codegen do
 
       def builder(attrs, error),
         do: GuardedStruct.Runtime.build_pattern_map(__MODULE__, attrs, error)
-
-      if unquote(error?) do
-        defmodule Error do
-          defexception [:errors, :term]
-
-          @impl true
-          def message(%{errors: errs, term: term}) do
-            """
-            #{GuardedStruct.Messages.translated_message(:message_exception)}
-             Term: #{inspect(term)}
-             Errors: #{inspect(errs)}
-            """
-          end
-        end
-
-        def __guarded_error_module__, do: __MODULE__.Error
-      else
-        def __guarded_error_module__, do: nil
-      end
     end
   end
 
@@ -380,36 +409,32 @@ defmodule GuardedStruct.Transformers.Codegen do
   Raise `ArgumentError` for non-atom non-regex field names or duplicate names.
   """
   def validate_entities!(entities) do
-    Enum.reduce(entities, [], fn entity, seen ->
-      name = entity_name(entity)
-
-      cond do
-        is_atom(name) and not is_nil(name) ->
-          if name in seen do
-            raise ArgumentError, "the field #{inspect(name)} is already set"
-          end
-
-          [name | seen]
-
-        is_struct(name, Regex) or match?({:regex_pattern, _}, name) ->
-          [name | seen]
-
-        is_number(name) or is_binary(name) ->
-          raise ArgumentError, "a field name must be an atom, got #{inspect(name)}"
-
-        true ->
-          seen
-      end
-    end)
-
+    _seen = Enum.reduce(entities, [], &check_entity_name!(entity_name(&1), &2))
     :ok
   end
+
+  defp check_entity_name!(name, seen) when is_atom(name) and not is_nil(name) do
+    if name in seen do
+      raise ArgumentError, "the field #{inspect(name)} is already set"
+    end
+
+    [name | seen]
+  end
+
+  defp check_entity_name!(%Regex{} = name, seen), do: [name | seen]
+  defp check_entity_name!({:regex_pattern, _} = name, seen), do: [name | seen]
+
+  defp check_entity_name!(name, _seen) when is_number(name) or is_binary(name),
+    do: raise(ArgumentError, "a field name must be an atom, got #{inspect(name)}")
+
+  defp check_entity_name!(_name, seen), do: seen
 
   defp entity_name(%Field{name: n}), do: n
   defp entity_name(%SubField{name: n}), do: n
   defp entity_name(other), do: Map.get(other, :name)
 
-  defp atom_lookup_for(keys) when is_list(keys) do
+  @doc "Maps each atom key's string form to the atom, so input keys convert without new atoms."
+  def atom_lookup_for(keys) when is_list(keys) do
     for k <- keys, is_atom(k), into: %{}, do: {Atom.to_string(k), k}
   end
 
@@ -418,6 +443,8 @@ defmodule GuardedStruct.Transformers.Codegen do
   Called at parent module compile time so the value is
   `Module.concat(parent, ChildPart)` baked in — runtime never recomputes it.
   """
+  # Module and field names come from the developer's DSL, not from user input.
+  # sobelow_skip ["DOS.ModuleConcat"]
   def bake_child_modules(fields, parent_module) when is_list(fields) do
     Enum.map(fields, fn
       %{kind: :sub_field, name: name} = meta ->
@@ -576,6 +603,17 @@ defmodule GuardedStruct.Transformers.Codegen do
     {keys, defstruct_kw, types, enforce_keys, fields_runtime ++ virtual_runtime}
   end
 
+  @doc """
+  Every entity of `entities` followed by the entities nested in it, depth first:
+  the fields, sub_fields and conditional_fields of each sub_field and conditional_field.
+  """
+  def all_entities(entities), do: Enum.flat_map(entities, &[&1 | all_entities(children(&1))])
+
+  defp children(%entity{} = parent) when entity in [SubField, ConditionalField],
+    do: parent.fields ++ parent.sub_fields ++ parent.conditional_fields
+
+  defp children(_entity), do: []
+
   @doc "The children of a conditional_field in the order they are written."
   def conditional_children(%ConditionalField{} = cf), do: merge_children_in_source_order(cf)
 
@@ -667,12 +705,16 @@ defmodule GuardedStruct.Transformers.Codegen do
       iex> GuardedStruct.Transformers.Codegen.atom_to_module(:my_field)
       :MyField
   """
+  # Module and field names come from the developer's DSL, not from user input.
+  # sobelow_skip ["DOS.StringToAtom"]
   def atom_to_module(field_atom) do
     field_atom |> Atom.to_string() |> Macro.camelize() |> String.to_atom()
   end
 
   # `Macro.escape/1` that rebuilds a `%Regex{}` from source (a compiled regex
   # can't be escaped before Elixir 1.19 on OTP 27+).
+  # Rebuilds a regex the developer wrote in the DSL, not one from user input.
+  # sobelow_skip ["DOS.Regex"]
   def escape_runtime(%Regex{source: source, opts: opts}) do
     quote do: Regex.compile!(unquote(source), unquote(Macro.escape(opts)))
   end
@@ -722,6 +764,8 @@ defmodule GuardedStruct.Transformers.Codegen do
   defp example_value_ast(%SubField{default: default}, _path) when not is_nil(default),
     do: escape_runtime(default)
 
+  # Module and field names come from the developer's DSL, not from user input.
+  # sobelow_skip ["DOS.ModuleConcat"]
   defp example_value_ast(%SubField{name: name}, _path) do
     component = atom_to_module(name)
     quote do: Module.concat(__MODULE__, unquote(component)).example()

@@ -267,7 +267,6 @@ defmodule GuardedStruct.Dsl do
     transformers: [
       GuardedStruct.Transformers.ParseDerive,
       GuardedStruct.Transformers.ParseCoreKeys,
-      GuardedStruct.Transformers.ParseDomain,
       GuardedStruct.Transformers.GenerateSubFieldModules,
       GuardedStruct.Transformers.GenerateBuilder
     ],

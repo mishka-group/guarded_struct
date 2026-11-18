@@ -3,8 +3,8 @@ defmodule GuardedStruct.Transformers.GenerateBuilder do
 
   use Spark.Dsl.Transformer
 
-  alias Spark.Dsl.Transformer
   alias GuardedStruct.Transformers.Codegen
+  alias Spark.Dsl.Transformer
 
   @impl true
   def transform(dsl_state) do

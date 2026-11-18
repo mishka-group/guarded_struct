@@ -3,9 +3,9 @@ defmodule GuardedStruct.Transformers.ParseDerive do
 
   use Spark.Dsl.Transformer
 
+  alias GuardedStruct.Derive.{Extension, OpEvaluator, OpParamValidator, Parser}
+  alias GuardedStruct.Dsl.{ConditionalField, Field, SubField, VirtualField}
   alias Spark.Dsl.Transformer
-  alias GuardedStruct.Dsl.{Field, SubField, ConditionalField, VirtualField}
-  alias GuardedStruct.Derive.{Extension, Parser, OpEvaluator, OpParamValidator}
 
   @impl true
   def before?(GuardedStruct.Transformers.GenerateBuilder), do: true
@@ -103,6 +103,9 @@ defmodule GuardedStruct.Transformers.ParseDerive do
 
   defp literal_default(nil), do: nil
 
+  # Evaluates a literal `default:` from the developer's DSL: `quoted_literal?` lets no
+  # call through.
+  # sobelow_skip ["RCE.CodeModule"]
   defp literal_default(default) do
     if Macro.quoted_literal?(default) do
       {value, _binding} = Code.eval_quoted(default)

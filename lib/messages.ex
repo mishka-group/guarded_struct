@@ -1,9 +1,9 @@
 defmodule GuardedStruct.Messages do
   @moduledoc """
-  This module is used to define the messages that are used in the guarded_struct library.
-  You can define your own messages by creating a module that uses this module and
-  implements the callbacks defined in this module.
-  It can be used to define messages in multiple languages like using Gettext.
+  The text of every error message guarded_struct returns. Each message is one
+  callback, so an app can replace any of them, for example to translate them
+  with Gettext: `use GuardedStruct.Messages` in your own module and override the
+  callbacks you need.
 
   ## Usage
   ```elixir
@@ -11,7 +11,7 @@ defmodule GuardedStruct.Messages do
     use GuardedStruct.Messages
     import MyAppWeb.Gettext
 
-    def required_fields(), do: gettext("Please submit required fields.")
+    def required_fields, do: gettext("Please submit required fields.")
   end
   ```
 
@@ -193,15 +193,15 @@ defmodule GuardedStruct.Messages do
       @behaviour unquote(__MODULE__)
 
       # GuardedStruct
-      def required_fields(), do: unquote(__MODULE__).required_fields()
-      def authorized_fields(), do: unquote(__MODULE__).authorized_fields()
-      def message_exception(), do: unquote(__MODULE__).message_exception()
+      def required_fields, do: unquote(__MODULE__).required_fields()
+      def authorized_fields, do: unquote(__MODULE__).authorized_fields()
+      def message_exception, do: unquote(__MODULE__).message_exception()
       def message_exception(exception), do: unquote(__MODULE__).message_exception(exception)
-      def builder(), do: unquote(__MODULE__).builder()
+      def builder, do: unquote(__MODULE__).builder()
       def field(name), do: unquote(__MODULE__).field(name)
       def field_type(name), do: unquote(__MODULE__).field_type(name)
-      def list_builder(), do: unquote(__MODULE__).list_builder()
-      def list_builder_type(), do: unquote(__MODULE__).list_builder_type()
+      def list_builder, do: unquote(__MODULE__).list_builder()
+      def list_builder_type, do: unquote(__MODULE__).list_builder_type()
       def check_dependent_keys(key_value), do: unquote(__MODULE__).check_dependent_keys(key_value)
       def domain_field_status(key), do: unquote(__MODULE__).domain_field_status(key)
       def force_domain_field_status(key), do: unquote(__MODULE__).force_domain_field_status(key)
@@ -251,6 +251,8 @@ defmodule GuardedStruct.Messages do
       def some_string_integer(field), do: unquote(__MODULE__).some_string_integer(field)
       def validate_unexpected(field), do: unquote(__MODULE__).validate_unexpected(field)
       def location_url(field), do: unquote(__MODULE__).location_url(field)
+      # `is_type/1` is a message key that users override, so the name stays.
+      # credo:disable-for-next-line Credo.Check.Readability.PredicateFunctionNames
       def is_type(field), do: unquote(__MODULE__).is_type(field)
       def convert_enum_output(field), do: unquote(__MODULE__).convert_enum_output(field)
       def equal(field), do: unquote(__MODULE__).equal(field)
@@ -277,19 +279,19 @@ defmodule GuardedStruct.Messages do
   end
 
   # GuardedStruct
-  def required_fields(), do: "Please submit required fields."
+  def required_fields, do: "Please submit required fields."
 
-  def authorized_fields(), do: "Unauthorized keys are present in the sent data."
+  def authorized_fields, do: "Unauthorized keys are present in the sent data."
 
-  def message_exception(), do: "There is at least one validation problem with your data:"
+  def message_exception, do: "There is at least one validation problem with your data:"
 
   def message_exception(exception) do
     "There is at least one validation problem with your data: #{inspect(exception.term)}"
   end
 
-  def builder(), do: "Your input must be a map or list of maps"
+  def builder, do: "Your input must be a map or list of maps"
 
-  def register_struct(),
+  def register_struct,
     do:
       "Main validator is came as a tuple and includes {module, function_name}, noted the function_name should be atom."
 
@@ -301,14 +303,14 @@ defmodule GuardedStruct.Messages do
     "a field name must be an atom, got #{inspect(name)}"
   end
 
-  def list_builder(),
+  def list_builder,
     do: "Unfortunately, the appropriate settings have not been applied to the desired field."
 
-  def list_builder_field_exception(),
+  def list_builder_field_exception,
     do:
       "Oh no!, We do not currently support using a normal field as a list without an extra module."
 
-  def list_builder_type(), do: "Your input must be a list of items"
+  def list_builder_type, do: "Your input must be a list of items"
 
   def check_dependent_keys({key, splited_pattern}) do
     """
@@ -432,6 +434,8 @@ defmodule GuardedStruct.Messages do
   def location_url(field),
     do: "Invalid geo url format in the #{field} field, you should send latitude and longitude"
 
+  # `is_type/1` is a message key that users override, so the name stays.
+  # credo:disable-for-next-line Credo.Check.Readability.PredicateFunctionNames
   def is_type({field, type}), do: "The #{field} field must be #{type}"
 
   def convert_enum_output(field),

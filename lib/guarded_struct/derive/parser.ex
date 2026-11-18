@@ -174,23 +174,21 @@ defmodule GuardedStruct.Derive.Parser do
     end
   end
 
-  defp scan_char(ch, index, open, state) do
-    case {state, ch} do
-      {:in_string, ?\\} -> {open, :string_escape}
-      {:string_escape, _} -> {open, :in_string}
-      {:in_string, ?"} -> {open, :code}
-      {:in_string, _} -> {open, :in_string}
-      {:in_charlist, ?\\} -> {open, :charlist_escape}
-      {:charlist_escape, _} -> {open, :in_charlist}
-      {:in_charlist, ?'} -> {open, :code}
-      {:in_charlist, _} -> {open, :in_charlist}
-      {:code, ?"} -> {open, :in_string}
-      {:code, ?'} -> {open, :in_charlist}
-      {:code, ?(} -> {[index | open], :code}
-      {:code, ?)} -> {Enum.drop(open, 1), :code}
-      {:code, _} -> {open, :code}
-    end
-  end
+  # Tracks whether the scan is in code, a string or a charlist, so a parenthesis
+  # inside quotes does not count; `open` holds the index of every unclosed `(`.
+  defp scan_char(?\\, _index, open, :in_string), do: {open, :string_escape}
+  defp scan_char(_ch, _index, open, :string_escape), do: {open, :in_string}
+  defp scan_char(?", _index, open, :in_string), do: {open, :code}
+  defp scan_char(_ch, _index, open, :in_string), do: {open, :in_string}
+  defp scan_char(?\\, _index, open, :in_charlist), do: {open, :charlist_escape}
+  defp scan_char(_ch, _index, open, :charlist_escape), do: {open, :in_charlist}
+  defp scan_char(?', _index, open, :in_charlist), do: {open, :code}
+  defp scan_char(_ch, _index, open, :in_charlist), do: {open, :in_charlist}
+  defp scan_char(?", _index, open, :code), do: {open, :in_string}
+  defp scan_char(?', _index, open, :code), do: {open, :in_charlist}
+  defp scan_char(?(, index, open, :code), do: {[index | open], :code}
+  defp scan_char(?), _index, open, :code), do: {Enum.drop(open, 1), :code}
+  defp scan_char(_ch, _index, open, :code), do: {open, :code}
 
   defp group_source(source, index) do
     before = :binary.part(source, 0, index)
@@ -292,6 +290,9 @@ defmodule GuardedStruct.Derive.Parser do
     {key, ast_to_string(value)}
   end
 
+  # Evaluates a literal operand of the developer's derive string: `quoted_literal?` lets
+  # no call through.
+  # sobelow_skip ["RCE.CodeModule"]
   defp parse_arg({:=, _, [{key, _, nil}, value]} = ast) when is_atom(key) do
     if Macro.quoted_literal?(value) do
       {literal, _binding} = Code.eval_quoted(value)
@@ -305,6 +306,8 @@ defmodule GuardedStruct.Derive.Parser do
 
   defp invalid_operand(ast), do: {:invalid_operand, ast_to_string(ast)}
 
+  # The regex comes from the developer's derive string, not from user input.
+  # sobelow_skip ["DOS.Regex"]
   defp precompile_regex(source) do
     case Regex.compile(source) do
       {:ok, regex} -> {:regex, regex}
@@ -416,6 +419,8 @@ defmodule GuardedStruct.Derive.Parser do
   defp convert_value(value, _spec), do: value
 
   @spec parse_core_keys_pattern(binary()) :: [atom()]
+  # `on:` and `from:` paths come from the developer's DSL, not from user input.
+  # sobelow_skip ["DOS.StringToAtom"]
   def parse_core_keys_pattern(pattern) do
     pattern
     |> String.trim()

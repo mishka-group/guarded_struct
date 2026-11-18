@@ -142,6 +142,8 @@ defmodule GuardedStruct.Derive.SanitizerDerive do
   defp failed(field, op, exception, stacktrace) do
     stacktrace = Enum.map(stacktrace, &without_args/1)
 
+    # `crash_reason` is the metadata key Logger's own handlers read for a crash, not an app key.
+    # credo:disable-for-next-line Credo.Check.Warning.MissedMetadataKeyInLoggerConfig
     Logger.error(
       "GuardedStruct could not sanitize the #{field} field with #{inspect(op)}\n" <>
         Exception.format(:error, exception, stacktrace),
@@ -161,24 +163,17 @@ defmodule GuardedStruct.Derive.SanitizerDerive do
   defp op_name(%{each: _inner}), do: :each
   defp op_name(_op), do: nil
 
+  # The tag type comes from the developer's derive string, not from user input.
+  # sobelow_skip ["DOS.StringToAtom"]
   defp tag_op(type) when is_binary(type), do: String.to_atom(type)
   defp tag_op(type), do: type
 
-  defp builtin(input, :trim) do
-    if is_binary(input), do: String.trim(input), else: input
-  end
+  defp builtin(input, :trim) when is_binary(input), do: String.trim(input)
+  defp builtin(input, :upcase) when is_binary(input), do: String.upcase(input)
+  defp builtin(input, :downcase) when is_binary(input), do: String.downcase(input)
+  defp builtin(input, :capitalize) when is_binary(input), do: String.capitalize(input)
 
-  defp builtin(input, :upcase) do
-    if is_binary(input), do: String.upcase(input), else: input
-  end
-
-  defp builtin(input, :downcase) do
-    if is_binary(input), do: String.downcase(input), else: input
-  end
-
-  defp builtin(input, :capitalize) do
-    if is_binary(input), do: String.capitalize(input), else: input
-  end
+  defp builtin(input, op) when op in [:trim, :upcase, :downcase, :capitalize], do: input
 
   if Code.ensure_loaded?(HtmlSanitizeEx) do
     defp builtin(input, :basic_html) when is_binary(input), do: HtmlSanitizeEx.basic_html(input)

@@ -164,39 +164,24 @@ defmodule GuardedStruct do
   `module: Foo` are lifted into setter calls inside the section body.
   """
   defmacro guardedstruct(opts, do: block) when is_list(opts) do
-    block = transform_derive_rules(block)
-    validate_block!(block)
-    block_enforce? = Keyword.get(opts, :enforce, false) == true
-    pre_enforce_keys = extract_enforce_keys(block, block_enforce?)
-    block_aliases = extract_aliases(block)
-
-    setters =
-      Enum.map(opts, fn {key, value} ->
-        {key, [], [value]}
-      end)
-
-    full_block = {:__block__, [], setters ++ [block]}
-
-    quote do
-      require GuardedStruct.Dsl
-      import GuardedStruct, only: [sub_field: 4, conditional_field: 4]
-
-      unquote_splicing(block_aliases)
-
-      GuardedStruct.Dsl.guardedstruct do
-        unquote(full_block)
-      end
-
-      @enforce_keys unquote(pre_enforce_keys)
-    end
+    setters = Enum.map(opts, fn {key, value} -> {key, [], [value]} end)
+    section_ast(block, setters, Keyword.get(opts, :enforce, false) == true)
   end
 
   @doc "`guardedstruct do … end` — no top-level options."
   defmacro guardedstruct(do: block) do
+    section_ast(block, nil, false)
+  end
+
+  # The code both `guardedstruct` macros expand to: the Spark section with the
+  # `@derives` decorators expanded, the block's aliases lifted out, and the
+  # `@enforce_keys` read from the fields.
+  defp section_ast(block, setters, block_enforce?) do
     block = transform_derive_rules(block)
     validate_block!(block)
-    pre_enforce_keys = extract_enforce_keys(block, false)
+    pre_enforce_keys = extract_enforce_keys(block, block_enforce?)
     block_aliases = extract_aliases(block)
+    body = section_body(block, setters)
 
     quote do
       require GuardedStruct.Dsl
@@ -205,12 +190,15 @@ defmodule GuardedStruct do
       unquote_splicing(block_aliases)
 
       GuardedStruct.Dsl.guardedstruct do
-        unquote(block)
+        unquote(body)
       end
 
       @enforce_keys unquote(pre_enforce_keys)
     end
   end
+
+  defp section_body(block, nil), do: block
+  defp section_body(block, setters), do: {:__block__, [], setters ++ [block]}
 
   # Every entity type that accepts a `:derives` opt. `@derives "..."` /
   # `@derive_rules "..."` decorators get consumed by the very next call to
@@ -221,15 +209,11 @@ defmodule GuardedStruct do
   # decorator that sits immediately above a decoratable entity call into an
   # inline `derives: "..."` opt on that entity. One-shot — consumed by the
   # very next entity declaration, like `@doc`.
-  defp transform_derive_rules(block) do
-    items =
-      case block do
-        {:__block__, meta, list} -> {:__block__, meta, do_transform_derive_rules(list, nil, [])}
-        single -> List.first(do_transform_derive_rules([single], nil, [])) || single
-      end
+  defp transform_derive_rules({:__block__, meta, list}),
+    do: {:__block__, meta, do_transform_derive_rules(list, nil, [])}
 
-    items
-  end
+  defp transform_derive_rules(single),
+    do: List.first(do_transform_derive_rules([single], nil, [])) || single
 
   defp do_transform_derive_rules([], _pending, acc), do: Enum.reverse(acc)
 
@@ -256,28 +240,20 @@ defmodule GuardedStruct do
 
   # Recurse into a sub_field / conditional_field's `do:` block so `@derives`
   # decorators inside the body are also expanded.
-  defp recurse_into_block(args) do
-    case args do
-      [name, type, opts, [do: do_block]] when is_list(opts) ->
-        [name, type, opts, [do: transform_derive_rules(do_block)]]
+  defp recurse_into_block([name, type, opts, [do: do_block]]) when is_list(opts),
+    do: [name, type, opts, [do: transform_derive_rules(do_block)]]
 
-      [name, type, [{:do, _} | _] = kw] ->
-        rewritten = Keyword.update!(kw, :do, fn block -> transform_derive_rules(block) end)
-        [name, type, rewritten]
+  defp recurse_into_block([name, type, [{:do, _} | _] = kw]),
+    do: [name, type, Keyword.update!(kw, :do, &transform_derive_rules/1)]
 
-      [name, type, opts] when is_list(opts) ->
-        case Keyword.fetch(opts, :do) do
-          {:ok, do_block} ->
-            [name, type, Keyword.put(opts, :do, transform_derive_rules(do_block))]
-
-          :error ->
-            args
-        end
-
-      other ->
-        other
+  defp recurse_into_block([name, type, opts] = args) when is_list(opts) do
+    case Keyword.fetch(opts, :do) do
+      {:ok, do_block} -> [name, type, Keyword.put(opts, :do, transform_derive_rules(do_block))]
+      :error -> args
     end
   end
+
+  defp recurse_into_block(other), do: other
 
   defp inject_derive(args, derive_str) do
     case args do
@@ -319,75 +295,58 @@ defmodule GuardedStruct do
   end
 
   defp extract_aliases(block) do
-    items =
-      case block do
-        {:__block__, _, list} -> list
-        single -> [single]
-      end
-
-    Enum.filter(items, fn
-      {:alias, _meta, _args} -> true
-      _ -> false
-    end)
+    block
+    |> block_items()
+    |> Enum.filter(&match?({:alias, _meta, _args}, &1))
   end
 
   defp extract_enforce_keys(block, block_enforce?) do
-    items =
-      case block do
-        {:__block__, _, list} -> list
-        single -> [single]
-      end
-
-    Enum.flat_map(items, fn
-      {:field, _meta, [name | rest]} when is_atom(name) and not is_nil(name) ->
-        opts =
-          case rest do
-            [_type, opts] when is_list(opts) -> opts
-            [_type] -> []
-            _ -> []
-          end
-
-        cond do
-          Keyword.get(opts, :enforce) == false -> []
-          Keyword.get(opts, :enforce) == true -> [name]
-          block_enforce? and not Keyword.has_key?(opts, :default) -> [name]
-          true -> []
-        end
-
-      _other ->
-        []
-    end)
+    block
+    |> block_items()
+    |> Enum.flat_map(&enforce_key(&1, block_enforce?))
     |> Enum.reverse()
   end
 
+  defp enforce_key({:field, _meta, [name | rest]}, block_enforce?)
+       when is_atom(name) and not is_nil(name) do
+    opts = field_opts(rest)
+    if field_enforced?(Keyword.get(opts, :enforce), block_enforce?, opts), do: [name], else: []
+  end
+
+  defp enforce_key(_item, _block_enforce?), do: []
+
+  defp field_opts([_type, opts]) when is_list(opts), do: opts
+  defp field_opts(_rest), do: []
+
+  # A field's own `enforce:` wins; otherwise a block-level `enforce: true`
+  # enforces every field that has no `default:`.
+  defp field_enforced?(false, _block_enforce?, _opts), do: false
+  defp field_enforced?(true, _block_enforce?, _opts), do: true
+
+  defp field_enforced?(_enforce, block_enforce?, opts),
+    do: block_enforce? and not Keyword.has_key?(opts, :default)
+
   defp validate_block!(block) do
-    items =
-      case block do
-        {:__block__, _, list} -> list
-        single -> [single]
-      end
-
-    Enum.reduce(items, [], fn
-      {:field, _meta, [name | _]}, seen ->
-        cond do
-          is_atom(name) and not is_nil(name) ->
-            if name in seen do
-              raise ArgumentError, "the field #{inspect(name)} is already set"
-            end
-
-            [name | seen]
-
-          is_number(name) or is_binary(name) ->
-            raise ArgumentError, "a field name must be an atom, got #{inspect(name)}"
-
-          true ->
-            seen
-        end
-
-      _, seen ->
-        seen
-    end)
-
+    _seen = block |> block_items() |> Enum.reduce([], &check_field_name!/2)
     :ok
   end
+
+  defp check_field_name!({:field, _meta, [name | _]}, seen)
+       when is_atom(name) and not is_nil(name) do
+    if name in seen do
+      raise ArgumentError, "the field #{inspect(name)} is already set"
+    end
+
+    [name | seen]
+  end
+
+  defp check_field_name!({:field, _meta, [name | _]}, _seen)
+       when is_number(name) or is_binary(name) do
+    raise ArgumentError, "a field name must be an atom, got #{inspect(name)}"
+  end
+
+  defp check_field_name!(_item, seen), do: seen
+
+  defp block_items({:__block__, _, list}), do: list
+  defp block_items(single), do: [single]
 end

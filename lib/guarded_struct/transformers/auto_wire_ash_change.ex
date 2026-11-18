@@ -26,6 +26,8 @@ defmodule GuardedStruct.Transformers.AutoWireAshChange do
         {:ok, dsl_state}
 
       true ->
+        # `apply/3` keeps the module compiling without warnings when the user's deps have no Ash.
+        # credo:disable-for-next-line Credo.Check.Refactor.Apply
         apply(Ash.Resource.Builder, :add_change, [
           dsl_state,
           GuardedStruct.AshResource.Change,

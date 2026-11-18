@@ -530,7 +530,7 @@ flowchart TD
 
     User --> Spark
 
-    Spark --> Transformers["<b>Transformers</b><br/>ParseDerive · ParseCoreKeys · ParseDomain<br/>GenerateBuilder · GenerateSubFieldModules<br/>GenerateAshValidator · AutoWireAshChange"]
+    Spark --> Transformers["<b>Transformers</b><br/>ParseDerive · ParseCoreKeys<br/>GenerateBuilder · GenerateSubFieldModules<br/>GenerateAshValidator · AutoWireAshChange"]
     Spark --> Verifiers["<b>Verifiers</b><br/>VerifyValidatorMFA · VerifyAutoMFA<br/>VerifyNoStructCycles"]
     Spark --> AsyncCompile["<b>Async submodule compile</b><br/>Spark.Dsl.Transformer.async_compile<br/>for sub_field branches"]
 
