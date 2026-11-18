@@ -7,8 +7,7 @@ defmodule GuardedStructTest.ParserPropertyTest do
   describe "parser/1 never crashes" do
     property "any binary input returns nil or a map (never raises)" do
       check all(input <- StreamData.binary()) do
-        result = Parser.parser(input)
-        assert result == nil or is_map(result)
+        assert_parsed_shape(Parser.parser(input))
       end
     end
 
@@ -17,8 +16,7 @@ defmodule GuardedStructTest.ParserPropertyTest do
               input <-
                 StreamData.string(:alphanumeric, max_length: 200)
             ) do
-        result = Parser.parser(input)
-        assert result == nil or is_map(result)
+        assert_parsed_shape(Parser.parser(input))
       end
     end
 
@@ -35,8 +33,7 @@ defmodule GuardedStructTest.ParserPropertyTest do
         end)
 
       check all(input <- op_string) do
-        result = Parser.parser(input)
-        assert result == nil or is_map(result)
+        assert_parsed_shape(Parser.parser(input))
       end
     end
   end
@@ -133,5 +130,14 @@ defmodule GuardedStructTest.ParserPropertyTest do
     test "leading whitespace doesn't break parsing" do
       assert %{validate: [:string]} = Parser.parser("   validate(string)")
     end
+  end
+
+  # A parse result is nil, or a map from the groups `sanitize`/`validate` to their op lists.
+  defp assert_parsed_shape(nil), do: :ok
+
+  defp assert_parsed_shape(ops) when is_map(ops) do
+    assert Enum.all?(ops, fn {group, group_ops} ->
+             group in [:sanitize, :validate] and is_list(group_ops)
+           end)
   end
 end

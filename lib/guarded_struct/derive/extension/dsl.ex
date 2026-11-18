@@ -1,7 +1,7 @@
 defmodule GuardedStruct.Derive.Extension.Dsl do
   @moduledoc false
 
-  alias GuardedStruct.Derive.Extension.Dsl.{Validator, Sanitizer}
+  alias GuardedStruct.Derive.Extension.Dsl.{Sanitizer, Validator}
 
   @validator %Spark.Dsl.Entity{
     name: :validator,

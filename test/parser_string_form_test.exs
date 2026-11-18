@@ -375,8 +375,7 @@ defmodule GuardedStructTest.ParserStringFormTest do
 
     test "a string the Elixir parser refuses is an error with the reason" do
       assert {:error, reason} = Parser.parse("validate(string,,)")
-      assert is_binary(reason)
-      assert reason != ""
+      assert reason =~ "syntax error before"
     end
 
     test "enum=Atom[a, b] (comma instead of ::) is an error" do

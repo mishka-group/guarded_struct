@@ -1,4 +1,5 @@
 defmodule GuardedStructTest.Fixtures.NestedConditionalField.Actor do
+  @moduledoc false
   use GuardedStruct
   @types ["Application", "Group", "Organization", "Person", "Service"]
 
@@ -16,46 +17,48 @@ defmodule GuardedStructTest.Fixtures.NestedConditionalField.Actor do
 end
 
 defmodule GuardedStructTest.Fixtures.NestedConditionalField.Conditional do
+  @moduledoc false
   use GuardedStruct
   alias ConditionalFieldValidatorTestValidators, as: VAL
   alias GuardedStructTest.Fixtures.NestedConditionalField.Actor
 
   guardedstruct do
     conditional_field :actor, any() do
-      field :actor, struct(), struct: Actor, validator: {VAL, :is_map_data}
+      field :actor, struct(), struct: Actor, validator: {VAL, :validate_map_data}
 
-      conditional_field :actor, any(), structs: true, validator: {VAL, :is_list_data} do
-        field :actor, struct(), struct: Actor, validator: {VAL, :is_map_data}
+      conditional_field :actor, any(), structs: true, validator: {VAL, :validate_list_data} do
+        field :actor, struct(), struct: Actor, validator: {VAL, :validate_map_data}
 
         field :actor, String.t(),
-          validator: {VAL, :is_string_data},
+          validator: {VAL, :validate_string_data},
           derives: "sanitize(tag=strip_tags) validate(url, max_len=160)"
       end
 
       field :actor, String.t(),
-        validator: {VAL, :is_string_data},
+        validator: {VAL, :validate_string_data},
         derives: "sanitize(tag=strip_tags) validate(url, max_len=160)"
     end
   end
 end
 
 defmodule GuardedStructTest.Fixtures.NestedConditionalField.TripleNest do
+  @moduledoc false
   use GuardedStruct
   alias ConditionalFieldValidatorTestValidators, as: VAL
 
   guardedstruct do
     conditional_field :choice, any() do
-      field :choice, String.t(), validator: {VAL, :is_string_data}, hint: "level1_string"
+      field :choice, String.t(), validator: {VAL, :validate_string_data}, hint: "level1_string"
 
-      conditional_field :choice, any(), validator: {VAL, :is_map_data} do
-        field :choice, String.t(), validator: {VAL, :is_string_data}, hint: "level2_string"
+      conditional_field :choice, any(), validator: {VAL, :validate_map_data} do
+        field :choice, String.t(), validator: {VAL, :validate_string_data}, hint: "level2_string"
 
-        conditional_field :choice, any(), validator: {VAL, :is_map_data} do
+        conditional_field :choice, any(), validator: {VAL, :validate_map_data} do
           field :choice, String.t(),
-            validator: {VAL, :is_string_data},
+            validator: {VAL, :validate_string_data},
             hint: "level3_string"
 
-          field :choice, :integer, validator: {VAL, :is_int_data}, hint: "level3_int"
+          field :choice, :integer, validator: {VAL, :validate_int_data}, hint: "level3_int"
         end
       end
     end

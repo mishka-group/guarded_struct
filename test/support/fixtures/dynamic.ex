@@ -9,6 +9,7 @@ defmodule GuardedStructFixtures.Dynamic do
   """
 
   defmodule Shard do
+    @moduledoc "One shard of a cluster: an IPv4 node and a replica count."
     use GuardedStruct
 
     guardedstruct do

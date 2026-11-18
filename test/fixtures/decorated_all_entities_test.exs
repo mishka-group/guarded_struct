@@ -297,12 +297,20 @@ defmodule GuardedStructFixtures.DecoratedAllEntitiesTest do
     test "every entity kind in the support file has a non-nil derive somewhere" do
       # If any future change breaks `@derives` for one entity type, the
       # matching coverage row will go nil and this test fails loudly.
-      assert find_field(D.OnField.__fields__(), :name).derive != nil
-      assert find_field(D.OnVirtualField.__fields__(), :password_confirmation).derive != nil
-      assert find_field(D.OnDynamicField.__fields__(), :metadata).derive != nil
-      assert find_field(D.OnSubField.__fields__(), :profile).derive != nil
-      assert find_field(D.OnConditionalField.__fields__(), :detail).derive != nil
-      assert find_field(D.InsideSubField.Wrapper.__fields__(), :tag).derive != nil
+      assert find_field(D.OnField.__fields__(), :name).derive ==
+               "sanitize(trim) validate(string, max_len=10)"
+
+      assert find_field(D.OnVirtualField.__fields__(), :password_confirmation).derive ==
+               "validate(string, min_len=8)"
+
+      assert find_field(D.OnDynamicField.__fields__(), :metadata).derive ==
+               "validate(map, not_empty)"
+
+      assert find_field(D.OnSubField.__fields__(), :profile).derive == "validate(map)"
+      assert find_field(D.OnConditionalField.__fields__(), :detail).derive == "validate(map)"
+
+      assert find_field(D.InsideSubField.Wrapper.__fields__(), :tag).derive ==
+               "sanitize(trim) validate(string, max_len=5)"
     end
   end
 end

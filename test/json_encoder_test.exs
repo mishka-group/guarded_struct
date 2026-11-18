@@ -6,7 +6,7 @@ defmodule GuardedStructTest.JsonEncoderTest do
   # Jason path. The built-in `JSON.Encoder` fallback is exercised in
   # downstream projects on Elixir 1.18+ that do NOT add Jason as a dep.
 
-  alias GuardedStructTest.Fixtures.JsonEncoder.{Plain, WithJason, Nested}
+  alias GuardedStructTest.Fixtures.JsonEncoder.{Nested, Plain, WithJason}
 
   test "without json: true, no JSON encoder is derived" do
     {:ok, struct} = Plain.builder(%{name: "Alice", age: 30})

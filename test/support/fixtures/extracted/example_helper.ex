@@ -1,4 +1,5 @@
 defmodule GuardedStructTest.Fixtures.ExampleHelper.WithDefaults do
+  @moduledoc false
   use GuardedStruct
 
   guardedstruct do
@@ -9,6 +10,7 @@ defmodule GuardedStructTest.Fixtures.ExampleHelper.WithDefaults do
 end
 
 defmodule GuardedStructTest.Fixtures.ExampleHelper.TypeFallbacks do
+  @moduledoc false
   use GuardedStruct
 
   guardedstruct do
@@ -22,6 +24,7 @@ defmodule GuardedStructTest.Fixtures.ExampleHelper.TypeFallbacks do
 end
 
 defmodule GuardedStructTest.Fixtures.ExampleHelper.Nested do
+  @moduledoc false
   use GuardedStruct
 
   guardedstruct do

@@ -1,4 +1,5 @@
 defmodule GuardedStructTest.Fixtures.Errors.SampleStruct do
+  @moduledoc false
   use GuardedStruct
 
   guardedstruct do

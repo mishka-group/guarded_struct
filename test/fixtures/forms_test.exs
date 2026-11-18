@@ -343,7 +343,7 @@ defmodule GuardedStructFixtures.FormsTest do
       # descriptive error embedding the inspected value.
       assert Forms.Signup.builder(%{
                email: "a@b.io",
-               password: 12345,
+               password: 12_345,
                password_confirmation: "xxxxxxxx"
              }) ==
                {:error,
@@ -402,10 +402,8 @@ defmodule GuardedStructFixtures.FormsTest do
                  password_confirmation: "tiny"
                })
 
-      assert is_list(errs)
-      actions = Enum.map(errs, & &1.action) |> Enum.sort()
-      assert :match in actions
-      assert :validator in actions
+      assert errs |> Enum.map(&{&1.field, &1.action}) |> Enum.sort() ==
+               [password: :validator, password_confirmation: :match]
     end
 
     test "all-fields invalid → multiple errors collected in one response" do
@@ -418,8 +416,8 @@ defmodule GuardedStructFixtures.FormsTest do
                  password_confirmation: 999
                })
 
-      errs = List.wrap(errs)
-      assert length(errs) >= 2
+      assert errs |> Enum.map(&{&1.field, &1.action}) |> Enum.sort() ==
+               [password: :validator, password_confirmation: :match]
     end
   end
 

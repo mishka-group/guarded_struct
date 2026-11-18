@@ -15,6 +15,7 @@ defmodule GuardedStructFixtures.CrossField do
   """
 
   defmodule AuditedEvent do
+    @moduledoc "An audited event that uses `from:`, `on:`, `auto:` and `domain:` between its fields."
     use GuardedStruct
 
     guardedstruct authorized_fields: true do

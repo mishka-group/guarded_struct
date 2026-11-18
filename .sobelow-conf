@@ -1,0 +1,1 @@
+[exit: :low, format: "txt", ignore: ["Config.HTTPS", "Config.CSP"], ignore_files: [], include_mix_tasks: false, include_scripts: false, out: nil, private: true, skip: true, summary: false, threshold: :low, verbose: false]

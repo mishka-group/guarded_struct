@@ -2,11 +2,11 @@ defmodule GuardedStructTest.PatternMapTest do
   use ExUnit.Case, async: true
 
   alias GuardedStructTest.Fixtures.PatternMap.{
-    Shard,
-    ShardsMap,
-    Plan,
+    HeadersMap,
     MultiPattern,
-    HeadersMap
+    Plan,
+    Shard,
+    ShardsMap
   }
 
   describe "standalone pattern-map struct" do
@@ -23,14 +23,13 @@ defmodule GuardedStructTest.PatternMapTest do
     end
 
     test "result is a plain map, not a struct" do
-      {:ok, result} = ShardsMap.builder(%{"shard_1" => %{node: "10.0.0.1"}})
-
-      refute Map.has_key?(result, :__struct__)
-      assert is_map(result)
+      # A plain map: a struct would not be equal to it.
+      assert ShardsMap.builder(%{"shard_1" => %{node: "10.0.0.1"}}) ==
+               {:ok, %{"shard_1" => %Shard{node: "10.0.0.1"}}}
     end
 
     test "%ShardsMap{} struct literal does not exist" do
-      refute function_exported?(ShardsMap, :__struct__, 0)
+      refute {:__struct__, 0} in ShardsMap.__info__(:functions)
     end
 
     test "rejects keys that don't match the regex pattern" do
@@ -86,7 +85,7 @@ defmodule GuardedStructTest.PatternMapTest do
       {:ok, result} = ShardsMap.builder(input)
 
       assert map_size(result) == 1000
-      assert Enum.all?(Map.keys(result), &is_binary/1)
+      assert Enum.all?(result, fn {key, _shard} -> is_binary(key) end)
     end
 
     test "rejects when ANY single key fails its pattern" do
@@ -128,8 +127,7 @@ defmodule GuardedStructTest.PatternMapTest do
       assert info.shape == :pattern_map
       assert info.key == :pattern
       assert info.keys == []
-      assert is_list(info.patterns)
-      assert Enum.all?(info.patterns, &is_struct(&1, Regex))
+      assert [%Regex{source: "^shard_\\d+$"}] = info.patterns
     end
 
     test "__fields__/0 returns pattern_field metadata" do
@@ -209,7 +207,7 @@ defmodule GuardedStructTest.PatternMapTest do
 
       assert_raise Spark.Error.DslError,
                    ~r/cannot mix atom-keyed and regex-keyed/,
-                   fn -> Code.compile_string(src) end
+                   fn -> compile(src) end
     end
   end
 
@@ -289,14 +287,16 @@ defmodule GuardedStructTest.PatternMapTest do
       {:error, errors} =
         WithValidator.builder(%{"k_1" => "bad", "k_2" => "short", "nope" => "x"})
 
-      assert length(errors) == 3
-
-      for error <- errors do
-        assert %{field: field, action: action, message: message} = error
-        assert is_atom(field)
-        assert is_atom(action)
-        assert is_binary(message)
-      end
+      assert errors == [
+               %{field: :__map__, key: "k_1", action: :validator, message: "k_1 is bad"},
+               %{field: :__map__, key: "k_2", action: :validator, message: "k_2 is short"},
+               %{
+                 field: :__map__,
+                 key: "nope",
+                 action: :key_pattern,
+                 message: "key \"nope\" does not match any declared pattern"
+               }
+             ]
     end
 
     test "an unmatched key and a failing validator share the field" do
@@ -330,4 +330,6 @@ defmodule GuardedStructTest.PatternMapTest do
       assert [%{field: :__map__, key: "k_1", action: :validator}] = error.errors
     end
   end
+
+  defp compile(source), do: Code.compile_string(source)
 end

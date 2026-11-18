@@ -1,7 +1,7 @@
 defmodule GuardedStructTest.CombinatorNestingTest do
   use ExUnit.Case, async: true
 
-  alias GuardedStruct.Derive.{OpParamValidator, ValidationDerive, SanitizerDerive}
+  alias GuardedStruct.Derive.{OpParamValidator, SanitizerDerive, ValidationDerive}
 
   # ────────────────────────────────────────────────────────────────
   # Fixtures — exercise the FULL macro pipeline: derive-string parser

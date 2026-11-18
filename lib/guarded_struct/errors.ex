@@ -31,6 +31,8 @@ defmodule GuardedStruct.Errors do
     ],
     unknown_error: GuardedStruct.Errors.Unknown
 
+  alias GuardedStruct.Errors.{Unknown, Validation}
+
   @doc """
   Convert an error tuple list into a Splode error class. Accepts either the
   inner list or the full `{:error, list}` tuple.
@@ -46,7 +48,7 @@ defmodule GuardedStruct.Errors do
 
   defp to_splode(%{field: field, errors: child_errors, action: :conditionals})
        when is_list(child_errors) do
-    GuardedStruct.Errors.Validation.exception(
+    Validation.exception(
       field: field,
       action: :conditionals,
       message: "Conditional field validation failed",
@@ -58,7 +60,7 @@ defmodule GuardedStruct.Errors do
   # without an action of its own.
   defp to_splode(%{field: field, errors: child_errors} = m)
        when is_list(child_errors) and not is_map_key(m, :action) do
-    GuardedStruct.Errors.Validation.exception(
+    Validation.exception(
       field: field,
       action: :nested,
       message: "The #{field} field has invalid values",
@@ -67,7 +69,7 @@ defmodule GuardedStruct.Errors do
   end
 
   defp to_splode(%{field: field, action: action} = m) do
-    GuardedStruct.Errors.Validation.exception(
+    Validation.exception(
       field: field,
       action: action,
       message: Map.get(m, :message),
@@ -77,6 +79,6 @@ defmodule GuardedStruct.Errors do
   end
 
   defp to_splode(other) do
-    GuardedStruct.Errors.Unknown.exception(error: other, message: inspect(other))
+    Unknown.exception(error: other, message: inspect(other))
   end
 end

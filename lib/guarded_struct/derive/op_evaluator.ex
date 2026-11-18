@@ -15,8 +15,9 @@ defmodule GuardedStruct.Derive.OpEvaluator do
     {:enum, split_to_list(strip_close(rest))}
   end
 
+  # sobelow_skip ["DOS.StringToAtom", "DOS.ModuleConcat"]
   defp rewrite({:enum, "Atom[" <> rest}) do
-    items = rest |> strip_close() |> split_to_list() |> Enum.map(&String.to_atom/1)
+    items = rest |> strip_close() |> split_to_list() |> Enum.map(&operand_atom/1)
     {:enum, items}
   end
 
@@ -71,7 +72,7 @@ defmodule GuardedStruct.Derive.OpEvaluator do
   end
 
   defp rewrite({:equal, "Atom::" <> value}) do
-    {:equal, String.to_atom(value)}
+    {:equal, operand_atom(value)}
   end
 
   defp rewrite({:equal, "Map::" <> value}) do
@@ -88,10 +89,10 @@ defmodule GuardedStruct.Derive.OpEvaluator do
     end
   end
 
-  defp rewrite({:record, tag}) when is_binary(tag), do: {:record, String.to_atom(tag)}
+  defp rewrite({:record, tag}) when is_binary(tag), do: {:record, operand_atom(tag)}
 
   defp rewrite({:custom, {mods, fun}}) when is_list(mods) and is_atom(fun),
-    do: {:custom, {Module.concat(mods), fun}}
+    do: {:custom, {operand_module(mods), fun}}
 
   defp rewrite({:custom, value}) when is_binary(value) do
     parts =
@@ -102,7 +103,7 @@ defmodule GuardedStruct.Derive.OpEvaluator do
 
     case parts do
       [module_str, fun_str] ->
-        {:custom, {Module.concat([module_str]), String.to_atom(fun_str)}}
+        {:custom, {operand_module([module_str]), operand_atom(fun_str)}}
 
       _ ->
         {:custom, value}
@@ -130,6 +131,16 @@ defmodule GuardedStruct.Derive.OpEvaluator do
     s |> String.split("::", trim: true) |> Enum.map(&String.trim/1)
   end
 
+  # Operands come from the developer's derive strings, never from user input.
+  # sobelow_skip ["DOS.StringToAtom"]
+  defp operand_atom(string), do: String.to_atom(string)
+
+  # Operands come from the developer's derive strings, never from user input.
+  # sobelow_skip ["DOS.ModuleConcat"]
+  defp operand_module(parts), do: Module.concat(parts)
+
+  # Operands come from the developer's derive strings, never from user input.
+  # sobelow_skip ["RCE.CodeModule"]
   defp safe_eval(value) do
     case Code.eval_string(value) do
       {term, _} -> term

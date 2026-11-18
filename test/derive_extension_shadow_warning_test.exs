@@ -170,8 +170,10 @@ defmodule GuardedStructTest.DeriveExtensionShadowWarningTest do
 
   describe "shadow validator is actually dead code at runtime" do
     test "built-in :string wins; the custom one is never called" do
-      output =
-        capture_io(:stderr, fn ->
+      # The last module defined is the result; `mod` comes from it, so no static
+      # "undefined module" warning.
+      {{{:module, mod, _binary, _result}, _binding}, output} =
+        with_io(:stderr, fn ->
           Code.eval_string("""
           defmodule DeadCodeExt do
             use GuardedStruct.Derive.Extension
@@ -195,9 +197,8 @@ defmodule GuardedStructTest.DeriveExtensionShadowWarningTest do
       # If the custom validator were live, `123` (an integer) would pass
       # because the custom fn always returns true. It DOESN'T pass because
       # the built-in :string clause matches first and rejects non-binaries.
-      mod = :"Elixir.UsesDeadCodeExt"
-      assert {:error, _} = apply(mod, :builder, [%{name: 123}])
-      assert {:ok, _} = apply(mod, :builder, [%{name: "real string"}])
+      assert {:error, _} = mod.builder(%{name: 123})
+      assert {:ok, _} = mod.builder(%{name: "real string"})
     end
   end
 end

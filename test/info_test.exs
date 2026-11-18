@@ -3,13 +3,20 @@ defmodule GuardedStructTest.InfoTest do
 
   alias GuardedStruct.Info
   alias GuardedStructTest.Fixtures.Info.{EverythingUser, HeadersMap}
+  alias GuardedStructTest.Fixtures.PatternMap.MultiPattern
 
   describe "GuardedStruct.Info — existing helpers" do
     test "guardedstruct/1 returns the entity list" do
-      entities = Info.guardedstruct(EverythingUser)
-      assert is_list(entities)
-      assert Enum.any?(entities, &match?(%GuardedStruct.Dsl.Field{name: :id}, &1))
-      assert Enum.any?(entities, &match?(%GuardedStruct.Dsl.SubField{name: :address}, &1))
+      assert [
+               %GuardedStruct.Dsl.Field{name: :id},
+               %GuardedStruct.Dsl.Field{name: :password},
+               %GuardedStruct.Dsl.Field{name: :nickname},
+               %GuardedStruct.Dsl.Field{name: :status},
+               %GuardedStruct.Dsl.VirtualField{name: :password_confirm},
+               %GuardedStruct.Dsl.Field{name: :metadata},
+               %GuardedStruct.Dsl.SubField{name: :address},
+               %GuardedStruct.Dsl.ConditionalField{name: :billing}
+             ] = Info.guardedstruct(EverythingUser)
     end
 
     test "fields/1 lists every entity, struct fields first then virtuals" do
@@ -35,7 +42,17 @@ defmodule GuardedStructTest.InfoTest do
     end
 
     test "fields_meta/1 + field/2 + field?/2" do
-      assert is_list(Info.fields_meta(EverythingUser))
+      assert [
+               %{name: :id, kind: :field},
+               %{name: :password, kind: :field},
+               %{name: :nickname, kind: :field},
+               %{name: :status, kind: :field},
+               %{name: :metadata, kind: :dynamic_field},
+               %{name: :address, kind: :sub_field},
+               %{name: :billing, kind: :conditional_field},
+               %{name: :password_confirm, kind: :virtual_field}
+             ] = Info.fields_meta(EverythingUser)
+
       assert %{name: :nickname, kind: :field} = Info.field(EverythingUser, :nickname)
       assert is_nil(Info.field(EverythingUser, :nope))
       assert Info.field?(EverythingUser, :address)
@@ -167,13 +184,9 @@ defmodule GuardedStructTest.InfoTest do
     end
 
     test "conditional_children/2 returns the variant list" do
-      children = Info.conditional_children(EverythingUser, :billing)
-      assert is_list(children)
-      assert length(children) == 2
-
       # Both children share the parent's name; their kinds differ
-      kinds = children |> Enum.map(& &1.kind) |> Enum.sort()
-      assert kinds == [:field, :sub_field]
+      assert [%{name: :billing, kind: :field}, %{name: :billing, kind: :sub_field}] =
+               Info.conditional_children(EverythingUser, :billing)
     end
 
     test "conditional_children/2 returns nil for non-conditional names" do
@@ -302,8 +315,7 @@ defmodule GuardedStructTest.InfoTest do
     end
 
     test "each field meta carries kind + enforce? + type + every entity option" do
-      fields = Info.describe(EverythingUser).fields
-      by_name = Map.new(fields, &{&1.name, &1})
+      by_name = described_fields(EverythingUser)
 
       id = by_name[:id]
       assert id.kind == :field
@@ -316,12 +328,15 @@ defmodule GuardedStructTest.InfoTest do
       assert nickname.enforce == false
       assert nickname.enforce? == false
       assert nickname.derive == "validate(string, max_len=20)"
-      assert is_map(nickname.__derive_ops__)
-      assert :validate in Map.keys(nickname.__derive_ops__)
+      assert nickname.__derive_ops__ == %{validate: [:string, {:max_len, 20}]}
 
       status = by_name[:status]
       assert status.default == "active"
       assert status.enforce? == false
+    end
+
+    test "virtual, dynamic, sub_field and conditional metas carry their own options" do
+      by_name = described_fields(EverythingUser)
 
       pc = by_name[:password_confirm]
       assert pc.kind == :virtual_field
@@ -339,8 +354,9 @@ defmodule GuardedStructTest.InfoTest do
 
       billing = by_name[:billing]
       assert billing.kind == :conditional_field
-      assert is_list(billing.children)
-      assert length(billing.children) == 2
+
+      assert [%{name: :billing, kind: :field}, %{name: :billing, kind: :sub_field}] =
+               billing.children
     end
 
     test "submodule dump uses :path and limited :options" do
@@ -430,8 +446,6 @@ defmodule GuardedStructTest.InfoTest do
     end
 
     test "a key matched by the first pattern of several reads that pattern's metadata" do
-      alias GuardedStructTest.Fixtures.PatternMap.MultiPattern
-
       assert %{pattern: pattern} = Info.field(MultiPattern, :shard_1)
       assert Regex.match?(pattern, "shard_1")
       assert %{pattern: backup} = Info.field(MultiPattern, :backup_2)
@@ -497,5 +511,10 @@ defmodule GuardedStructTest.InfoTest do
       assert DeepEnforce.Profile.enforce_keys() == [:address, :name]
       assert DeepEnforce.Profile.Address.enforce_keys() == [:city]
     end
+  end
+
+  # Each field meta of `Info.describe/1`, keyed by field name.
+  defp described_fields(module) do
+    Map.new(Info.describe(module).fields, &{&1.name, &1})
   end
 end

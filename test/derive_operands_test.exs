@@ -7,6 +7,8 @@ defmodule GuardedStructTest.DeriveOperandsTest do
 
   use ExUnit.Case, async: true
 
+  alias GuardedStruct.Validate
+
   defmodule TypedEqual do
     use GuardedStruct
 
@@ -258,8 +260,6 @@ defmodule GuardedStructTest.DeriveOperandsTest do
   end
 
   describe "a derives string whose groups cannot be read" do
-    alias GuardedStruct.Validate
-
     test "a group name other than sanitize and validate is named" do
       for derive <- ["validte(string)", "foo", "validate(string) foo", "sanitize"] do
         assert_raise Spark.Error.DslError, ~r/unknown group `/, fn -> compile(derive) end
@@ -326,8 +326,6 @@ defmodule GuardedStructTest.DeriveOperandsTest do
   end
 
   describe "the same operands through Validate.run/2" do
-    alias GuardedStruct.Validate
-
     test "equal=String::value" do
       assert {:ok, "admin"} = Validate.run("validate(equal=String::admin)", "admin")
 

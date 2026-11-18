@@ -1,8 +1,3 @@
-# TODO: these tests needs to re-check
-# test validate(:url, input, field) - 3393.6ms
-# test validate(:email, input, field) - 1646.2ms
-# test validate(:email, input, field) - 1646.2ms
-# test validate({:tell, country_code}, input, field) -> country_code - 49.4ms
 defmodule GuardedStructTest.GlobalTest do
   use ExUnit.Case, async: true
   alias GuardedStruct.Derive.ValidationDerive
@@ -22,9 +17,8 @@ defmodule GuardedStructTest.GlobalTest do
       end
     end
 
-    def validator(:name, value) do
-      if is_binary(value), do: {:ok, :name, value}, else: {:error, :name, "No, never"}
-    end
+    def validator(:name, value) when is_binary(value), do: {:ok, :name, value}
+    def validator(:name, _value), do: {:error, :name, "No, never"}
 
     def validator(field, value) do
       {:ok, field, value}
@@ -84,11 +78,8 @@ defmodule GuardedStructTest.GlobalTest do
       )
     end
 
-    def validator(:nickname, value) do
-      if is_binary(value),
-        do: {:ok, :nickname, value},
-        else: {:error, :nickname, "Invalid nickname"}
-    end
+    def validator(:nickname, value) when is_binary(value), do: {:ok, :nickname, value}
+    def validator(:nickname, _value), do: {:error, :nickname, "Invalid nickname"}
 
     def validator(field, value) do
       {:ok, field, value}
@@ -379,13 +370,13 @@ defmodule GuardedStructTest.GlobalTest do
        profile: %__MODULE__.TestAutoValueStruct.Profile{
          social: %__MODULE__.TestAutoValueStruct.Profile.Social{
            skype: "mishka_skype",
-           id: social_UUID,
+           id: social_uuid,
            username: "mishka"
          },
          nickname: "Mishka",
-         id: profile_UUID
+         id: profile_uuid
        },
-       user_id: user_UUID,
+       user_id: user_uuid,
        username: "mishka",
        parent_id: _parent_id
      }} =
@@ -395,15 +386,11 @@ defmodule GuardedStructTest.GlobalTest do
         profile: %{nickname: "Mishka", social: %{skype: "mishka_skype", username: "none_to_test"}}
       })
 
-    assert String.contains?(social_UUID, "test-path")
+    assert String.contains?(social_uuid, "test-path")
 
-    assert ValidationDerive.validate(:uuid, profile_UUID, :test)
-           |> is_binary()
-
-    assert ValidationDerive.validate(:uuid, user_UUID, :test)
-           |> is_binary()
-
-    assert social_UUID != profile_UUID != user_UUID
+    assert ValidationDerive.validate(:uuid, profile_uuid, :test) == profile_uuid
+    assert ValidationDerive.validate(:uuid, user_uuid, :test) == user_uuid
+    assert MapSet.size(MapSet.new([social_uuid, profile_uuid, user_uuid])) == 3
 
     {:ok,
      %__MODULE__.TestAutoValueStruct{

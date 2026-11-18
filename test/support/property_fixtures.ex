@@ -14,6 +14,7 @@ defmodule GuardedStructTest.PropertyFixtures do
   """
 
   defmodule Account do
+    @moduledoc false
     use GuardedStruct
 
     guardedstruct do
@@ -28,6 +29,7 @@ defmodule GuardedStructTest.PropertyFixtures do
   end
 
   defmodule RequiredOnly do
+    @moduledoc false
     use GuardedStruct
 
     guardedstruct do
@@ -38,6 +40,7 @@ defmodule GuardedStructTest.PropertyFixtures do
   end
 
   defmodule Deeply do
+    @moduledoc false
     use GuardedStruct
 
     guardedstruct do
@@ -66,6 +69,7 @@ defmodule GuardedStructTest.PropertyFixtures do
   end
 
   defmodule Tagged do
+    @moduledoc false
     use GuardedStruct
 
     guardedstruct do

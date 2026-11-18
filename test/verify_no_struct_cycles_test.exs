@@ -1,8 +1,8 @@
 defmodule GuardedStructTest.VerifyNoStructCyclesTest do
   use ExUnit.Case, async: true
 
-  alias GuardedStruct.Verifiers.VerifyNoStructCycles
   alias GuardedStruct.Dsl.{Field, SubField}
+  alias GuardedStruct.Verifiers.VerifyNoStructCycles
 
   defmodule InnerOK do
     use GuardedStruct

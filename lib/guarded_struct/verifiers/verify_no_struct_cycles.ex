@@ -3,7 +3,7 @@ defmodule GuardedStruct.Verifiers.VerifyNoStructCycles do
 
   use Spark.Dsl.Verifier
 
-  alias GuardedStruct.Dsl.{Field, SubField, ConditionalField}
+  alias GuardedStruct.Dsl.{ConditionalField, Field, SubField}
 
   @impl true
   def verify(dsl_state) do
@@ -40,37 +40,34 @@ defmodule GuardedStruct.Verifiers.VerifyNoStructCycles do
 
   defp walk_entity(_origin, _other, _visited), do: :ok
 
+  defp visit(origin, origin, _visited), do: raise_cycle(origin, [origin])
+
   defp visit(origin, target, visited) do
-    cond do
-      target == origin ->
-        raise_cycle(origin, [target])
+    if MapSet.member?(visited, target) or not function_exported?(target, :__fields__, 0) do
+      :ok
+    else
+      visited = MapSet.put(visited, target)
+      Enum.each(target.__fields__(), &visit_field(origin, target, &1, visited))
+    end
+  end
 
-      MapSet.member?(visited, target) ->
+  defp visit_field(origin, target, meta, visited) do
+    case field_target(meta) do
+      nil ->
         :ok
 
-      not function_exported?(target, :__fields__, 0) ->
-        :ok
+      next ->
+        if next == origin, do: raise_cycle(origin, [target, next])
+        visit_via(origin, next, visited)
+    end
+  end
 
-      true ->
-        target_fields = target.__fields__()
-
-        Enum.each(target_fields, fn meta ->
-          case {Map.get(meta, :struct), Map.get(meta, :structs)} do
-            {nil, nil} ->
-              :ok
-
-            {next, _} when is_atom(next) and not is_nil(next) ->
-              if next == origin, do: raise_cycle(origin, [target, next])
-              visit_via(origin, next, MapSet.put(visited, target))
-
-            {_, next} when is_atom(next) and next not in [nil, true, false] ->
-              if next == origin, do: raise_cycle(origin, [target, next])
-              visit_via(origin, next, MapSet.put(visited, target))
-
-            _ ->
-              :ok
-          end
-        end)
+  # The module a `struct:` or `structs:` field builds, or nil for any other field.
+  defp field_target(meta) do
+    case {Map.get(meta, :struct), Map.get(meta, :structs)} do
+      {next, _} when is_atom(next) and not is_nil(next) -> next
+      {_, next} when is_atom(next) and next not in [nil, true, false] -> next
+      _ -> nil
     end
   end
 
@@ -83,7 +80,7 @@ defmodule GuardedStruct.Verifiers.VerifyNoStructCycles do
   end
 
   defp raise_cycle(origin, chain) do
-    rendered = [origin | chain] |> Enum.map(&inspect/1) |> Enum.join(" → ")
+    rendered = Enum.map_join([origin | chain], " → ", &inspect/1)
 
     raise Spark.Error.DslError,
       message:

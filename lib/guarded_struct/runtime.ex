@@ -7,6 +7,12 @@ defmodule GuardedStruct.Runtime do
   alias GuardedStruct.Derive.Parser
   alias GuardedStruct.Derive.ValidationDerive
 
+  # A `struct:` option that names a module.
+  defguardp is_struct_module(value) when is_atom(value) and not is_nil(value)
+
+  # A `structs:` option that names a module, not the `true` or `false` flag.
+  defguardp is_structs_module(value) when is_atom(value) and value not in [nil, true, false]
+
   @doc """
   Run the validation pipeline and return `{:ok, attrs_map}` (NOT a struct).
   Used by `GuardedStruct.AshResource` — Ash resources have their own struct,
@@ -47,8 +53,7 @@ defmodule GuardedStruct.Runtime do
   end
 
   def validate(_module, _attrs, _error?) do
-    {:error,
-     [%{field: :__root__, action: :bad_parameters, message: translated_message(:builder)}]}
+    {:error, [bad_parameters_error(:__root__)]}
   end
 
   @spec build(module(), map() | struct() | tuple(), boolean()) ::
@@ -83,8 +88,7 @@ defmodule GuardedStruct.Runtime do
   end
 
   def build(_module, _attrs, _error?) do
-    {:error,
-     [%{field: :__root__, action: :bad_parameters, message: translated_message(:builder)}]}
+    {:error, [bad_parameters_error(:__root__)]}
   end
 
   defp with_telemetry(module, fun) do
@@ -163,8 +167,7 @@ defmodule GuardedStruct.Runtime do
   def build_pattern_map(module, attrs, error?)
 
   def build_pattern_map(_module, attrs, _error?) when not is_map(attrs) do
-    {:error,
-     [%{field: :__root__, action: :bad_parameters, message: translated_message(:builder)}]}
+    {:error, [bad_parameters_error(:__root__)]}
   end
 
   def build_pattern_map(module, attrs, error?) do
@@ -196,33 +199,35 @@ defmodule GuardedStruct.Runtime do
 
   defp process_pattern_entries(attrs, pattern_fields, _module) do
     {results, errors} =
-      Enum.reduce(attrs, {%{}, []}, fn {key, value}, {ok, errs} ->
-        key_str = if is_atom(key), do: Atom.to_string(key), else: to_string(key)
-
-        case Enum.find(pattern_fields, &Regex.match?(&1.pattern, key_str)) do
-          nil ->
-            {ok,
-             [
-               %{
-                 field: :__map__,
-                 key: key_str,
-                 action: :key_pattern,
-                 message: "key #{inspect(key_str)} does not match any declared pattern"
-               }
-               | errs
-             ]}
-
-          %{} = pf ->
-            case process_pattern_value(pf, value, key_str) do
-              {:ok, validated_value} -> {Map.put(ok, key_str, validated_value), errs}
-              {:error, value_errs} -> {ok, value_errs ++ errs}
-            end
-        end
+      Enum.reduce(attrs, {%{}, []}, fn {key, value}, acc ->
+        put_pattern_entry(acc, key, value, pattern_fields)
       end)
 
     case errors do
       [] -> {:ok, results}
       _ -> {:error, Enum.reverse(errors)}
+    end
+  end
+
+  defp put_pattern_entry({ok, errs}, key, value, pattern_fields) do
+    key_str = if is_atom(key), do: Atom.to_string(key), else: to_string(key)
+
+    case Enum.find(pattern_fields, &Regex.match?(&1.pattern, key_str)) do
+      nil ->
+        error = %{
+          field: :__map__,
+          key: key_str,
+          action: :key_pattern,
+          message: "key #{inspect(key_str)} does not match any declared pattern"
+        }
+
+        {ok, [error | errs]}
+
+      %{} = pf ->
+        case process_pattern_value(pf, value, key_str) do
+          {:ok, validated_value} -> {Map.put(ok, key_str, validated_value), errs}
+          {:error, value_errs} -> {ok, value_errs ++ errs}
+        end
     end
   end
 
@@ -266,23 +271,15 @@ defmodule GuardedStruct.Runtime do
 
   defp do_build_with_key(module, key, attrs, type, error?) when is_list(key) do
     case get_in(attrs, key) do
-      sub when is_map(sub) ->
-        do_build(module, sub, attrs, type, error?)
-
-      _ ->
-        {:error,
-         [%{field: :__root__, action: :bad_parameters, message: translated_message(:builder)}]}
+      sub when is_map(sub) -> do_build(module, sub, attrs, type, error?)
+      _ -> {:error, [bad_parameters_error(:__root__)]}
     end
   end
 
   defp do_build_with_key(module, key, attrs, type, error?) when is_atom(key) do
     case Map.get(attrs, key) do
-      sub when is_map(sub) ->
-        do_build(module, sub, attrs, type, error?)
-
-      _ ->
-        {:error,
-         [%{field: :__root__, action: :bad_parameters, message: translated_message(:builder)}]}
+      sub when is_map(sub) -> do_build(module, sub, attrs, type, error?)
+      _ -> {:error, [bad_parameters_error(:__root__)]}
     end
   end
 
@@ -301,106 +298,126 @@ defmodule GuardedStruct.Runtime do
     {info, fields_meta} = read_metadata(module)
     section_opts = section_options_from(info)
 
-    keys = info.keys
-    enforce_keys = info.enforce_keys
-
     # A nested build receives `full_attrs` already converted by the root build.
     full_attrs_atomized = if path == [], do: atomize(module, full_attrs), else: full_attrs
 
     with {:ok, normalized} <- normalize_keys(attrs, module),
          {:ok, attrs_after_authorized} <-
-           authorized_fields(normalized, keys, section_opts.authorized_fields),
-         :ok <- check_enforce_keys(attrs_after_authorized, enforce_keys),
-         attrs1 = apply_auto(attrs_after_authorized, fields_meta, type),
-         {:ok, _} <- check_domain(full_attrs_atomized, attrs1, fields_meta),
-         {:ok, _} <- check_on(attrs1, fields_meta, full_attrs_atomized),
-         attrs2 = apply_from(attrs1, fields_meta, full_attrs_atomized) do
-      {:ok, sub_field_data, sub_errors} =
-        build_sub_fields(attrs2, fields_meta, module, full_attrs_atomized, path)
+           authorized_fields(normalized, info.keys, section_opts.authorized_fields),
+         :ok <- check_enforce_keys(attrs_after_authorized, info.enforce_keys),
+         {:ok, prepared} <-
+           apply_core_keys(attrs_after_authorized, fields_meta, full_attrs_atomized, type) do
+      ctx = %{
+        module: module,
+        info: info,
+        fields_meta: fields_meta,
+        section_opts: section_opts,
+        full_attrs: full_attrs_atomized,
+        path: path,
+        build_struct?: build_struct?,
+        error?: error?
+      }
 
-      already_errored = Enum.map(sub_errors, & &1.field)
-      attrs_for_validation = Map.drop(attrs2, already_errored)
-
-      {validator_attrs, validator_errors} =
-        run_per_field_validators_collect(attrs_for_validation, fields_meta, module)
-
-      all_errors = sub_errors ++ validator_errors
-
-      # A field that already failed its validator or its sub_field has no value left to derive:
-      # its derives would run on the default and report a second, unrelated error
-      # (`not_nil_value` on the nil it was dropped to).
-      failed = MapSet.new(all_errors, & &1.field)
-      derivable? = &(not MapSet.member?(failed, &1.name))
-
-      virtual_names = Map.get(info, :virtual_keys, [])
-
-      # The Ash-extension entry point (`validate/3`) sets `:guarded_as_map?`
-      # on the process dict, forcing every nested build to return a map
-      # rather than a struct — regardless of the `build_struct?` arg the
-      # submodule passes in via its own `builder/1`. The map starts from the
-      # struct's defaults, the ones `struct/2` fills for `builder/1`.
-      # Short-circuit: `build_struct? = false` is the original non-struct path
-      # (`validate/3` itself), so we don't need to consult the dict in that case.
-      as_map? = build_struct? and Process.get(:guarded_as_map?, false)
-
-      wrap = fn merged ->
-        merged = Map.drop(merged, virtual_names)
-
-        cond do
-          as_map? -> module |> struct() |> Map.from_struct() |> Map.merge(merged)
-          build_struct? -> struct(module, merged)
-          true -> merged
-        end
-      end
-
-      {derive_errors, struct_value} =
-        case run_main_validator(validator_attrs, module, section_opts) do
-          {:ok, after_main} ->
-            merged = Map.merge(after_main, sub_field_data)
-
-            # Pass 1 — derive on the raw merged map for VIRTUAL fields only.
-            # Virtuals are dropped by `wrap.()`, so this is the one chance
-            # to validate them. Defaults aren't relevant here (virtuals
-            # don't get default-substituted through struct/2).
-            virtual_meta =
-              virtual_names |> Enum.map(&module.__field_meta__/1) |> Enum.filter(derivable?)
-
-            virtual_errs =
-              case run_derives(merged, virtual_meta) do
-                {:ok, _} -> []
-                {:error, errs} -> errs
-              end
-
-            # Pass 2 — wrap into struct (so struct/2 applies field defaults),
-            # then derive on the wrapped struct for NON-virtual fields.
-            sv = wrap.(merged)
-
-            non_virtual_meta =
-              fields_meta
-              |> Enum.reject(&(&1[:kind] == :virtual_field))
-              |> Enum.filter(derivable?)
-
-            case run_derives(sv, non_virtual_meta) do
-              {:ok, derived} -> {virtual_errs, derived}
-              {:error, errs} -> {virtual_errs ++ errs, sv}
-            end
-
-          {:error, errs} ->
-            {errs, wrap.(Map.merge(validator_attrs, sub_field_data))}
-        end
-
-      final_errors = derive_errors ++ all_errors
-
-      cond do
-        final_errors != [] ->
-          handle_error({:error, final_errors}, module, error?)
-
-        true ->
-          {:ok, struct_value}
-      end
+      build_prepared(prepared, ctx)
     else
       {:error, errs} when is_list(errs) ->
         handle_error({:error, errs}, module, error?)
+    end
+  end
+
+  # Fills `auto` values, checks `domain` and `on`, then copies `from` values into the attrs.
+  defp apply_core_keys(attrs, fields_meta, full_attrs, type) do
+    with_auto = apply_auto(attrs, fields_meta, type)
+
+    with {:ok, _} <- check_domain(full_attrs, with_auto, fields_meta),
+         {:ok, _} <- check_on(with_auto, fields_meta, full_attrs) do
+      {:ok, apply_from(with_auto, fields_meta, full_attrs)}
+    end
+  end
+
+  defp build_prepared(attrs, %{module: module, fields_meta: fields_meta} = ctx) do
+    {:ok, sub_field_data, sub_errors} =
+      build_sub_fields(attrs, fields_meta, module, ctx.full_attrs, ctx.path)
+
+    already_errored = Enum.map(sub_errors, & &1.field)
+    attrs_for_validation = Map.drop(attrs, already_errored)
+
+    {validator_attrs, validator_errors} =
+      run_per_field_validators_collect(attrs_for_validation, fields_meta, module)
+
+    all_errors = sub_errors ++ validator_errors
+
+    # The Ash-extension entry point (`validate/3`) sets `:guarded_as_map?`
+    # on the process dict, forcing every nested build to return a map
+    # rather than a struct, regardless of the `build_struct?` arg the
+    # submodule passes in via its own `builder/1`. The map starts from the
+    # struct's defaults, the ones `struct/2` fills for `builder/1`.
+    # `build_struct? = false` is the non-struct path (`validate/3` itself),
+    # so the dict is not read in that case.
+    wrap_ctx =
+      Map.merge(ctx, %{
+        as_map?: ctx.build_struct? and Process.get(:guarded_as_map?, false),
+        virtual_names: Map.get(ctx.info, :virtual_keys, []),
+        failed: MapSet.new(all_errors, & &1.field)
+      })
+
+    {derive_errors, struct_value} =
+      case run_main_validator(validator_attrs, module, ctx.section_opts) do
+        {:ok, after_main} ->
+          derive_merged(Map.merge(after_main, sub_field_data), wrap_ctx)
+
+        {:error, errs} ->
+          {errs, wrap_value(Map.merge(validator_attrs, sub_field_data), wrap_ctx)}
+      end
+
+    case derive_errors ++ all_errors do
+      [] -> {:ok, struct_value}
+      final_errors -> handle_error({:error, final_errors}, module, ctx.error?)
+    end
+  end
+
+  # Runs the derives in two passes and returns `{errors, value}`.
+  #
+  # Pass 1 derives the virtual fields on the raw merged map: `wrap_value/2`
+  # drops them, so this is the one chance to validate them.
+  # Pass 2 wraps the map into the struct (so `struct/2` applies field defaults),
+  # then derives the non-virtual fields on it.
+  #
+  # A field that already failed its validator or its sub_field has no value left to derive:
+  # its derives would run on the default and report a second, unrelated error
+  # (`not_nil_value` on the nil it was dropped to), so it is skipped.
+  defp derive_merged(merged, %{module: module, failed: failed} = ctx) do
+    derivable? = &(not MapSet.member?(failed, &1.name))
+
+    virtual_meta =
+      ctx.virtual_names |> Enum.map(&module.__field_meta__/1) |> Enum.filter(derivable?)
+
+    virtual_errs =
+      case run_derives(merged, virtual_meta) do
+        {:ok, _} -> []
+        {:error, errs} -> errs
+      end
+
+    wrapped = wrap_value(merged, ctx)
+
+    non_virtual_meta =
+      ctx.fields_meta
+      |> Enum.reject(&(&1[:kind] == :virtual_field))
+      |> Enum.filter(derivable?)
+
+    case run_derives(wrapped, non_virtual_meta) do
+      {:ok, derived} -> {virtual_errs, derived}
+      {:error, errs} -> {virtual_errs ++ errs, wrapped}
+    end
+  end
+
+  defp wrap_value(merged, %{module: module, virtual_names: virtual_names} = ctx) do
+    merged = Map.drop(merged, virtual_names)
+
+    cond do
+      ctx.as_map? -> module |> struct() |> Map.from_struct() |> Map.merge(merged)
+      ctx.build_struct? -> struct(module, merged)
+      true -> merged
     end
   end
 
@@ -463,8 +480,8 @@ defmodule GuardedStruct.Runtime do
     structs = Map.get(meta, :structs)
 
     cond do
-      is_atom(structs) and structs not in [nil, true, false] -> [structs]
-      is_atom(struct) and not is_nil(struct) -> [struct]
+      is_structs_module(structs) -> [structs]
+      is_struct_module(struct) -> [struct]
       kind == :sub_field -> [meta.child_module]
       true -> []
     end
@@ -473,7 +490,7 @@ defmodule GuardedStruct.Runtime do
   defp conditional_modules(%{name: name, children: children}, owner) do
     Enum.flat_map(children, fn
       %{kind: :sub_field, sub_field_index: index} ->
-        [Module.concat(owner, atom_to_module(String.to_atom("#{name}#{index}")))]
+        [sub_field_module(owner, name, index)]
 
       %{kind: :conditional_field} = inner ->
         conditional_modules(inner, owner)
@@ -523,34 +540,23 @@ defmodule GuardedStruct.Runtime do
   end
 
   defp apply_auto(attrs, fields_meta, type) do
-    Enum.reduce(fields_meta, attrs, fn meta, acc ->
-      case meta.auto do
-        nil ->
-          acc
-
-        {mod, fun} ->
-          if type == :edit and not is_nil(Map.get(acc, meta.name)) do
-            acc
-          else
-            Map.put(acc, meta.name, apply(mod, fun, []))
-          end
-
-        {mod, fun, arg} when is_list(arg) ->
-          if type == :edit and not is_nil(Map.get(acc, meta.name)) do
-            acc
-          else
-            Map.put(acc, meta.name, apply(mod, fun, arg))
-          end
-
-        {mod, fun, arg} ->
-          if type == :edit and not is_nil(Map.get(acc, meta.name)) do
-            acc
-          else
-            Map.put(acc, meta.name, apply(mod, fun, [arg]))
-          end
-      end
-    end)
+    Enum.reduce(fields_meta, attrs, &put_auto(&2, &1, type))
   end
+
+  # An `:edit` build keeps a value the caller already sent; otherwise the `auto` MFA fills it.
+  defp put_auto(attrs, %{auto: nil}, _type), do: attrs
+
+  defp put_auto(attrs, %{auto: auto, name: name}, type) do
+    if type == :edit and not is_nil(Map.get(attrs, name)) do
+      attrs
+    else
+      Map.put(attrs, name, call_auto(auto))
+    end
+  end
+
+  defp call_auto({mod, fun}), do: apply(mod, fun, [])
+  defp call_auto({mod, fun, args}) when is_list(args), do: apply(mod, fun, args)
+  defp call_auto({mod, fun, arg}), do: apply(mod, fun, [arg])
 
   defp check_on(attrs, fields_meta, full_attrs) do
     errors =
@@ -680,6 +686,8 @@ defmodule GuardedStruct.Runtime do
     end
   end
 
+  # The domain path comes from the developer's DSL, not from user input.
+  # sobelow_skip ["DOS.StringToAtom"]
   defp get_domain_field(field, attrs) do
     field
     |> String.trim()
@@ -689,70 +697,35 @@ defmodule GuardedStruct.Runtime do
   end
 
   defp build_sub_fields(attrs, fields_meta, parent_module, full_attrs, parent_path) do
-    by_name =
-      Enum.reduce(fields_meta, %{}, fn f, acc ->
-        Map.update(acc, f.name, [f], &(&1 ++ [f]))
-      end)
+    first_by_name = Enum.reduce(fields_meta, %{}, &Map.put_new(&2, &1.name, &1))
 
     embedded =
       attrs
       |> Map.keys()
-      |> Enum.flat_map(fn k ->
-        case Map.get(by_name, k) do
-          nil ->
-            []
+      |> Enum.flat_map(&embedded_meta(first_by_name, &1))
 
-          [first | _] ->
-            embedded? =
-              first.kind in [:sub_field, :conditional_field] or
-                not is_nil(Map.get(first, :struct)) or
-                (not is_nil(Map.get(first, :structs)) and Map.get(first, :structs) != false)
-
-            if embedded?, do: [first], else: []
-        end
-      end)
-
-    Enum.reduce(embedded, {:ok, %{}, []}, fn meta, {:ok, ok_acc, err_acc} ->
-      case Map.get(attrs, meta.name) do
-        nil ->
-          {:ok, ok_acc, err_acc}
-
-        value ->
-          case run_pre_validator(meta, value, parent_module) do
-            {:ok, validated} ->
-              if meta.kind == :conditional_field do
-                dispatch(
-                  meta,
-                  validated,
-                  parent_module,
-                  ok_acc,
-                  err_acc,
-                  full_attrs,
-                  parent_path
-                )
-              else
-                case pre_derive(meta, validated) do
-                  {:ok, sanitized} ->
-                    dispatch(
-                      meta,
-                      sanitized,
-                      parent_module,
-                      ok_acc,
-                      err_acc,
-                      full_attrs,
-                      parent_path
-                    )
-
-                  {:error, errs} ->
-                    {:ok, ok_acc, err_acc ++ [%{field: meta.name, errors: errs}]}
-                end
-              end
-
-            {:error, err} ->
-              {:ok, ok_acc, err_acc ++ [%{field: meta.name, errors: err}]}
-          end
-      end
+    Enum.reduce(embedded, {:ok, %{}, []}, fn meta, acc ->
+      value = Map.get(attrs, meta.name)
+      build_sub_field(meta, value, acc, parent_module, full_attrs, parent_path)
     end)
+  end
+
+  defp embedded_meta(first_by_name, key) do
+    case Map.get(first_by_name, key) do
+      nil -> []
+      meta -> if meta.kind == :conditional_field or embedded?(meta), do: [meta], else: []
+    end
+  end
+
+  defp build_sub_field(_meta, nil, acc, _parent_module, _full_attrs, _parent_path), do: acc
+
+  defp build_sub_field(meta, value, {:ok, ok_acc, err_acc}, parent_module, full_attrs, path) do
+    with {:ok, validated} <- run_pre_validator(meta, value, parent_module),
+         {:ok, prepared} <- pre_derive(meta, validated) do
+      dispatch(meta, prepared, parent_module, ok_acc, err_acc, full_attrs, path)
+    else
+      {:error, errs} -> {:ok, ok_acc, err_acc ++ [%{field: meta.name, errors: errs}]}
+    end
   end
 
   defp run_pre_validator(%{validator: {mod, fun}, name: name}, value, _parent)
@@ -760,13 +733,11 @@ defmodule GuardedStruct.Runtime do
     apply_validator(mod, fun, name, value)
   end
 
-  defp run_pre_validator(%{struct: m} = meta, value, _parent)
-       when is_atom(m) and not is_nil(m) do
+  defp run_pre_validator(%{struct: m} = meta, value, _parent) when is_struct_module(m) do
     apply_caller_validator(m, meta.name, value)
   end
 
-  defp run_pre_validator(%{structs: m} = meta, value, _parent)
-       when is_atom(m) and m not in [nil, true, false] do
+  defp run_pre_validator(%{structs: m} = meta, value, _parent) when is_structs_module(m) do
     apply_caller_validator(m, meta.name, value)
   end
 
@@ -798,8 +769,15 @@ defmodule GuardedStruct.Runtime do
     end
   end
 
-  defp pre_derive(%{__derive_ops__: ops, name: name}, value)
-       when not is_nil(ops) do
+  # A conditional field runs its derive per branch, in `dispatch_conditional/7`.
+  defp pre_derive(%{kind: :conditional_field}, value), do: {:ok, value}
+
+  defp pre_derive(%{__derive_ops__: ops, name: name}, value) when not is_nil(ops),
+    do: derive_value(name, ops, value)
+
+  defp pre_derive(_meta, value), do: {:ok, value}
+
+  defp derive_value(name, ops, value) do
     input = %{field: name, derive_ops: ops}
 
     case Derive.derive({:ok, %{name => value}, [input]}) do
@@ -808,28 +786,54 @@ defmodule GuardedStruct.Runtime do
     end
   end
 
-  defp pre_derive(_meta, value), do: {:ok, value}
-
   defp dispatch(meta, value, parent_module, ok_acc, err_acc, full_attrs, parent_path) do
-    cond do
-      meta.kind == :conditional_field ->
+    case dispatch_target(meta, value) do
+      :conditional ->
         dispatch_conditional(meta, value, parent_module, ok_acc, err_acc, full_attrs, parent_path)
 
-      is_atom(meta.structs) and meta.structs not in [nil, true, false] and is_list(value) ->
-        build_list(meta.structs, meta.name, value, ok_acc, err_acc, full_attrs, parent_path)
+      {:list, module} ->
+        build_list(module, meta.name, value, ok_acc, err_acc, full_attrs, parent_path)
 
-      is_atom(meta.struct) and not is_nil(meta.struct) and is_map(value) ->
-        build_single(meta.struct, meta.name, value, ok_acc, err_acc, full_attrs, parent_path)
+      {:single, module} ->
+        build_single(module, meta.name, value, ok_acc, err_acc, full_attrs, parent_path)
 
-      meta.kind == :sub_field and Map.get(meta, :list?) == true and is_list(value) ->
-        build_list(meta.child_module, meta.name, value, ok_acc, err_acc, full_attrs, parent_path)
+      :shape_error ->
+        {:ok, ok_acc, err_acc ++ shape_error(meta)}
+    end
+  end
 
-      meta.kind == :sub_field and is_map(value) ->
-        meta.child_module
-        |> build_single(meta.name, value, ok_acc, err_acc, full_attrs, parent_path)
+  # Which module builds the value, and whether it builds a list or one struct.
+  defp dispatch_target(%{kind: :conditional_field}, _value), do: :conditional
+
+  defp dispatch_target(%{structs: structs}, value)
+       when is_structs_module(structs) and is_list(value),
+       do: {:list, structs}
+
+  defp dispatch_target(%{struct: struct}, value) when is_struct_module(struct) and is_map(value),
+    do: {:single, struct}
+
+  defp dispatch_target(%{kind: :sub_field, list?: true} = meta, value) when is_list(value),
+    do: {:list, meta.child_module}
+
+  defp dispatch_target(%{kind: :sub_field, list?: true}, _value), do: :shape_error
+
+  defp dispatch_target(%{kind: :sub_field} = meta, value) when is_map(value),
+    do: {:single, meta.child_module}
+
+  defp dispatch_target(_meta, _value), do: :shape_error
+
+  # A `struct:`, `structs:` or `sub_field` value of the wrong shape is refused, instead of being
+  # kept in the struct unbuilt: a list where a list is built, a map where one struct is built.
+  defp shape_error(meta) do
+    cond do
+      Map.get(meta, :list?) == true or is_structs_module(meta.structs) ->
+        [%{field: meta.name, action: :type, message: translated_message(:list_builder_type)}]
+
+      meta.kind == :sub_field or is_struct_module(meta.struct) ->
+        [bad_parameters_error(meta.name)]
 
       true ->
-        {:ok, ok_acc, err_acc}
+        []
     end
   end
 
@@ -879,12 +883,7 @@ defmodule GuardedStruct.Runtime do
           {:ok, Map.put(ok_acc, meta.name, built), err_acc}
 
         {:error, child_errors} ->
-          final_errors =
-            if Map.get(meta, :priority) == true and child_errors != [] do
-              [List.first(child_errors)]
-            else
-              child_errors
-            end
+          final_errors = priority_errors(meta, child_errors)
 
           {:ok, ok_acc,
            err_acc ++
@@ -893,19 +892,21 @@ defmodule GuardedStruct.Runtime do
     end
   end
 
+  # A `priority: true` conditional field reports only the first failed branch.
+  defp priority_errors(%{priority: true}, [first | _]), do: [first]
+  defp priority_errors(_meta, errors), do: errors
+
   defp try_conditional_children(value, children, parent_meta, parent_module, full_attrs, path) do
     Enum.reduce_while(children, {:error, []}, fn child, {:error, errs} ->
       case try_conditional_child(child, value, parent_meta, parent_module, full_attrs, path) do
-        {:ok, _} = ok ->
-          {:halt, ok}
-
-        {:error, e} ->
-          hinted = hint_error(e, child)
-          new_errs = if is_list(hinted), do: errs ++ hinted, else: errs ++ [hinted]
-          {:cont, {:error, new_errs}}
+        {:ok, _} = ok -> {:halt, ok}
+        {:error, e} -> {:cont, {:error, append_errors(errs, hint_error(e, child))}}
       end
     end)
   end
+
+  defp append_errors(errs, new_errs) when is_list(new_errs), do: errs ++ new_errs
+  defp append_errors(errs, new_err), do: errs ++ [new_err]
 
   defp hint_error(err, %{hint: nil}), do: err
 
@@ -918,59 +919,8 @@ defmodule GuardedStruct.Runtime do
   defp hint_error(err, _), do: err
 
   defp try_conditional_child(%{kind: :field} = child, value, _parent, _module, _full, _path) do
-    case run_child_validator(child, value) do
-      {:ok, validated} ->
-        cond do
-          is_atom(Map.get(child, :struct)) and not is_nil(Map.get(child, :struct)) ->
-            if is_map(validated) do
-              child.struct.builder(validated)
-            else
-              {:error,
-               [
-                 %{
-                   field: Map.get(child, :name, :__root__),
-                   action: :bad_parameters,
-                   message: translated_message(:builder)
-                 }
-               ]}
-            end
-
-          is_atom(Map.get(child, :structs)) and
-              Map.get(child, :structs) not in [nil, true, false] ->
-            if is_list(validated) do
-              mod = child.structs
-
-              built =
-                Enum.flat_map(validated, fn
-                  item when is_list(item) ->
-                    Enum.map(item, fn v -> mod.builder(v) end)
-
-                  item ->
-                    [mod.builder(item)]
-                end)
-
-              case Enum.find(built, &(elem(&1, 0) == :error)) do
-                nil -> {:ok, Enum.map(built, &elem(&1, 1))}
-                {:error, errs} -> {:error, errs}
-              end
-            else
-              {:error,
-               %{
-                 message: translated_message(:list_builder_type),
-                 field: child.name,
-                 action: :type
-               }}
-            end
-
-          true ->
-            case run_child_derive(child, validated) do
-              {:ok, sanitized} -> {:ok, sanitized}
-              {:error, errs} -> {:error, errs}
-            end
-        end
-
-      {:error, err} ->
-        {:error, err}
+    with {:ok, validated} <- run_child_validator(child, value) do
+      build_conditional_field(child, validated)
     end
   end
 
@@ -984,61 +934,14 @@ defmodule GuardedStruct.Runtime do
        ) do
     with {:ok, validated} <- run_child_validator(child, value),
          {:ok, sanitized} <- run_child_derive(child, validated) do
-      sub_index = Map.get(child, :sub_field_index)
-
-      submodule_name =
-        if sub_index do
-          "#{parent.name}#{sub_index}" |> String.to_atom() |> atom_to_module()
-        else
-          atom_to_module(name)
+      submodule =
+        case Map.get(child, :sub_field_index) do
+          index when index in [nil, false] -> sub_field_module(parent_module, name)
+          index -> sub_field_module(parent_module, parent.name, index)
         end
 
-      submodule = Module.concat(parent_module, submodule_name)
       nested_input_for = fn v -> {:__nested__, v, full_attrs, path, :add} end
-
-      cond do
-        Map.get(child, :list?) == true and is_list(sanitized) ->
-          built =
-            Enum.flat_map(sanitized, fn
-              item when is_map(item) ->
-                [submodule.builder(nested_input_for.(item))]
-
-              item when is_list(item) ->
-                Enum.map(item, fn v -> submodule.builder(nested_input_for.(v)) end)
-
-              _ ->
-                [
-                  {:error,
-                   [
-                     %{
-                       field: Map.get(child, :name, :__root__),
-                       action: :bad_parameters,
-                       message: translated_message(:builder)
-                     }
-                   ]}
-                ]
-            end)
-
-          case Enum.find(built, &(elem(&1, 0) == :error)) do
-            nil -> {:ok, Enum.map(built, &elem(&1, 1))}
-            {:error, errs} -> {:error, errs}
-          end
-
-        Map.get(child, :list?) == true ->
-          {:error,
-           %{
-             message: translated_message(:list_builder_type),
-             field: name,
-             action: :type
-           }}
-
-        is_map(sanitized) ->
-          submodule.builder(nested_input_for.(sanitized))
-
-        true ->
-          {:error,
-           [%{field: :__root__, action: :bad_parameters, message: translated_message(:builder)}]}
-      end
+      build_conditional_sub_field(child, sanitized, submodule, nested_input_for)
     end
   end
 
@@ -1050,74 +953,116 @@ defmodule GuardedStruct.Runtime do
          full_attrs,
          path
        ) do
-    children = child.children
-    is_list_cond = Map.get(child, :structs) == true or Map.get(child, :list?) == true
+    list? = Map.get(child, :structs) == true or Map.get(child, :list?) == true
+    try_nested_conditional(list?, child, value, parent_module, full_attrs, path)
+  end
 
-    cond do
-      is_list_cond and is_list(value) ->
-        results =
-          Enum.map(value, fn item ->
-            try_conditional_children(item, children, child, parent_module, full_attrs, path)
-          end)
+  defp build_conditional_field(%{struct: struct}, validated)
+       when is_struct_module(struct) and is_map(validated),
+       do: struct.builder(validated)
 
-        case Enum.split_with(results, &match?({:ok, _}, &1)) do
-          {oks, []} ->
-            {:ok, Enum.map(oks, fn {:ok, v} -> v end)}
+  defp build_conditional_field(%{struct: struct} = child, _validated)
+       when is_struct_module(struct),
+       do: {:error, [bad_parameters_error(Map.get(child, :name, :__root__))]}
 
-          {_oks, errs} ->
-            collected =
-              errs
-              |> Enum.flat_map(fn {:error, e} -> e end)
-              |> Enum.uniq()
+  defp build_conditional_field(%{structs: structs}, validated)
+       when is_structs_module(structs) and is_list(validated) do
+    validated
+    |> Enum.flat_map(fn
+      item when is_list(item) -> Enum.map(item, &structs.builder/1)
+      item -> [structs.builder(item)]
+    end)
+    |> collect_built()
+  end
 
-            {:error, %{field: child.name, errors: collected, action: :conditionals}}
-        end
+  defp build_conditional_field(%{structs: structs} = child, _validated)
+       when is_structs_module(structs),
+       do:
+         {:error,
+          %{message: translated_message(:list_builder_type), field: child.name, action: :type}}
 
-      is_list_cond ->
-        {:error,
-         %{
-           field: child.name,
-           message: translated_message(:list_builder_type),
-           action: :type
-         }}
+  defp build_conditional_field(child, validated), do: run_child_derive(child, validated)
 
-      true ->
-        case try_conditional_children(value, children, child, parent_module, full_attrs, path) do
-          {:ok, _} = ok -> ok
-          {:error, errs} -> {:error, %{field: child.name, errors: errs, action: :conditionals}}
-        end
+  defp build_conditional_sub_field(%{list?: true} = child, sanitized, submodule, input_for)
+       when is_list(sanitized) do
+    sanitized
+    |> Enum.flat_map(&build_conditional_item(&1, child, submodule, input_for))
+    |> collect_built()
+  end
+
+  defp build_conditional_sub_field(
+         %{list?: true, name: name},
+         _sanitized,
+         _submodule,
+         _input_for
+       ),
+       do:
+         {:error, %{message: translated_message(:list_builder_type), field: name, action: :type}}
+
+  defp build_conditional_sub_field(_child, sanitized, submodule, input_for)
+       when is_map(sanitized),
+       do: submodule.builder(input_for.(sanitized))
+
+  defp build_conditional_sub_field(_child, _sanitized, _submodule, _input_for),
+    do: {:error, [bad_parameters_error(:__root__)]}
+
+  defp build_conditional_item(item, _child, submodule, input_for) when is_map(item),
+    do: [submodule.builder(input_for.(item))]
+
+  defp build_conditional_item(item, _child, submodule, input_for) when is_list(item),
+    do: Enum.map(item, &submodule.builder(input_for.(&1)))
+
+  defp build_conditional_item(_item, child, _submodule, _input_for),
+    do: [{:error, [bad_parameters_error(Map.get(child, :name, :__root__))]}]
+
+  defp try_nested_conditional(true, child, value, parent_module, full_attrs, path)
+       when is_list(value) do
+    results =
+      Enum.map(value, fn item ->
+        try_conditional_children(item, child.children, child, parent_module, full_attrs, path)
+      end)
+
+    case Enum.split_with(results, &match?({:ok, _}, &1)) do
+      {oks, []} ->
+        {:ok, Enum.map(oks, fn {:ok, v} -> v end)}
+
+      {_oks, errs} ->
+        collected =
+          errs
+          |> Enum.flat_map(fn {:error, e} -> e end)
+          |> Enum.uniq()
+
+        {:error, %{field: child.name, errors: collected, action: :conditionals}}
+    end
+  end
+
+  defp try_nested_conditional(true, child, _value, _parent_module, _full_attrs, _path) do
+    {:error, %{field: child.name, message: translated_message(:list_builder_type), action: :type}}
+  end
+
+  defp try_nested_conditional(false, child, value, parent_module, full_attrs, path) do
+    case try_conditional_children(value, child.children, child, parent_module, full_attrs, path) do
+      {:ok, _} = ok -> ok
+      {:error, errs} -> {:error, %{field: child.name, errors: errs, action: :conditionals}}
     end
   end
 
   defp run_child_derive(%{derive: nil}, value), do: {:ok, value}
 
   defp run_child_derive(%{name: name} = child, value) do
-    ops = Map.get(child, :__derive_ops__)
-    str = Map.get(child, :derive)
-
-    cond do
-      is_nil(ops) and is_nil(str) ->
-        {:ok, value}
-
-      true ->
-        input = %{field: name, derive_ops: ops}
-
-        case Derive.derive({:ok, %{name => value}, [input]}) do
-          {:ok, %{^name => sanitized}} -> {:ok, sanitized}
-          {:error, errs} -> {:error, errs}
-        end
-    end
+    if has_derive?(child),
+      do: derive_value(name, Map.get(child, :__derive_ops__), value),
+      else: {:ok, value}
   end
 
   defp run_child_derive(_child, value), do: {:ok, value}
 
+  defp has_derive?(meta),
+    do: not (is_nil(Map.get(meta, :__derive_ops__)) and is_nil(Map.get(meta, :derive)))
+
   defp run_child_validator(%{validator: {mod, fun}, name: name}, value)
-       when is_atom(mod) and is_atom(fun) do
-    case apply(mod, fun, [name, value]) do
-      {:ok, _key, new_value} -> {:ok, new_value}
-      {:error, key, message} -> {:error, %{field: key, message: message, action: :validator}}
-    end
-  end
+       when is_atom(mod) and is_atom(fun),
+       do: apply_validator(mod, fun, name, value)
 
   defp run_child_validator(_child, value), do: {:ok, value}
 
@@ -1128,21 +1073,12 @@ defmodule GuardedStruct.Runtime do
         {:error, errors}, {oks, errs} -> {oks, errs ++ errors}
       end)
 
-    deduped = Enum.uniq(errs)
-
-    final_errs =
-      if Map.get(meta, :priority) == true and deduped != [] do
-        [List.first(deduped)]
-      else
-        deduped
-      end
-
-    cond do
-      final_errs != [] ->
-        {:ok, ok_acc, err_acc ++ [%{field: meta.name, errors: final_errs, action: :conditionals}]}
-
-      true ->
+    case priority_errors(meta, Enum.uniq(errs)) do
+      [] ->
         {:ok, Map.put(ok_acc, meta.name, oks), err_acc}
+
+      final_errs ->
+        {:ok, ok_acc, err_acc ++ [%{field: meta.name, errors: final_errs, action: :conditionals}]}
     end
   end
 
@@ -1169,12 +1105,17 @@ defmodule GuardedStruct.Runtime do
         end)
       end)
 
-    case Enum.find(built, &(elem(&1, 0) == :error)) do
-      nil ->
-        {:ok, Map.put(ok_acc, field_name, Enum.map(built, &elem(&1, 1))), err_acc}
+    case collect_built(built) do
+      {:ok, values} -> {:ok, Map.put(ok_acc, field_name, values), err_acc}
+      {:error, errs} -> {:ok, ok_acc, err_acc ++ [%{field: field_name, errors: errs}]}
+    end
+  end
 
-      {:error, errs} ->
-        {:ok, ok_acc, err_acc ++ [%{field: field_name, errors: errs}]}
+  # Returns every built value, or the errors of the first item that failed.
+  defp collect_built(built) do
+    case Enum.find(built, &(elem(&1, 0) == :error)) do
+      nil -> {:ok, Enum.map(built, &elem(&1, 1))}
+      {:error, errs} -> {:error, errs}
     end
   end
 
@@ -1209,23 +1150,24 @@ defmodule GuardedStruct.Runtime do
   end
 
   defp run_per_field_validators_collect(attrs, _fields_meta, module) do
-    Enum.reduce(attrs, {%{}, []}, fn {key, value}, {ok_acc, err_acc} ->
-      meta = module.__field_meta__(key)
-
-      cond do
-        embedded?(meta) ->
-          {Map.put(ok_acc, key, value), err_acc}
-
-        true ->
-          case run_field_validator(meta, key, value, module) do
-            {:ok, new_value} ->
-              {Map.put(ok_acc, key, new_value), err_acc}
-
-            {:error, message} ->
-              {ok_acc, err_acc ++ [%{field: key, message: message, action: :validator}]}
-          end
-      end
+    Enum.reduce(attrs, {%{}, []}, fn {key, value}, acc ->
+      collect_field_validator(acc, module.__field_meta__(key), key, value, module)
     end)
+  end
+
+  # Embedded values were already validated by `build_sub_fields/5`, so they pass through.
+  defp collect_field_validator({ok_acc, err_acc}, meta, key, value, module) do
+    if embedded?(meta) do
+      {Map.put(ok_acc, key, value), err_acc}
+    else
+      case run_field_validator(meta, key, value, module) do
+        {:ok, new_value} ->
+          {Map.put(ok_acc, key, new_value), err_acc}
+
+        {:error, message} ->
+          {ok_acc, err_acc ++ [%{field: key, message: message, action: :validator}]}
+      end
+    end
   end
 
   defp embedded?(nil), do: false
@@ -1280,15 +1222,9 @@ defmodule GuardedStruct.Runtime do
 
   defp run_derives(value, fields_meta) do
     derive_inputs =
-      Enum.flat_map(fields_meta, fn f ->
-        ops = Map.get(f, :__derive_ops__)
-        str = Map.get(f, :derive)
-
-        cond do
-          is_nil(ops) and is_nil(str) -> []
-          true -> [%{field: f.name, derive_ops: ops}]
-        end
-      end)
+      for f <- fields_meta, has_derive?(f) do
+        %{field: f.name, derive_ops: Map.get(f, :__derive_ops__)}
+      end
 
     if derive_inputs == [] do
       {:ok, value}
@@ -1336,7 +1272,13 @@ defmodule GuardedStruct.Runtime do
     end)
   end
 
-  defp atom_to_module(field_atom) do
-    field_atom |> Atom.to_string() |> Macro.camelize() |> String.to_atom()
-  end
+  defp bad_parameters_error(field),
+    do: %{field: field, action: :bad_parameters, message: translated_message(:builder)}
+
+  # The module generated for a sub_field: the owner module plus the camelized field name.
+  # The sub_field index tells apart the sub_fields of one conditional field.
+  # Module and field names come from the developer's DSL, not from user input.
+  # sobelow_skip ["DOS.ModuleConcat"]
+  defp sub_field_module(owner, name, index \\ nil),
+    do: Module.concat(owner, Macro.camelize("#{name}#{index}"))
 end

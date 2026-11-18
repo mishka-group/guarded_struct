@@ -158,7 +158,6 @@ defmodule GuardedStruct.AshResource do
     transformers: [
       GuardedStruct.Transformers.ParseDerive,
       GuardedStruct.Transformers.ParseCoreKeys,
-      GuardedStruct.Transformers.ParseDomain,
       GuardedStruct.Transformers.GenerateAshValidator,
       GuardedStruct.Transformers.GenerateSubFieldModules,
       GuardedStruct.Transformers.AutoWireAshChange

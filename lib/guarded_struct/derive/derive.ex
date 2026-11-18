@@ -64,21 +64,20 @@ defmodule GuardedStruct.Derive do
 
     flat_errors = Enum.flat_map(errors, fn {:error, e} -> e end)
 
-    value_to_store =
-      cond do
-        list_data? and flat_errors != [] -> {:error, flat_errors}
-        list_data? -> ok_values
-        ok_values != [] -> List.first(ok_values)
-        true -> {:error, flat_errors}
-      end
-
-    Map.put(acc, input.field, value_to_store)
+    Map.put(acc, input.field, value_to_store(list_data?, ok_values, flat_errors))
   end
 
   defp update(field_value, ops, hint, input, acc) do
     ops = if ops == [], do: nil, else: ops
     Map.put(acc, input.field, run_one(ops, input.field, field_value, hint))
   end
+
+  # A list value with one op per element keeps every element; otherwise the
+  # field keeps the first value that passed.
+  defp value_to_store(true, _ok_values, [_ | _] = errors), do: {:error, errors}
+  defp value_to_store(true, ok_values, []), do: ok_values
+  defp value_to_store(false, [first | _], _errors), do: first
+  defp value_to_store(false, [], errors), do: {:error, errors}
 
   defp run_one(ops, field, value, hint) do
     {processed, errors} =
@@ -128,7 +127,7 @@ defmodule GuardedStruct.Derive do
   end
 
   @doc """
-  The modules that serve the ops no built-in clause or derive extension handles:
+  Lists where an op goes when no built-in clause or derive extension handles it:
   the `validate_derive` / `sanitize_derive` section option of the module being
   built first, then the application config of the same name.
   """

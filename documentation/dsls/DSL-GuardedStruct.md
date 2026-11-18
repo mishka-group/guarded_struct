@@ -91,6 +91,7 @@ field name, type
 | [`structs`](#guardedstruct-field-structs){: #guardedstruct-field-structs } | `atom \| boolean` |  |  |
 | [`hint`](#guardedstruct-field-hint){: #guardedstruct-field-hint } | `String.t` |  |  |
 | [`priority`](#guardedstruct-field-priority){: #guardedstruct-field-priority } | `boolean` |  |  |
+| [`doc`](#guardedstruct-field-doc){: #guardedstruct-field-doc } | `String.t \| false` |  | What the field holds, in Markdown. It is the field's row text in the table of the module's `t()` type docs. `false` leaves the field out of that table. |
 
 
 
@@ -129,6 +130,7 @@ virtual_field name, type
 | [`on`](#guardedstruct-virtual_field-on){: #guardedstruct-virtual_field-on } | `String.t` |  |  |
 | [`domain`](#guardedstruct-virtual_field-domain){: #guardedstruct-virtual_field-domain } | `String.t` |  |  |
 | [`hint`](#guardedstruct-virtual_field-hint){: #guardedstruct-virtual_field-hint } | `String.t` |  |  |
+| [`doc`](#guardedstruct-virtual_field-doc){: #guardedstruct-virtual_field-doc } | `String.t \| false` |  | What the field holds, in Markdown. It is the field's row text in the table of the module's `t()` type docs. `false` leaves the field out of that table. |
 
 
 
@@ -167,6 +169,7 @@ dynamic_field name
 | [`on`](#guardedstruct-dynamic_field-on){: #guardedstruct-dynamic_field-on } | `String.t` |  |  |
 | [`domain`](#guardedstruct-dynamic_field-domain){: #guardedstruct-dynamic_field-domain } | `String.t` |  |  |
 | [`hint`](#guardedstruct-dynamic_field-hint){: #guardedstruct-dynamic_field-hint } | `String.t` |  |  |
+| [`doc`](#guardedstruct-dynamic_field-doc){: #guardedstruct-dynamic_field-doc } | `String.t \| false` |  | What the field holds, in Markdown. It is the field's row text in the table of the module's `t()` type docs. `false` leaves the field out of that table. |
 
 
 
@@ -219,6 +222,7 @@ sub_field name, type
 | [`error`](#guardedstruct-sub_field-error){: #guardedstruct-sub_field-error } | `boolean` |  |  |
 | [`authorized_fields`](#guardedstruct-sub_field-authorized_fields){: #guardedstruct-sub_field-authorized_fields } | `boolean` |  |  |
 | [`main_validator`](#guardedstruct-sub_field-main_validator){: #guardedstruct-sub_field-main_validator } | `{atom, atom}` |  | A `{Module, :function}` called with the sub_field's validated attributes, like the section option. A `main_validator/1` defined in the parent module does not run for a sub_field. |
+| [`doc`](#guardedstruct-sub_field-doc){: #guardedstruct-sub_field-doc } | `String.t \| false` |  | The `@moduledoc` of the module this sub_field generates, so the module has its own page in the docs, and the field's row text in the parent's `t()` table. `false` hides the module from the docs (`@moduledoc false`). When it is not set, the module has no `@moduledoc`. A sub_field without a `do` block uses your own module of that name, and `doc:` is only the row text. |
 
 
 ### guardedstruct.sub_field.conditional_field
@@ -260,6 +264,7 @@ conditional_field name, type
 | [`structs`](#guardedstruct-sub_field-conditional_field-structs){: #guardedstruct-sub_field-conditional_field-structs } | `atom \| boolean` |  |  |
 | [`hint`](#guardedstruct-sub_field-conditional_field-hint){: #guardedstruct-sub_field-conditional_field-hint } | `String.t` |  |  |
 | [`priority`](#guardedstruct-sub_field-conditional_field-priority){: #guardedstruct-sub_field-conditional_field-priority } | `boolean` |  |  |
+| [`doc`](#guardedstruct-sub_field-conditional_field-doc){: #guardedstruct-sub_field-conditional_field-doc } | `String.t \| false` |  | What the field holds, in Markdown. It is the field's row text in the table of the module's `t()` type docs. `false` leaves the field out of that table. |
 
 
 ### guardedstruct.sub_field.conditional_field.field
@@ -297,6 +302,7 @@ field name, type
 | [`structs`](#guardedstruct-sub_field-conditional_field-field-structs){: #guardedstruct-sub_field-conditional_field-field-structs } | `atom \| boolean` |  |  |
 | [`hint`](#guardedstruct-sub_field-conditional_field-field-hint){: #guardedstruct-sub_field-conditional_field-field-hint } | `String.t` |  |  |
 | [`priority`](#guardedstruct-sub_field-conditional_field-field-priority){: #guardedstruct-sub_field-conditional_field-field-priority } | `boolean` |  |  |
+| [`doc`](#guardedstruct-sub_field-conditional_field-field-doc){: #guardedstruct-sub_field-conditional_field-field-doc } | `String.t \| false` |  | What the field holds, in Markdown. It is the field's row text in the table of the module's `t()` type docs. `false` leaves the field out of that table. |
 
 
 
@@ -343,6 +349,7 @@ sub_field name, type
 | [`error`](#guardedstruct-sub_field-conditional_field-sub_field-error){: #guardedstruct-sub_field-conditional_field-sub_field-error } | `boolean` |  |  |
 | [`authorized_fields`](#guardedstruct-sub_field-conditional_field-sub_field-authorized_fields){: #guardedstruct-sub_field-conditional_field-sub_field-authorized_fields } | `boolean` |  |  |
 | [`main_validator`](#guardedstruct-sub_field-conditional_field-sub_field-main_validator){: #guardedstruct-sub_field-conditional_field-sub_field-main_validator } | `{atom, atom}` |  | A `{Module, :function}` called with the sub_field's validated attributes, like the section option. A `main_validator/1` defined in the parent module does not run for a sub_field. |
+| [`doc`](#guardedstruct-sub_field-conditional_field-sub_field-doc){: #guardedstruct-sub_field-conditional_field-sub_field-doc } | `String.t \| false` |  | The `@moduledoc` of the module this sub_field generates, so the module has its own page in the docs, and the field's row text in the parent's `t()` table. `false` hides the module from the docs (`@moduledoc false`). When it is not set, the module has no `@moduledoc`. A sub_field without a `do` block uses your own module of that name, and `doc:` is only the row text. |
 
 
 ### guardedstruct.sub_field.conditional_field.sub_field.field
@@ -380,6 +387,7 @@ field name, type
 | [`structs`](#guardedstruct-sub_field-conditional_field-sub_field-field-structs){: #guardedstruct-sub_field-conditional_field-sub_field-field-structs } | `atom \| boolean` |  |  |
 | [`hint`](#guardedstruct-sub_field-conditional_field-sub_field-field-hint){: #guardedstruct-sub_field-conditional_field-sub_field-field-hint } | `String.t` |  |  |
 | [`priority`](#guardedstruct-sub_field-conditional_field-sub_field-field-priority){: #guardedstruct-sub_field-conditional_field-sub_field-field-priority } | `boolean` |  |  |
+| [`doc`](#guardedstruct-sub_field-conditional_field-sub_field-field-doc){: #guardedstruct-sub_field-conditional_field-sub_field-field-doc } | `String.t \| false` |  | What the field holds, in Markdown. It is the field's row text in the table of the module's `t()` type docs. `false` leaves the field out of that table. |
 
 
 
@@ -434,6 +442,7 @@ sub_field name, type
 | [`error`](#guardedstruct-sub_field-sub_field-error){: #guardedstruct-sub_field-sub_field-error } | `boolean` |  |  |
 | [`authorized_fields`](#guardedstruct-sub_field-sub_field-authorized_fields){: #guardedstruct-sub_field-sub_field-authorized_fields } | `boolean` |  |  |
 | [`main_validator`](#guardedstruct-sub_field-sub_field-main_validator){: #guardedstruct-sub_field-sub_field-main_validator } | `{atom, atom}` |  | A `{Module, :function}` called with the sub_field's validated attributes, like the section option. A `main_validator/1` defined in the parent module does not run for a sub_field. |
+| [`doc`](#guardedstruct-sub_field-sub_field-doc){: #guardedstruct-sub_field-sub_field-doc } | `String.t \| false` |  | The `@moduledoc` of the module this sub_field generates, so the module has its own page in the docs, and the field's row text in the parent's `t()` table. `false` hides the module from the docs (`@moduledoc false`). When it is not set, the module has no `@moduledoc`. A sub_field without a `do` block uses your own module of that name, and `doc:` is only the row text. |
 
 
 ### guardedstruct.sub_field.sub_field.field
@@ -471,6 +480,7 @@ field name, type
 | [`structs`](#guardedstruct-sub_field-sub_field-field-structs){: #guardedstruct-sub_field-sub_field-field-structs } | `atom \| boolean` |  |  |
 | [`hint`](#guardedstruct-sub_field-sub_field-field-hint){: #guardedstruct-sub_field-sub_field-field-hint } | `String.t` |  |  |
 | [`priority`](#guardedstruct-sub_field-sub_field-field-priority){: #guardedstruct-sub_field-sub_field-field-priority } | `boolean` |  |  |
+| [`doc`](#guardedstruct-sub_field-sub_field-field-doc){: #guardedstruct-sub_field-sub_field-field-doc } | `String.t \| false` |  | What the field holds, in Markdown. It is the field's row text in the table of the module's `t()` type docs. `false` leaves the field out of that table. |
 
 
 
@@ -516,6 +526,7 @@ field name, type
 | [`structs`](#guardedstruct-sub_field-field-structs){: #guardedstruct-sub_field-field-structs } | `atom \| boolean` |  |  |
 | [`hint`](#guardedstruct-sub_field-field-hint){: #guardedstruct-sub_field-field-hint } | `String.t` |  |  |
 | [`priority`](#guardedstruct-sub_field-field-priority){: #guardedstruct-sub_field-field-priority } | `boolean` |  |  |
+| [`doc`](#guardedstruct-sub_field-field-doc){: #guardedstruct-sub_field-field-doc } | `String.t \| false` |  | What the field holds, in Markdown. It is the field's row text in the table of the module's `t()` type docs. `false` leaves the field out of that table. |
 
 
 
@@ -575,6 +586,7 @@ conditional_field name, type
 | [`structs`](#guardedstruct-conditional_field-structs){: #guardedstruct-conditional_field-structs } | `atom \| boolean` |  |  |
 | [`hint`](#guardedstruct-conditional_field-hint){: #guardedstruct-conditional_field-hint } | `String.t` |  |  |
 | [`priority`](#guardedstruct-conditional_field-priority){: #guardedstruct-conditional_field-priority } | `boolean` |  |  |
+| [`doc`](#guardedstruct-conditional_field-doc){: #guardedstruct-conditional_field-doc } | `String.t \| false` |  | What the field holds, in Markdown. It is the field's row text in the table of the module's `t()` type docs. `false` leaves the field out of that table. |
 
 
 ### guardedstruct.conditional_field.sub_field
@@ -623,6 +635,7 @@ sub_field name, type
 | [`error`](#guardedstruct-conditional_field-sub_field-error){: #guardedstruct-conditional_field-sub_field-error } | `boolean` |  |  |
 | [`authorized_fields`](#guardedstruct-conditional_field-sub_field-authorized_fields){: #guardedstruct-conditional_field-sub_field-authorized_fields } | `boolean` |  |  |
 | [`main_validator`](#guardedstruct-conditional_field-sub_field-main_validator){: #guardedstruct-conditional_field-sub_field-main_validator } | `{atom, atom}` |  | A `{Module, :function}` called with the sub_field's validated attributes, like the section option. A `main_validator/1` defined in the parent module does not run for a sub_field. |
+| [`doc`](#guardedstruct-conditional_field-sub_field-doc){: #guardedstruct-conditional_field-sub_field-doc } | `String.t \| false` |  | The `@moduledoc` of the module this sub_field generates, so the module has its own page in the docs, and the field's row text in the parent's `t()` table. `false` hides the module from the docs (`@moduledoc false`). When it is not set, the module has no `@moduledoc`. A sub_field without a `do` block uses your own module of that name, and `doc:` is only the row text. |
 
 
 ### guardedstruct.conditional_field.sub_field.conditional_field
@@ -664,6 +677,7 @@ conditional_field name, type
 | [`structs`](#guardedstruct-conditional_field-sub_field-conditional_field-structs){: #guardedstruct-conditional_field-sub_field-conditional_field-structs } | `atom \| boolean` |  |  |
 | [`hint`](#guardedstruct-conditional_field-sub_field-conditional_field-hint){: #guardedstruct-conditional_field-sub_field-conditional_field-hint } | `String.t` |  |  |
 | [`priority`](#guardedstruct-conditional_field-sub_field-conditional_field-priority){: #guardedstruct-conditional_field-sub_field-conditional_field-priority } | `boolean` |  |  |
+| [`doc`](#guardedstruct-conditional_field-sub_field-conditional_field-doc){: #guardedstruct-conditional_field-sub_field-conditional_field-doc } | `String.t \| false` |  | What the field holds, in Markdown. It is the field's row text in the table of the module's `t()` type docs. `false` leaves the field out of that table. |
 
 
 ### guardedstruct.conditional_field.sub_field.conditional_field.field
@@ -701,6 +715,7 @@ field name, type
 | [`structs`](#guardedstruct-conditional_field-sub_field-conditional_field-field-structs){: #guardedstruct-conditional_field-sub_field-conditional_field-field-structs } | `atom \| boolean` |  |  |
 | [`hint`](#guardedstruct-conditional_field-sub_field-conditional_field-field-hint){: #guardedstruct-conditional_field-sub_field-conditional_field-field-hint } | `String.t` |  |  |
 | [`priority`](#guardedstruct-conditional_field-sub_field-conditional_field-field-priority){: #guardedstruct-conditional_field-sub_field-conditional_field-field-priority } | `boolean` |  |  |
+| [`doc`](#guardedstruct-conditional_field-sub_field-conditional_field-field-doc){: #guardedstruct-conditional_field-sub_field-conditional_field-field-doc } | `String.t \| false` |  | What the field holds, in Markdown. It is the field's row text in the table of the module's `t()` type docs. `false` leaves the field out of that table. |
 
 
 
@@ -747,6 +762,7 @@ sub_field name, type
 | [`error`](#guardedstruct-conditional_field-sub_field-conditional_field-sub_field-error){: #guardedstruct-conditional_field-sub_field-conditional_field-sub_field-error } | `boolean` |  |  |
 | [`authorized_fields`](#guardedstruct-conditional_field-sub_field-conditional_field-sub_field-authorized_fields){: #guardedstruct-conditional_field-sub_field-conditional_field-sub_field-authorized_fields } | `boolean` |  |  |
 | [`main_validator`](#guardedstruct-conditional_field-sub_field-conditional_field-sub_field-main_validator){: #guardedstruct-conditional_field-sub_field-conditional_field-sub_field-main_validator } | `{atom, atom}` |  | A `{Module, :function}` called with the sub_field's validated attributes, like the section option. A `main_validator/1` defined in the parent module does not run for a sub_field. |
+| [`doc`](#guardedstruct-conditional_field-sub_field-conditional_field-sub_field-doc){: #guardedstruct-conditional_field-sub_field-conditional_field-sub_field-doc } | `String.t \| false` |  | The `@moduledoc` of the module this sub_field generates, so the module has its own page in the docs, and the field's row text in the parent's `t()` table. `false` hides the module from the docs (`@moduledoc false`). When it is not set, the module has no `@moduledoc`. A sub_field without a `do` block uses your own module of that name, and `doc:` is only the row text. |
 
 
 ### guardedstruct.conditional_field.sub_field.conditional_field.sub_field.field
@@ -784,6 +800,7 @@ field name, type
 | [`structs`](#guardedstruct-conditional_field-sub_field-conditional_field-sub_field-field-structs){: #guardedstruct-conditional_field-sub_field-conditional_field-sub_field-field-structs } | `atom \| boolean` |  |  |
 | [`hint`](#guardedstruct-conditional_field-sub_field-conditional_field-sub_field-field-hint){: #guardedstruct-conditional_field-sub_field-conditional_field-sub_field-field-hint } | `String.t` |  |  |
 | [`priority`](#guardedstruct-conditional_field-sub_field-conditional_field-sub_field-field-priority){: #guardedstruct-conditional_field-sub_field-conditional_field-sub_field-field-priority } | `boolean` |  |  |
+| [`doc`](#guardedstruct-conditional_field-sub_field-conditional_field-sub_field-field-doc){: #guardedstruct-conditional_field-sub_field-conditional_field-sub_field-field-doc } | `String.t \| false` |  | What the field holds, in Markdown. It is the field's row text in the table of the module's `t()` type docs. `false` leaves the field out of that table. |
 
 
 
@@ -838,6 +855,7 @@ sub_field name, type
 | [`error`](#guardedstruct-conditional_field-sub_field-sub_field-error){: #guardedstruct-conditional_field-sub_field-sub_field-error } | `boolean` |  |  |
 | [`authorized_fields`](#guardedstruct-conditional_field-sub_field-sub_field-authorized_fields){: #guardedstruct-conditional_field-sub_field-sub_field-authorized_fields } | `boolean` |  |  |
 | [`main_validator`](#guardedstruct-conditional_field-sub_field-sub_field-main_validator){: #guardedstruct-conditional_field-sub_field-sub_field-main_validator } | `{atom, atom}` |  | A `{Module, :function}` called with the sub_field's validated attributes, like the section option. A `main_validator/1` defined in the parent module does not run for a sub_field. |
+| [`doc`](#guardedstruct-conditional_field-sub_field-sub_field-doc){: #guardedstruct-conditional_field-sub_field-sub_field-doc } | `String.t \| false` |  | The `@moduledoc` of the module this sub_field generates, so the module has its own page in the docs, and the field's row text in the parent's `t()` table. `false` hides the module from the docs (`@moduledoc false`). When it is not set, the module has no `@moduledoc`. A sub_field without a `do` block uses your own module of that name, and `doc:` is only the row text. |
 
 
 ### guardedstruct.conditional_field.sub_field.sub_field.field
@@ -875,6 +893,7 @@ field name, type
 | [`structs`](#guardedstruct-conditional_field-sub_field-sub_field-field-structs){: #guardedstruct-conditional_field-sub_field-sub_field-field-structs } | `atom \| boolean` |  |  |
 | [`hint`](#guardedstruct-conditional_field-sub_field-sub_field-field-hint){: #guardedstruct-conditional_field-sub_field-sub_field-field-hint } | `String.t` |  |  |
 | [`priority`](#guardedstruct-conditional_field-sub_field-sub_field-field-priority){: #guardedstruct-conditional_field-sub_field-sub_field-field-priority } | `boolean` |  |  |
+| [`doc`](#guardedstruct-conditional_field-sub_field-sub_field-field-doc){: #guardedstruct-conditional_field-sub_field-sub_field-field-doc } | `String.t \| false` |  | What the field holds, in Markdown. It is the field's row text in the table of the module's `t()` type docs. `false` leaves the field out of that table. |
 
 
 
@@ -920,6 +939,7 @@ field name, type
 | [`structs`](#guardedstruct-conditional_field-sub_field-field-structs){: #guardedstruct-conditional_field-sub_field-field-structs } | `atom \| boolean` |  |  |
 | [`hint`](#guardedstruct-conditional_field-sub_field-field-hint){: #guardedstruct-conditional_field-sub_field-field-hint } | `String.t` |  |  |
 | [`priority`](#guardedstruct-conditional_field-sub_field-field-priority){: #guardedstruct-conditional_field-sub_field-field-priority } | `boolean` |  |  |
+| [`doc`](#guardedstruct-conditional_field-sub_field-field-doc){: #guardedstruct-conditional_field-sub_field-field-doc } | `String.t \| false` |  | What the field holds, in Markdown. It is the field's row text in the table of the module's `t()` type docs. `false` leaves the field out of that table. |
 
 
 
@@ -969,6 +989,7 @@ conditional_field name, type
 | [`structs`](#guardedstruct-conditional_field-conditional_field-structs){: #guardedstruct-conditional_field-conditional_field-structs } | `atom \| boolean` |  |  |
 | [`hint`](#guardedstruct-conditional_field-conditional_field-hint){: #guardedstruct-conditional_field-conditional_field-hint } | `String.t` |  |  |
 | [`priority`](#guardedstruct-conditional_field-conditional_field-priority){: #guardedstruct-conditional_field-conditional_field-priority } | `boolean` |  |  |
+| [`doc`](#guardedstruct-conditional_field-conditional_field-doc){: #guardedstruct-conditional_field-conditional_field-doc } | `String.t \| false` |  | What the field holds, in Markdown. It is the field's row text in the table of the module's `t()` type docs. `false` leaves the field out of that table. |
 
 
 ### guardedstruct.conditional_field.conditional_field.field
@@ -1006,6 +1027,7 @@ field name, type
 | [`structs`](#guardedstruct-conditional_field-conditional_field-field-structs){: #guardedstruct-conditional_field-conditional_field-field-structs } | `atom \| boolean` |  |  |
 | [`hint`](#guardedstruct-conditional_field-conditional_field-field-hint){: #guardedstruct-conditional_field-conditional_field-field-hint } | `String.t` |  |  |
 | [`priority`](#guardedstruct-conditional_field-conditional_field-field-priority){: #guardedstruct-conditional_field-conditional_field-field-priority } | `boolean` |  |  |
+| [`doc`](#guardedstruct-conditional_field-conditional_field-field-doc){: #guardedstruct-conditional_field-conditional_field-field-doc } | `String.t \| false` |  | What the field holds, in Markdown. It is the field's row text in the table of the module's `t()` type docs. `false` leaves the field out of that table. |
 
 
 
@@ -1052,6 +1074,7 @@ sub_field name, type
 | [`error`](#guardedstruct-conditional_field-conditional_field-sub_field-error){: #guardedstruct-conditional_field-conditional_field-sub_field-error } | `boolean` |  |  |
 | [`authorized_fields`](#guardedstruct-conditional_field-conditional_field-sub_field-authorized_fields){: #guardedstruct-conditional_field-conditional_field-sub_field-authorized_fields } | `boolean` |  |  |
 | [`main_validator`](#guardedstruct-conditional_field-conditional_field-sub_field-main_validator){: #guardedstruct-conditional_field-conditional_field-sub_field-main_validator } | `{atom, atom}` |  | A `{Module, :function}` called with the sub_field's validated attributes, like the section option. A `main_validator/1` defined in the parent module does not run for a sub_field. |
+| [`doc`](#guardedstruct-conditional_field-conditional_field-sub_field-doc){: #guardedstruct-conditional_field-conditional_field-sub_field-doc } | `String.t \| false` |  | The `@moduledoc` of the module this sub_field generates, so the module has its own page in the docs, and the field's row text in the parent's `t()` table. `false` hides the module from the docs (`@moduledoc false`). When it is not set, the module has no `@moduledoc`. A sub_field without a `do` block uses your own module of that name, and `doc:` is only the row text. |
 
 
 ### guardedstruct.conditional_field.conditional_field.sub_field.field
@@ -1089,6 +1112,7 @@ field name, type
 | [`structs`](#guardedstruct-conditional_field-conditional_field-sub_field-field-structs){: #guardedstruct-conditional_field-conditional_field-sub_field-field-structs } | `atom \| boolean` |  |  |
 | [`hint`](#guardedstruct-conditional_field-conditional_field-sub_field-field-hint){: #guardedstruct-conditional_field-conditional_field-sub_field-field-hint } | `String.t` |  |  |
 | [`priority`](#guardedstruct-conditional_field-conditional_field-sub_field-field-priority){: #guardedstruct-conditional_field-conditional_field-sub_field-field-priority } | `boolean` |  |  |
+| [`doc`](#guardedstruct-conditional_field-conditional_field-sub_field-field-doc){: #guardedstruct-conditional_field-conditional_field-sub_field-field-doc } | `String.t \| false` |  | What the field holds, in Markdown. It is the field's row text in the table of the module's `t()` type docs. `false` leaves the field out of that table. |
 
 
 
@@ -1138,6 +1162,7 @@ field name, type
 | [`structs`](#guardedstruct-conditional_field-field-structs){: #guardedstruct-conditional_field-field-structs } | `atom \| boolean` |  |  |
 | [`hint`](#guardedstruct-conditional_field-field-hint){: #guardedstruct-conditional_field-field-hint } | `String.t` |  |  |
 | [`priority`](#guardedstruct-conditional_field-field-priority){: #guardedstruct-conditional_field-field-priority } | `boolean` |  |  |
+| [`doc`](#guardedstruct-conditional_field-field-doc){: #guardedstruct-conditional_field-field-doc } | `String.t \| false` |  | What the field holds, in Markdown. It is the field's row text in the table of the module's `t()` type docs. `false` leaves the field out of that table. |
 
 
 

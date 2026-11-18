@@ -7,15 +7,15 @@ defmodule GuardedStruct.Verifiers.VerifyAutoMFA do
 
   use Spark.Dsl.Verifier
 
+  alias GuardedStruct.Transformers.Codegen
   alias Spark.Dsl.Verifier
-  alias GuardedStruct.Dsl.{Field, SubField, ConditionalField}
 
   @impl true
   def verify(dsl_state) do
     module = Verifier.get_persisted(dsl_state, :module)
     entities = Verifier.get_entities(dsl_state, [:guardedstruct])
 
-    case walk(entities, []) do
+    case entities |> Codegen.all_entities() |> Enum.reduce([], &check_auto/2) do
       [] ->
         :ok
 
@@ -30,36 +30,23 @@ defmodule GuardedStruct.Verifiers.VerifyAutoMFA do
     end
   end
 
-  defp walk(entities, errors) do
-    Enum.reduce(entities, errors, fn entity, acc ->
-      acc =
-        case Map.get(entity, :auto) do
-          {mod, fun} when is_atom(mod) and is_atom(fun) ->
-            check(entity.name, mod, fun, 0, acc)
+  defp check_auto(entity, acc) do
+    case Map.get(entity, :auto) do
+      {mod, fun} when is_atom(mod) and is_atom(fun) ->
+        check(entity.name, mod, fun, 0, acc)
 
-          {mod, fun, arg} when is_atom(mod) and is_atom(fun) ->
-            arity = if is_list(arg), do: length(arg), else: 1
-            check(entity.name, mod, fun, arity, acc)
+      {mod, fun, arg} when is_atom(mod) and is_atom(fun) ->
+        check(entity.name, mod, fun, auto_arity(arg), acc)
 
-          _ ->
-            acc
-        end
-
-      case entity do
-        %SubField{} = sf ->
-          walk(sf.fields ++ sf.sub_fields ++ sf.conditional_fields, acc)
-
-        %ConditionalField{} = cf ->
-          walk(cf.fields ++ cf.sub_fields ++ cf.conditional_fields, acc)
-
-        %Field{} ->
-          acc
-
-        _ ->
-          acc
-      end
-    end)
+      _ ->
+        acc
+    end
   end
+
+  # `{Mod, :fn, [a, b]}` passes the list as the arguments; any other third element is
+  # one argument.
+  defp auto_arity(args) when is_list(args), do: length(args)
+  defp auto_arity(_arg), do: 1
 
   defp check(field, mod, fun, arity, acc) do
     Code.ensure_loaded(mod)

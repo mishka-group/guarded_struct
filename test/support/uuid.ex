@@ -35,7 +35,7 @@ defmodule GuardedStructTest.Support.UUID do
 
     def format({:parameterized, type, params}) do
       if function_exported?(type, :format, 1) do
-        apply(type, :format, [params])
+        type.format(params)
       else
         "##{inspect(type)}<#{inspect(params)}>"
       end
@@ -51,13 +51,14 @@ defmodule GuardedStructTest.Support.UUID do
         <<a1, a2, a3, a4, a5, a6, a7, a8, ?-, b1, b2, b3, b4, ?-, c1, c2, c3, c4, ?-, d1, d2, d3,
           d4, ?-, e1, e2, e3, e4, e5, e6, e7, e8, e9, e10, e11, e12>>
       ) do
-    <<c(a1), c(a2), c(a3), c(a4), c(a5), c(a6), c(a7), c(a8), ?-, c(b1), c(b2), c(b3), c(b4), ?-,
-      c(c1), c(c2), c(c3), c(c4), ?-, c(d1), c(d2), c(d3), c(d4), ?-, c(e1), c(e2), c(e3), c(e4),
-      c(e5), c(e6), c(e7), c(e8), c(e9), c(e10), c(e11), c(e12)>>
+    hex_uuid =
+      <<c(a1), c(a2), c(a3), c(a4), c(a5), c(a6), c(a7), c(a8), ?-, c(b1), c(b2), c(b3), c(b4),
+        ?-, c(c1), c(c2), c(c3), c(c4), ?-, c(d1), c(d2), c(d3), c(d4), ?-, c(e1), c(e2), c(e3),
+        c(e4), c(e5), c(e6), c(e7), c(e8), c(e9), c(e10), c(e11), c(e12)>>
+
+    {:ok, hex_uuid}
   catch
     :error -> :error
-  else
-    hex_uuid -> {:ok, hex_uuid}
   end
 
   def cast(<<_::128>> = raw_uuid), do: {:ok, encode(raw_uuid)}
@@ -98,10 +99,10 @@ defmodule GuardedStructTest.Support.UUID do
   defp c(_), do: throw(:error)
 
   @spec generate() :: t
-  def generate(), do: encode(bingenerate())
+  def generate, do: encode(bingenerate())
 
   @spec bingenerate() :: raw
-  def bingenerate() do
+  def bingenerate do
     <<u0::48, _::4, u1::12, _::2, u2::62>> = :crypto.strong_rand_bytes(16)
     <<u0::48, 4::4, u1::12, 2::2, u2::62>>
   end

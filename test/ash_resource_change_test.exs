@@ -3,7 +3,7 @@ defmodule GuardedStructTest.AshResourceChangeTest do
 
   @moduletag capture_log: true
 
-  alias GuardedStructTest.AshResources.{Manual, AutoWired, AutoWireOff, AutoWiredForm}
+  alias GuardedStructTest.AshResources.{AutoWired, AutoWiredForm, AutoWireOff, Manual}
 
   describe "Change.change/3 — happy path" do
     test "valid input → changeset.attributes contain sanitized values" do
@@ -37,7 +37,12 @@ defmodule GuardedStructTest.AshResourceChangeTest do
       result = GuardedStruct.AshResource.Change.change(changeset, [], %{})
 
       refute result.valid?
-      assert length(result.errors) >= 1
+
+      assert [
+               %Ash.Error.Changes.InvalidAttribute{field: :nickname, vars: [validation: :max_len]}
+               | _
+             ] =
+               result.errors
     end
 
     test "derive failure on nickname surfaces an error mentioning the field" do
@@ -120,7 +125,7 @@ defmodule GuardedStructTest.AshResourceChangeTest do
         |> Ash.Resource.Info.changes()
         |> Enum.filter(fn c -> c.change == {GuardedStruct.AshResource.Change, []} end)
 
-      assert length(gs_changes) == 1
+      assert [%{change: {GuardedStruct.AshResource.Change, []}}] = gs_changes
     end
 
     test "AutoWireOff resource has ZERO GuardedStruct changes" do
@@ -145,8 +150,8 @@ defmodule GuardedStructTest.AshResourceChangeTest do
     end
 
     test "returns plain map (auto-map cascade) — no struct wrapping" do
-      {:ok, result} = Manual.__guarded_change__(%{email: "x@y.com"})
-      refute is_struct(result)
+      # A plain map: a struct would not be equal to it.
+      assert Manual.__guarded_change__(%{email: "x@y.com"}) == {:ok, %{email: "x@y.com"}}
     end
   end
 end

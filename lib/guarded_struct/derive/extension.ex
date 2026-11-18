@@ -104,8 +104,9 @@ defmodule GuardedStruct.Derive.Extension do
   defp load_extensions(list) do
     list
     |> List.wrap()
-    |> Enum.filter(&ensure_extension_loaded?/1)
-    |> Enum.filter(&function_exported?(&1, :__derive_extension__?, 0))
+    |> Enum.filter(
+      &(ensure_extension_loaded?(&1) and function_exported?(&1, :__derive_extension__?, 0))
+    )
   end
 
   # `Code.ensure_compiled?/1` (not `ensure_loaded?`) handles the case

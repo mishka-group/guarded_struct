@@ -630,31 +630,27 @@ defmodule GuardedStructTest.DeriveTest do
   end
 
   defmodule TestValidate do
-    def validate(:testv1, input, field) do
-      if is_binary(input),
-        do: input,
-        else: {:error, field, :testv1, "The #{field} field must not be empty"}
-    end
+    def validate(:testv1, input, _field) when is_binary(input), do: input
+
+    def validate(:testv1, _input, field),
+      do: {:error, field, :testv1, "The #{field} field must not be empty"}
   end
 
   defmodule TestValidate2 do
-    def validate(:testv2, input, field) do
-      if is_binary(input),
-        do: input,
-        else: {:error, field, :testv1, "The #{field} field must not be empty"}
-    end
+    def validate(:testv2, input, _field) when is_binary(input), do: input
+
+    def validate(:testv2, _input, field),
+      do: {:error, field, :testv1, "The #{field} field must not be empty"}
   end
 
   defmodule TestSanitize do
-    def sanitize(input, :capitalize_v1) do
-      if is_binary(input), do: String.capitalize(input), else: input
-    end
+    def sanitize(input, :capitalize_v1) when is_binary(input), do: String.capitalize(input)
+    def sanitize(input, :capitalize_v1), do: input
   end
 
   defmodule TestSanitize2 do
-    def sanitize(input, :capitalize_v2) do
-      if is_binary(input), do: String.capitalize(input), else: input
-    end
+    def sanitize(input, :capitalize_v2) when is_binary(input), do: String.capitalize(input)
+    def sanitize(input, :capitalize_v2), do: input
   end
 
   defmodule TestExistCustomValidateDerive do
@@ -791,11 +787,11 @@ defmodule GuardedStructTest.DeriveTest do
     use GuardedStruct
 
     guardedstruct authorized_fields: true do
-      field(:status, String.t(), derives: "validate(custom=[#{__MODULE__}, is_stuff?])")
+      field(:status, String.t(), derives: "validate(custom=[#{__MODULE__}, stuff?])")
     end
 
-    def is_stuff?(data) when data == "ok", do: true
-    def is_stuff?(_data), do: false
+    def stuff?("ok"), do: true
+    def stuff?(_data), do: false
   end
 
   test "validate({:custom, value}, input, field)" do
@@ -1149,7 +1145,7 @@ defmodule GuardedStructTest.DeriveTest do
 
     test ":port_number accepts 1..65535 integers" do
       assert ValidationDerive.validate(:port_number, 1, :port) == 1
-      assert ValidationDerive.validate(:port_number, 65535, :port) == 65535
+      assert ValidationDerive.validate(:port_number, 65_535, :port) == 65_535
       assert ValidationDerive.validate(:port_number, 8080, :port) == 8080
     end
 
@@ -1158,7 +1154,7 @@ defmodule GuardedStructTest.DeriveTest do
                ValidationDerive.validate(:port_number, 0, :port)
 
       assert {:error, :port, :port_number, _} =
-               ValidationDerive.validate(:port_number, 70000, :port)
+               ValidationDerive.validate(:port_number, 70_000, :port)
 
       assert {:error, :port, :port_number, _} =
                ValidationDerive.validate(:port_number, "80", :port)
@@ -1752,7 +1748,7 @@ defmodule GuardedStructTest.DeriveTest do
       assert {:error, :addr, :ipv6, _} = ValidationDerive.validate(:ipv6, "127.0.0.1", :addr)
       assert {:error, :addr, :ipv6, _} = ValidationDerive.validate(:ipv6, "", :addr)
       assert {:error, :addr, :ipv6, _} = ValidationDerive.validate(:ipv6, "::g", :addr)
-      assert {:error, :addr, :ipv6, _} = ValidationDerive.validate(:ipv6, 12345, :addr)
+      assert {:error, :addr, :ipv6, _} = ValidationDerive.validate(:ipv6, 12_345, :addr)
       assert {:error, :addr, :ipv6, _} = ValidationDerive.validate(:ipv6, nil, :addr)
     end
 

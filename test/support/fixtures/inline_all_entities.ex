@@ -19,17 +19,18 @@ defmodule GuardedStructFixtures.InlineAllEntities do
 
   defmodule Validators do
     @moduledoc false
-    def is_string(field, v) when is_binary(v), do: {:ok, field, v}
-    def is_string(field, _), do: {:error, field, "not a string"}
+    def validate_string(field, v) when is_binary(v), do: {:ok, field, v}
+    def validate_string(field, _), do: {:error, field, "not a string"}
 
-    def is_map(field, v) when is_map(v) and not is_struct(v), do: {:ok, field, v}
-    def is_map(field, _), do: {:error, field, "not a map"}
+    def validate_map(field, v) when is_map(v) and not is_struct(v), do: {:ok, field, v}
+    def validate_map(field, _), do: {:error, field, "not a map"}
   end
 
   # ----------------------------------------------------------------
   # 1. inline derives: on `field`
   # ----------------------------------------------------------------
   defmodule OnField do
+    @moduledoc "Inline `derives:` on a `field`."
     use GuardedStruct
 
     guardedstruct do
@@ -41,6 +42,7 @@ defmodule GuardedStructFixtures.InlineAllEntities do
   # 2. inline derives: on `virtual_field`
   # ----------------------------------------------------------------
   defmodule OnVirtualField do
+    @moduledoc "Inline `derives:` on a `virtual_field`."
     use GuardedStruct
 
     guardedstruct do
@@ -59,6 +61,7 @@ defmodule GuardedStructFixtures.InlineAllEntities do
   # 3. inline derives: on `dynamic_field` (overrides schema default)
   # ----------------------------------------------------------------
   defmodule OnDynamicField do
+    @moduledoc "Inline `derives:` on a `dynamic_field`, overriding its default rule."
     use GuardedStruct
 
     guardedstruct do
@@ -70,6 +73,7 @@ defmodule GuardedStructFixtures.InlineAllEntities do
   # 4. inline derives: on `sub_field` itself
   # ----------------------------------------------------------------
   defmodule OnSubField do
+    @moduledoc "Inline `derives:` on a `sub_field` itself."
     use GuardedStruct
 
     guardedstruct do
@@ -83,20 +87,21 @@ defmodule GuardedStructFixtures.InlineAllEntities do
   # 5. inline derives: on `conditional_field` itself
   # ----------------------------------------------------------------
   defmodule OnConditionalField do
+    @moduledoc "Inline `derives:` on a `conditional_field` itself."
     use GuardedStruct
 
     guardedstruct do
       conditional_field(:detail, any(), derives: "validate(map)") do
         sub_field(:detail, struct(),
           hint: "minimal",
-          validator: {Validators, :is_map}
+          validator: {Validators, :validate_map}
         ) do
           field(:tag, String.t())
         end
 
         sub_field(:detail, struct(),
           hint: "full",
-          validator: {Validators, :is_map}
+          validator: {Validators, :validate_map}
         ) do
           field(:tag, String.t(), enforce: true)
           field(:extra, String.t())
@@ -109,6 +114,7 @@ defmodule GuardedStructFixtures.InlineAllEntities do
   # 6. inline derives: on field INSIDE a sub_field body
   # ----------------------------------------------------------------
   defmodule InsideSubField do
+    @moduledoc "Inline `derives:` on a field inside a sub_field body."
     use GuardedStruct
 
     guardedstruct do
@@ -122,19 +128,20 @@ defmodule GuardedStructFixtures.InlineAllEntities do
   # 7. inline derives: on branch fields of conditional_field
   # ----------------------------------------------------------------
   defmodule InsideConditional do
+    @moduledoc "Inline `derives:` on the branch fields of a conditional_field."
     use GuardedStruct
 
     guardedstruct do
       conditional_field(:body, any()) do
         field(:body, String.t(),
           hint: "short_string",
-          validator: {Validators, :is_string},
+          validator: {Validators, :validate_string},
           derives: "validate(string, max_len=10)"
         )
 
         sub_field(:body, struct(),
           hint: "map_form",
-          validator: {Validators, :is_map}
+          validator: {Validators, :validate_map}
         ) do
           field(:kind, String.t(), derives: "validate(string)")
         end
@@ -146,6 +153,7 @@ defmodule GuardedStructFixtures.InlineAllEntities do
   # 8. DEEP nesting — inline derives: at every level (1 → 2 → 3 → 4)
   # ----------------------------------------------------------------
   defmodule DeepNested do
+    @moduledoc "Inline `derives:` at every level of a four-level nesting."
     use GuardedStruct
 
     guardedstruct do
@@ -169,6 +177,7 @@ defmodule GuardedStructFixtures.InlineAllEntities do
   # 9. Mixed-entity module — every entity type, inline form
   # ----------------------------------------------------------------
   defmodule MixedAll do
+    @moduledoc "Every entity type in one module, each ruled by inline `derives:`."
     use GuardedStruct
 
     guardedstruct do
@@ -183,12 +192,12 @@ defmodule GuardedStructFixtures.InlineAllEntities do
       conditional_field(:variant, any()) do
         field(:variant, String.t(),
           hint: "string",
-          validator: {Validators, :is_string}
+          validator: {Validators, :validate_string}
         )
 
         sub_field(:variant, struct(),
           hint: "map",
-          validator: {Validators, :is_map}
+          validator: {Validators, :validate_map}
         ) do
           field(:value, String.t(), derives: "validate(string)")
         end

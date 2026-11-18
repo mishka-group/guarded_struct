@@ -36,19 +36,20 @@ defmodule GuardedStructFixtures.Conditionals do
   defmodule Validators do
     @moduledoc false
 
-    def is_string(field, value) when is_binary(value), do: {:ok, field, value}
-    def is_string(field, _), do: {:error, field, "not a string"}
+    def validate_string(field, value) when is_binary(value), do: {:ok, field, value}
+    def validate_string(field, _), do: {:error, field, "not a string"}
 
-    def is_map(field, value) when is_map(value) and not is_struct(value),
+    def validate_map(field, value) when is_map(value) and not is_struct(value),
       do: {:ok, field, value}
 
-    def is_map(field, _), do: {:error, field, "not a map"}
+    def validate_map(field, _), do: {:error, field, "not a map"}
 
-    def is_list(field, value) when is_list(value), do: {:ok, field, value}
-    def is_list(field, _), do: {:error, field, "not a list"}
+    def validate_list(field, value) when is_list(value), do: {:ok, field, value}
+    def validate_list(field, _), do: {:error, field, "not a list"}
   end
 
   defmodule Image do
+    @moduledoc "An image block: a URL and an optional alt text."
     use GuardedStruct
 
     guardedstruct do
@@ -72,14 +73,14 @@ defmodule GuardedStructFixtures.Conditionals do
         # Variant A: plain string content
         field(:content, String.t(),
           hint: "plain",
-          validator: {Validators, :is_string},
+          validator: {Validators, :validate_string},
           derives: "validate(string, max_len=50_000)"
         )
 
         # Variant B: rich content (sub_field). LEVEL 2.
         sub_field(:content, struct(),
           hint: "rich",
-          validator: {Validators, :is_map}
+          validator: {Validators, :validate_map}
         ) do
           field(:title, String.t(), enforce: true, derives: "validate(string)")
 
@@ -88,14 +89,14 @@ defmodule GuardedStructFixtures.Conditionals do
             # Variant B.1: simple-string body
             field(:body, String.t(),
               hint: "simple",
-              validator: {Validators, :is_string},
+              validator: {Validators, :validate_string},
               derives: "validate(string, max_len=10_000)"
             )
 
             # Variant B.2: structured body (sub_field). LEVEL 4.
             sub_field(:body, struct(),
               hint: "structured",
-              validator: {Validators, :is_map}
+              validator: {Validators, :validate_map}
             ) do
               field(:heading, String.t(), enforce: true, derives: "validate(string)")
 
@@ -103,19 +104,19 @@ defmodule GuardedStructFixtures.Conditionals do
               conditional_field(:paragraphs, any(),
                 structs: true,
                 hint: "paragraphs",
-                validator: {Validators, :is_list}
+                validator: {Validators, :validate_list}
               ) do
                 # Variant B.2.a: plain paragraph (string)
                 field(:paragraphs, String.t(),
                   hint: "plain_paragraph",
-                  validator: {Validators, :is_string},
+                  validator: {Validators, :validate_string},
                   derives: "validate(string, max_len=5_000)"
                 )
 
                 # Variant B.2.b: quote paragraph. LEVEL 6.
                 sub_field(:paragraphs, struct(),
                   hint: "quote_paragraph",
-                  validator: {Validators, :is_map}
+                  validator: {Validators, :validate_map}
                 ) do
                   field(:text, String.t(), enforce: true, derives: "validate(string)")
 
@@ -135,6 +136,7 @@ defmodule GuardedStructFixtures.Conditionals do
   end
 
   defmodule Block do
+    @moduledoc "A CMS block that is a paragraph string, an image map or a gallery list."
     use GuardedStruct
 
     guardedstruct do
@@ -142,14 +144,14 @@ defmodule GuardedStructFixtures.Conditionals do
         # 1. paragraph: just a string
         field(:block, String.t(),
           hint: "paragraph",
-          validator: {Validators, :is_string},
+          validator: {Validators, :validate_string},
           derives: "validate(string, max_len=10_000)"
         )
 
         # 2. single image: a map
         sub_field(:block, struct(),
           hint: "image",
-          validator: {Validators, :is_map}
+          validator: {Validators, :validate_map}
         ) do
           field(:url, String.t(), enforce: true, derives: "validate(url)")
           field(:alt, String.t(), default: "")
@@ -160,18 +162,18 @@ defmodule GuardedStructFixtures.Conditionals do
         conditional_field(:block, any(),
           structs: true,
           hint: "gallery",
-          validator: {Validators, :is_list}
+          validator: {Validators, :validate_list}
         ) do
           field(:block, String.t(),
             hint: "gallery_item_string",
-            validator: {Validators, :is_string},
+            validator: {Validators, :validate_string},
             derives: "validate(string, max_len=2048)"
           )
 
           field(:block, struct(),
             struct: Image,
             hint: "gallery_item_image",
-            validator: {Validators, :is_map}
+            validator: {Validators, :validate_map}
           )
         end
       end

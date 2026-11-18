@@ -34,22 +34,19 @@ defmodule GuardedStructTest.ValidatorDeriveTest do
       end
     end
 
-    def test_validator(field, value) do
-      if is_map(value) and value != %{},
-        do: {:ok, field, value},
-        else: {:error, field, "No, it is not map"}
-    end
+    def test_validator(field, value) when is_map(value) and value != %{},
+      do: {:ok, field, value}
 
-    def validator(:name, value) do
-      if is_binary(value), do: {:ok, :name, value}, else: {:error, :name, "No, never"}
-    end
+    def test_validator(field, _value), do: {:error, field, "No, it is not map"}
+
+    def validator(:name, value) when is_binary(value), do: {:ok, :name, value}
+    def validator(:name, _value), do: {:error, :name, "No, never"}
 
     # it does not work, because it is sub_field as external module
-    def validator(:auth_path2, value) do
-      if is_map(value) and value != %{},
-        do: {:ok, :auth_path2, value},
-        else: {:error, :auth_path2, "No, it is not map"}
-    end
+    def validator(:auth_path2, value) when is_map(value) and value != %{},
+      do: {:ok, :auth_path2, value}
+
+    def validator(:auth_path2, _value), do: {:error, :auth_path2, "No, it is not map"}
 
     def validator(field, value) do
       {:ok, field, value}
@@ -66,9 +63,8 @@ defmodule GuardedStructTest.ValidatorDeriveTest do
         field(:title, String.t())
       end
 
-      def validator(:name, value) do
-        if is_binary(value), do: {:ok, :name, value}, else: {:error, :name, "No, never"}
-      end
+      def validator(:name, value) when is_binary(value), do: {:ok, :name, value}
+      def validator(:name, _value), do: {:error, :name, "No, never"}
 
       def validator(name, value) do
         {:ok, name, value}
@@ -91,9 +87,8 @@ defmodule GuardedStructTest.ValidatorDeriveTest do
         field(:title, String.t())
       end
 
-      def validator(:name, value) do
-        if is_binary(value), do: {:ok, :name, value}, else: {:error, :name, "No, never"}
-      end
+      def validator(:name, value) when is_binary(value), do: {:ok, :name, value}
+      def validator(:name, _value), do: {:error, :name, "No, never"}
 
       def validator(name, value) do
         {:ok, name, value}
@@ -110,9 +105,8 @@ defmodule GuardedStructTest.ValidatorDeriveTest do
 
   test "use builder to get validator inside another module" do
     defmodule GuardedStructTest.AnotherModule do
-      def validator(:name, value) do
-        if is_binary(value), do: {:ok, :name, value}, else: {:error, :name, "No, never"}
-      end
+      def validator(:name, value) when is_binary(value), do: {:ok, :name, value}
+      def validator(:name, _value), do: {:error, :name, "No, never"}
     end
 
     defmodule TestStructAnotherValidatorBuilder do
@@ -239,9 +233,8 @@ defmodule GuardedStructTest.ValidatorDeriveTest do
         field(:title, String.t(), derives: "sanitize(trim, capitalize) validate(not_empty)")
       end
 
-      def validator(:name, value) do
-        if is_binary(value), do: {:ok, :name, "Mishka   "}, else: {:error, :name, "No, never"}
-      end
+      def validator(:name, value) when is_binary(value), do: {:ok, :name, "Mishka   "}
+      def validator(:name, _value), do: {:error, :name, "No, never"}
 
       def validator(name, value) do
         {:ok, name, value}
@@ -306,9 +299,8 @@ defmodule GuardedStructTest.ValidatorDeriveTest do
         field(:nickname, String.t(), derives: "validate(not_empty, time)")
       end
 
-      def validator(:name, value) do
-        if is_binary(value), do: {:ok, :name, "Mishka   "}, else: {:error, :name, "No, never"}
-      end
+      def validator(:name, value) when is_binary(value), do: {:ok, :name, "Mishka   "}
+      def validator(:name, _value), do: {:error, :name, "No, never"}
 
       def validator(name, value) do
         {:ok, name, value}

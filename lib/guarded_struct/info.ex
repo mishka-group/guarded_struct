@@ -318,6 +318,8 @@ defmodule GuardedStruct.Info do
     }
   end
 
+  # Module and field names come from the developer's DSL, not from user input.
+  # sobelow_skip ["DOS.ModuleConcat"]
   defp enrich_field(meta, enforce_keys, parent_module) do
     # Pattern-field metadata uses `:pattern` (a regex) instead of `:name`,
     # and is not subject to struct-key enforcement.

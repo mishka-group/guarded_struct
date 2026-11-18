@@ -11,7 +11,7 @@ defmodule GuardedStructFixtures.ConditionalsTest do
   describe "Block (nested conditional_field)" do
     test "resolves a plain paragraph (string) to the first branch" do
       # `:block` is a conditional with 3 variants. A string input matches
-      # the first variant's `is_string` validator → resolved as the string.
+      # the first variant's `validate_string` validator → resolved as the string.
       assert {:ok, %Conditionals.Block{block: "hello world"}} =
                Conditionals.Block.builder(%{block: "hello world"})
     end
@@ -33,10 +33,13 @@ defmodule GuardedStructFixtures.ConditionalsTest do
         %{url: "https://x.io/img.png", alt: "a pic"}
       ]
 
-      assert {:ok, %Conditionals.Block{block: items}} =
-               Conditionals.Block.builder(%{block: gallery})
-
-      assert length(items) == 2
+      assert {:ok,
+              %Conditionals.Block{
+                block: [
+                  "https://x.io/cap.png",
+                  %Conditionals.Image{url: "https://x.io/img.png", alt: "a pic"}
+                ]
+              }} = Conditionals.Block.builder(%{block: gallery})
     end
 
     test "rejects a value that matches no branch (number)" do
@@ -82,12 +85,9 @@ defmodule GuardedStructFixtures.ConditionalsTest do
       assert info.options == %{json: false, authorized_fields: false}
     end
 
-    test "__fields__/0 exposes the FULL conditional shape — all 3 variants" do
-      [%{name: :block, kind: :conditional_field, children: children}] =
-        Conditionals.Block.__fields__()
-
-      # Three variants, in declaration order:
-      [string_variant, image_variant, gallery_variant] = children
+    test "__fields__/0 exposes the FULL conditional shape — the paragraph variant" do
+      # Three variants, in declaration order: paragraph, image, gallery.
+      [string_variant, _image_variant, _gallery_variant] = block_variants()
 
       # 1. Paragraph — leaf string field with a derive
       assert string_variant.name == :block
@@ -95,21 +95,29 @@ defmodule GuardedStructFixtures.ConditionalsTest do
       assert string_variant.hint == "paragraph"
       assert string_variant.derive == "validate(string, max_len=10_000)"
       assert string_variant.__derive_ops__ == %{validate: [:string, {:max_len, 10_000}]}
-      assert string_variant.validator == {Conditionals.Validators, :is_string}
+      assert string_variant.validator == {Conditionals.Validators, :validate_string}
+    end
+
+    test "__fields__/0 exposes the FULL conditional shape — the image variant" do
+      [_string_variant, image_variant, _gallery_variant] = block_variants()
 
       # 2. Single image — sub_field that generates its own submodule
       assert image_variant.name == :block
       assert image_variant.kind == :sub_field
       assert image_variant.hint == "image"
-      assert image_variant.validator == {Conditionals.Validators, :is_map}
+      assert image_variant.validator == {Conditionals.Validators, :validate_map}
       assert image_variant.sub_field_index == 1
       refute image_variant.list?
+    end
+
+    test "__fields__/0 exposes the FULL conditional shape — the gallery variant" do
+      [_string_variant, _image_variant, gallery_variant] = block_variants()
 
       # 3. Gallery — list-of-conditional, each item is its own conditional
       assert gallery_variant.name == :block
       assert gallery_variant.kind == :conditional_field
       assert gallery_variant.hint == "gallery"
-      assert gallery_variant.validator == {Conditionals.Validators, :is_list}
+      assert gallery_variant.validator == {Conditionals.Validators, :validate_list}
       assert gallery_variant.list? == true
 
       [item_string, item_image] = gallery_variant.children
@@ -170,8 +178,7 @@ defmodule GuardedStructFixtures.ConditionalsTest do
                  ]
                })
 
-      assert length(items) == 3
-      [first, second, third] = items
+      assert [first, second, third] = items
 
       # First is the string variant (resolved by the inner conditional)
       assert first == "https://x.io/header.png"
@@ -441,13 +448,13 @@ defmodule GuardedStructFixtures.ConditionalsTest do
       ]
 
       for mod <- mods do
-        assert Code.ensure_loaded?(mod),
-               "expected #{inspect(mod)} to be a generated submodule"
+        # `__info__/1` loads the module and raises if it was never generated.
+        functions = mod.__info__(:functions)
 
-        assert function_exported?(mod, :builder, 1),
+        assert {:builder, 1} in functions,
                "expected #{inspect(mod)}.builder/1 to be defined"
 
-        assert function_exported?(mod, :keys, 0),
+        assert {:keys, 0} in functions,
                "expected #{inspect(mod)}.keys/0 to be defined"
       end
     end
@@ -459,5 +466,13 @@ defmodule GuardedStructFixtures.ConditionalsTest do
       assert Conditionals.Document.Content1.Body1.Paragraphs1.keys() == [:text, :source]
       assert Conditionals.Document.Content1.Body1.Paragraphs1.Source.keys() == [:author, :url]
     end
+  end
+
+  # The variants of `Conditionals.Block`'s one conditional field, in declaration order.
+  defp block_variants do
+    [%{name: :block, kind: :conditional_field, children: children}] =
+      Conditionals.Block.__fields__()
+
+    children
   end
 end

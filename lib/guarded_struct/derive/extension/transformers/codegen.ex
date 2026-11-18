@@ -3,8 +3,8 @@ defmodule GuardedStruct.Derive.Extension.Transformers.Codegen do
 
   use Spark.Dsl.Transformer
 
+  alias GuardedStruct.Derive.Extension.Dsl.{Sanitizer, Validator}
   alias Spark.Dsl.Transformer
-  alias GuardedStruct.Derive.Extension.Dsl.{Validator, Sanitizer}
 
   @impl true
   def transform(dsl_state) do

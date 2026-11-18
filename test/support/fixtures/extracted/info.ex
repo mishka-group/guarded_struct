@@ -10,6 +10,7 @@ defmodule GuardedStructTest.Fixtures.Info.EverythingUser.Ids do
 end
 
 defmodule GuardedStructTest.Fixtures.Info.EverythingUser do
+  @moduledoc false
   use GuardedStruct
 
   alias GuardedStructTest.Fixtures.Info.EverythingUser.{Hashers, Ids}
@@ -39,6 +40,7 @@ defmodule GuardedStructTest.Fixtures.Info.EverythingUser do
 end
 
 defmodule GuardedStructTest.Fixtures.Info.HeadersMap do
+  @moduledoc false
   use GuardedStruct
 
   guardedstruct do

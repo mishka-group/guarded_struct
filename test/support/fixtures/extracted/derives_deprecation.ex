@@ -1,4 +1,5 @@
 defmodule GuardedStructTest.Fixtures.DerivesDeprecation.CanonicalName do
+  @moduledoc false
   use GuardedStruct
 
   guardedstruct do

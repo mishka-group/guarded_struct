@@ -14,17 +14,18 @@ defmodule GuardedStructFixtures.MixedDecoratorInline do
 
   defmodule Validators do
     @moduledoc false
-    def is_string(field, v) when is_binary(v), do: {:ok, field, v}
-    def is_string(field, _), do: {:error, field, "not a string"}
+    def validate_string(field, v) when is_binary(v), do: {:ok, field, v}
+    def validate_string(field, _), do: {:error, field, "not a string"}
 
-    def is_map(field, v) when is_map(v) and not is_struct(v), do: {:ok, field, v}
-    def is_map(field, _), do: {:error, field, "not a map"}
+    def validate_map(field, v) when is_map(v) and not is_struct(v), do: {:ok, field, v}
+    def validate_map(field, _), do: {:error, field, "not a map"}
   end
 
   # ----------------------------------------------------------------
   # 1. Two siblings — decorator on one, inline on the other
   # ----------------------------------------------------------------
   defmodule SiblingMix do
+    @moduledoc "Two sibling fields: one ruled by the `@derives` decorator, the other by inline `derives:`."
     use GuardedStruct
 
     guardedstruct do
@@ -39,6 +40,7 @@ defmodule GuardedStructFixtures.MixedDecoratorInline do
   # 2. Decorator on outer sub_field + inline on inner field
   # ----------------------------------------------------------------
   defmodule OuterDecoratorInnerInline do
+    @moduledoc "Decorator on the outer sub_field, inline `derives:` on its inner field."
     use GuardedStruct
 
     guardedstruct do
@@ -53,6 +55,7 @@ defmodule GuardedStructFixtures.MixedDecoratorInline do
   # 3. Inline on outer sub_field + decorator on inner field
   # ----------------------------------------------------------------
   defmodule OuterInlineInnerDecorator do
+    @moduledoc "Inline `derives:` on the outer sub_field, decorator on its inner field."
     use GuardedStruct
 
     guardedstruct do
@@ -67,6 +70,7 @@ defmodule GuardedStructFixtures.MixedDecoratorInline do
   # 4. BOTH on the same field — inline wins (existing precedence rule)
   # ----------------------------------------------------------------
   defmodule BothOnSameField do
+    @moduledoc "Decorator and inline `derives:` on the same field; the inline rule wins."
     use GuardedStruct
 
     guardedstruct do
@@ -80,6 +84,7 @@ defmodule GuardedStructFixtures.MixedDecoratorInline do
   # Confirms decorator one-shot semantics + independent enforcement.
   # ----------------------------------------------------------------
   defmodule VirtualMix do
+    @moduledoc "Adjacent virtual fields, one decorated and one inline, each enforced on its own."
     use GuardedStruct
 
     guardedstruct do
@@ -103,6 +108,7 @@ defmodule GuardedStructFixtures.MixedDecoratorInline do
   # 6. Mixed conditional — decorator on conditional + inline on branch field
   # ----------------------------------------------------------------
   defmodule ConditionalMix do
+    @moduledoc "Decorator on a conditional_field with inline `derives:` on a branch field."
     use GuardedStruct
 
     guardedstruct do
@@ -110,7 +116,7 @@ defmodule GuardedStructFixtures.MixedDecoratorInline do
       conditional_field(:detail, any()) do
         sub_field(:detail, struct(),
           hint: "minimal",
-          validator: {Validators, :is_map}
+          validator: {Validators, :validate_map}
         ) do
           field(:tag, String.t(), derives: "validate(string, max_len=8)")
         end

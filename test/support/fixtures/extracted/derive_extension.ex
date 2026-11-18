@@ -1,4 +1,5 @@
 defmodule GuardedStructTest.Fixtures.DeriveExtension.SlugDerives do
+  @moduledoc false
   use GuardedStruct.Derive.Extension
 
   derives do
@@ -16,6 +17,7 @@ defmodule GuardedStructTest.Fixtures.DeriveExtension.SlugDerives do
 end
 
 defmodule GuardedStructTest.Fixtures.DeriveExtension.WithSlug do
+  @moduledoc false
   use GuardedStruct
 
   guardedstruct do
@@ -24,6 +26,7 @@ defmodule GuardedStructTest.Fixtures.DeriveExtension.WithSlug do
 end
 
 defmodule GuardedStructTest.Fixtures.DeriveExtension.WithSlugify do
+  @moduledoc false
   use GuardedStruct
 
   guardedstruct do

@@ -1,4 +1,5 @@
 defmodule GuardedStructTest.Fixtures.PatternMap.Shard do
+  @moduledoc false
   use GuardedStruct
 
   guardedstruct do
@@ -7,6 +8,7 @@ defmodule GuardedStructTest.Fixtures.PatternMap.Shard do
 end
 
 defmodule GuardedStructTest.Fixtures.PatternMap.ShardsMap do
+  @moduledoc false
   use GuardedStruct
 
   guardedstruct do
@@ -18,6 +20,7 @@ defmodule GuardedStructTest.Fixtures.PatternMap.ShardsMap do
 end
 
 defmodule GuardedStructTest.Fixtures.PatternMap.Plan do
+  @moduledoc false
   use GuardedStruct
 
   guardedstruct do
@@ -31,6 +34,7 @@ defmodule GuardedStructTest.Fixtures.PatternMap.Plan do
 end
 
 defmodule GuardedStructTest.Fixtures.PatternMap.MultiPattern do
+  @moduledoc false
   use GuardedStruct
 
   guardedstruct do
@@ -40,6 +44,7 @@ defmodule GuardedStructTest.Fixtures.PatternMap.MultiPattern do
 end
 
 defmodule GuardedStructTest.Fixtures.PatternMap.HeadersMap do
+  @moduledoc false
   use GuardedStruct
 
   guardedstruct do

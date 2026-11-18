@@ -1,4 +1,13 @@
 defmodule GuardedStruct.Derive.ValidationDerive do
+  @moduledoc """
+  The built-in `validate(...)` ops of a derive.
+
+  `validate/3` checks one value against one op and returns the value, or
+  `{:error, field, action, message}` when it fails. `call/3` runs every validate
+  op of a field and collects the errors. An op it does not know goes to the
+  `derive_extensions` and the `validate_derive` modules of the struct.
+  """
+
   alias GuardedStruct.Helper.Extra
   import GuardedStruct.Messages, only: [translated_message: 2]
 
@@ -36,31 +45,23 @@ defmodule GuardedStruct.Derive.ValidationDerive do
     validated = Enum.map(actions, &validate(&1, input, field))
 
     validated_errors =
-      Enum.reduce(validated, [], fn map, acc ->
-        if is_tuple(map) and elem(map, 0) == :error do
-          map_list =
-            case map do
-              {:error, _, :each, _, {:children, child_errs}} when is_list(child_errs) ->
-                Enum.map(child_errs, &maybe_add_hint(&1, hint))
-
-              {:error, _, _, _, :halt} ->
-                [Map.put(build_error_map(field, map, hint), :status, :halt)]
-
-              {:error, _, _, _} ->
-                [build_error_map(field, map, hint)]
-
-              _ ->
-                []
-            end
-
-          map_list ++ acc
-        else
-          acc
-        end
-      end)
+      Enum.reduce(validated, [], fn result, acc -> error_entries(result, field, hint) ++ acc end)
 
     {List.first(validated), validated_errors}
   end
+
+  # The error maps one validate result adds: an `each` error holds one per failed element.
+  defp error_entries({:error, _, :each, _, {:children, child_errs}}, _field, hint)
+       when is_list(child_errs),
+       do: Enum.map(child_errs, &maybe_add_hint(&1, hint))
+
+  defp error_entries({:error, _, _, _, :halt} = error, field, hint),
+    do: [Map.put(build_error_map(field, error, hint), :status, :halt)]
+
+  defp error_entries({:error, _, _, _} = error, field, hint),
+    do: [build_error_map(field, error, hint)]
+
+  defp error_entries(_result, _field, _hint), do: []
 
   defp build_error_map(field, error_tuple, hint) do
     %{field: field, action: elem(error_tuple, 2), message: elem(error_tuple, 3)}
@@ -96,12 +97,12 @@ defmodule GuardedStruct.Derive.ValidationDerive do
 
   for {op, pred_name} <- type_predicates do
     def validate(unquote(op), input, field) do
-      is_type(field, unquote(pred_name)(input), unquote(op), input)
+      check_type(field, unquote(pred_name)(input), unquote(op), input)
     end
   end
 
   def validate(:not_nil_value, input, field) do
-    is_type(field, not is_nil(input), :not_nil_value, input)
+    check_type(field, not is_nil(input), :not_nil_value, input)
   end
 
   def validate(:not_empty, input, field) when is_binary(input) do
@@ -159,17 +160,17 @@ defmodule GuardedStruct.Derive.ValidationDerive do
       else: {:error, field, :max_len, translated_message(:max_len_binary, {field, len})}
   end
 
-  def validate({:max_len, len}, input, field) when is_integer(input) or is_float(input) do
-    if input <= len,
-      do: input,
-      else: {:error, field, :max_len, translated_message(:max_len_integer, {field, len})}
-  end
+  def validate({:max_len, len}, input, _field) when is_number(input) and input <= len, do: input
 
-  def validate({:max_len, len}, %{__struct__: Range, first: _first, last: last} = input, field) do
-    if is_integer(last) and last <= len,
-      do: input,
-      else: {:error, field, :max_len, translated_message(:max_len_range, {field, len})}
-  end
+  def validate({:max_len, len}, input, field) when is_number(input),
+    do: {:error, field, :max_len, translated_message(:max_len_integer, {field, len})}
+
+  def validate({:max_len, len}, %{__struct__: Range, first: _first, last: last} = input, _field)
+      when is_integer(last) and last <= len,
+      do: input
+
+  def validate({:max_len, len}, %{__struct__: Range, first: _first, last: _last}, field),
+    do: {:error, field, :max_len, translated_message(:max_len_range, {field, len})}
 
   def validate({:max_len, len}, input, field) when is_list(input) do
     if length(input) <= len,
@@ -187,17 +188,17 @@ defmodule GuardedStruct.Derive.ValidationDerive do
       else: input
   end
 
-  def validate({:min_len, len}, input, field) when is_integer(input) or is_float(input) do
-    if input < len,
-      do: {:error, field, :min_len, translated_message(:min_len_integer, {field, len})},
-      else: input
-  end
+  def validate({:min_len, len}, input, field) when is_number(input) and input < len,
+    do: {:error, field, :min_len, translated_message(:min_len_integer, {field, len})}
 
-  def validate({:min_len, len}, %{__struct__: Range, first: first, last: _last} = input, field) do
-    if is_integer(first) and first >= len,
-      do: input,
-      else: {:error, field, :min_len, translated_message(:min_len_range, {field, len})}
-  end
+  def validate({:min_len, _len}, input, _field) when is_number(input), do: input
+
+  def validate({:min_len, len}, %{__struct__: Range, first: first, last: _last} = input, _field)
+      when is_integer(first) and first >= len,
+      do: input
+
+  def validate({:min_len, len}, %{__struct__: Range, first: _first, last: _last}, field),
+    do: {:error, field, :min_len, translated_message(:min_len_range, {field, len})}
 
   def validate({:min_len, len}, input, field) when is_list(input) do
     if length(input) < len,
@@ -238,13 +239,7 @@ defmodule GuardedStruct.Derive.ValidationDerive do
     with_packages(field, :tell, [URL, ExPhoneNumber], fn ->
       case URL.new("tel:#{input}") do
         {:ok, %{__struct__: URL, scheme: "tel", parsed_path: %{__struct__: URL.Tel}}} ->
-          case ExPhoneNumber.parse(input, nil) do
-            {:ok, %{__struct__: ExPhoneNumber.Model.PhoneNumber, country_code: ^country_code}} ->
-              input
-
-            _ ->
-              {:error, field, :tell, translated_message(:tell, field)}
-          end
+          phone_in_country(input, country_code, field)
 
         {:error, {URL.Parser.ParseError, _msg}} ->
           {:error, field, :tell, translated_message(:tell, field)}
@@ -383,16 +378,11 @@ defmodule GuardedStruct.Derive.ValidationDerive do
   end
 
   def validate(:ipv4, input, field) when is_binary(input) do
-    segments = String.split(input, ".")
-
-    if length(segments) != 4 do
-      {:error, field, :ipv4, translated_message(:ipv4, field)}
+    with [_, _, _, _] = segments <- String.split(input, "."),
+         true <- Enum.all?(segments, &(String.to_integer(&1) in 0..255)) do
+      input
     else
-      Enum.all?(segments, &(String.to_integer(&1) in 0..255))
-      |> case do
-        true -> input
-        false -> {:error, field, :ipv4, translated_message(:ipv4, field)}
-      end
+      _ -> {:error, field, :ipv4, translated_message(:ipv4, field)}
     end
   rescue
     _ ->
@@ -428,13 +418,11 @@ defmodule GuardedStruct.Derive.ValidationDerive do
   def validate(:ip, _input, field),
     do: {:error, field, :ip, translated_message(:ip, field)}
 
-  def validate(:not_empty_string, input, field) do
-    if is_binary(input) and input != "" do
-      input
-    else
-      {:error, field, :not_empty_string, translated_message(:not_empty_string, field)}
-    end
-  end
+  def validate(:not_empty_string, input, _field) when is_binary(input) and input != "",
+    do: input
+
+  def validate(:not_empty_string, _input, field),
+    do: {:error, field, :not_empty_string, translated_message(:not_empty_string, field)}
 
   def validate(:uuid, input, field) do
     uuid_regex = ~r/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
@@ -482,7 +470,7 @@ defmodule GuardedStruct.Derive.ValidationDerive do
 
   def validate({:enum, "Atom" <> list}, input, field) when is_atom(input) do
     convert_enum(list)
-    |> Enum.map(&String.to_atom(&1))
+    |> Enum.map(&operand_atom/1)
     |> convert_enum_output(input, field)
   end
 
@@ -532,22 +520,22 @@ defmodule GuardedStruct.Derive.ValidationDerive do
     |> vlidate_equal(input, field)
   end
 
+  # Compares names, so checking a value creates no atom.
   def validate({:equal, "Atom::" <> value}, input, field) do
-    String.to_atom(value)
-    |> vlidate_equal(input, field)
+    if is_atom(input) and Atom.to_string(input) == value,
+      do: input,
+      else: {:error, field, :equal, translated_message(:equal, field)}
   end
 
   def validate({:equal, "Map::" <> value}, input, field) do
-    {converted, []} = Code.eval_string(value)
-
-    converted
+    value
+    |> eval_operand()
     |> vlidate_equal(input, field)
   end
 
   def validate({:equal, "Tuple::" <> value}, input, field) do
-    {converted, []} = Code.eval_string(value)
-
-    converted
+    value
+    |> eval_operand()
     |> vlidate_equal(input, field)
   end
 
@@ -577,7 +565,7 @@ defmodule GuardedStruct.Derive.ValidationDerive do
   def validate({:custom, value}, input, field) do
     [module, function] = convert_enum(value, ",")
     safe_module = Module.safe_concat([module])
-    executed = apply(safe_module, String.to_atom(function), [input])
+    executed = apply(safe_module, String.to_existing_atom(function), [input])
     if is_boolean(executed) and executed, do: input, else: raise(ArgumentError, "")
   rescue
     _e ->
@@ -587,7 +575,7 @@ defmodule GuardedStruct.Derive.ValidationDerive do
   def validate(%{either: list}, input, field) do
     Enum.any?(list, fn item ->
       output = validate(item, input, field)
-      if is_tuple(output) and elem(output, 0) == :error, do: false, else: true
+      not (is_tuple(output) and elem(output, 0) == :error)
     end)
     |> case do
       true ->
@@ -661,8 +649,11 @@ defmodule GuardedStruct.Derive.ValidationDerive do
       else: {:error, field, :record, translated_message(:record, field)}
   end
 
+  # Compares names, so checking a value creates no atom.
   def validate({:record, tag}, input, field) when is_binary(tag) do
-    validate({:record, String.to_atom(tag)}, input, field)
+    if record?(input) and Atom.to_string(elem(input, 0)) == tag,
+      do: input,
+      else: {:error, field, :record, translated_message(:record, field)}
   end
 
   def validate(:slug, input, field) when is_binary(input) do
@@ -697,7 +688,7 @@ defmodule GuardedStruct.Derive.ValidationDerive do
     do: {:error, field, :hostname, translated_message(:hostname, field)}
 
   def validate(:port_number, input, _field)
-      when is_integer(input) and input >= 1 and input <= 65535,
+      when is_integer(input) and input >= 1 and input <= 65_535,
       do: input
 
   def validate(:port_number, _input, field),
@@ -932,16 +923,28 @@ defmodule GuardedStruct.Derive.ValidationDerive do
       "Add {#{inspect(package)}, #{inspect(requirement)}} to your deps"
   end
 
+  defp phone_in_country(input, country_code, field) do
+    case ExPhoneNumber.parse(input, nil) do
+      {:ok, %{__struct__: ExPhoneNumber.Model.PhoneNumber, country_code: ^country_code}} ->
+        input
+
+      _ ->
+        {:error, field, :tell, translated_message(:tell, field)}
+    end
+  end
+
   defp record?(input) do
     is_tuple(input) and tuple_size(input) > 0 and is_atom(elem(input, 0))
   end
 
-  defp is_type(field, status, type, input) do
+  defp check_type(field, status, type, input) do
     if status,
       do: input,
       else: {:error, field, type, translated_message(:is_type, {field, type})}
   end
 
+  # The pattern comes from the developer's derive string; only the subject is user input.
+  # sobelow_skip ["DOS.Regex"]
   defp regex_match?(pattern_str, subject) do
     case Regex.compile(pattern_str) do
       {:ok, regex} -> Regex.match?(regex, subject)
@@ -965,7 +968,7 @@ defmodule GuardedStruct.Derive.ValidationDerive do
   end
 
   defp validate_pattern(module, action, input, field) do
-    apply(module, :validate, [action, input, field])
+    module.validate(action, input, field)
   rescue
     _ -> nil
   end
@@ -989,19 +992,23 @@ defmodule GuardedStruct.Derive.ValidationDerive do
     end
   end
 
-  defp convert_enum_code_eval(list) do
-    list
-    |> Enum.map(fn item ->
-      {converted, []} = Code.eval_string(item)
-      converted
-    end)
+  defp convert_enum_code_eval(list), do: Enum.map(list, &eval_operand/1)
+
+  # Operands come from the developer's derive strings, never from user input.
+  # sobelow_skip ["RCE.CodeModule"]
+  defp eval_operand(source) do
+    {converted, []} = Code.eval_string(source)
+    converted
   end
 
-  defp vlidate_equal(validator, input, field) do
-    if validator === input,
-      do: input,
-      else: {:error, field, :equal, translated_message(:equal, field)}
-  end
+  # Operands come from the developer's derive strings, never from user input.
+  # sobelow_skip ["DOS.StringToAtom"]
+  defp operand_atom(string), do: String.to_atom(string)
+
+  defp vlidate_equal(validator, input, _field) when validator === input, do: input
+
+  defp vlidate_equal(_validator, _input, field),
+    do: {:error, field, :equal, translated_message(:equal, field)}
 
   defp compare_past(input, field, cmp, now_fn) do
     if cmp.(input, now_fn.()) in [:lt, :eq],
@@ -1018,8 +1025,8 @@ defmodule GuardedStruct.Derive.ValidationDerive do
   defp parse_temporal(bin) do
     parsers = [
       fn b -> with {:ok, dt, _} <- DateTime.from_iso8601(b), do: {:ok, dt} end,
-      fn b -> NaiveDateTime.from_iso8601(b) end,
-      fn b -> Date.from_iso8601(b) end
+      &NaiveDateTime.from_iso8601/1,
+      &Date.from_iso8601/1
     ]
 
     Enum.find_value(parsers, :error, fn parser ->

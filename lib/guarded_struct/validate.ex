@@ -19,7 +19,7 @@ defmodule GuardedStruct.Validate do
   import GuardedStruct.Messages, only: [translated_message: 2]
 
   alias GuardedStruct.{Derive, Runtime}
-  alias GuardedStruct.Derive.{Extension, Parser, OpEvaluator, OpParamValidator, ValidationDerive}
+  alias GuardedStruct.Derive.{Extension, OpEvaluator, OpParamValidator, Parser, ValidationDerive}
 
   @type error :: %{
           required(:field) => atom(),
@@ -40,6 +40,10 @@ defmodule GuardedStruct.Validate do
 
       iex> {:error, [%{action: :bad_parameters}]} =
       ...>   GuardedStruct.Validate.run("validate(max_len=foo)", "x")
+
+  The derive string is code, like a `derives:` string: its `Map::`, `Tuple::` and
+  `Atom[...]` operands are evaluated and regex operands compiled. Write it in your
+  own code and never build it from user input; only `value` may come from users.
   """
   @spec run(String.t(), any()) :: {:ok, any()} | {:error, [error]}
   def run(derive_string, value) when is_binary(derive_string) do
@@ -136,17 +140,19 @@ defmodule GuardedStruct.Validate do
 
     {ok_acc, err_acc} =
       Runtime.with_current_module(module, fn ->
-        Enum.reduce(present, {%{}, []}, fn meta, {ok, errs} ->
-          value = Map.get(attrs, meta.name)
-
-          case do_field_validate(meta, value, [context: attrs, mode: :strict], module) do
-            {:ok, validated} -> {Map.put(ok, meta.name, validated), errs}
-            {:error, e} -> {ok, errs ++ List.wrap(e)}
-          end
-        end)
+        Enum.reduce(present, {%{}, []}, &collect_field(&1, &2, attrs, module))
       end)
 
     if err_acc == [], do: {:ok, ok_acc}, else: {:error, err_acc}
+  end
+
+  defp collect_field(meta, {ok, errs}, attrs, module) do
+    value = Map.get(attrs, meta.name)
+
+    case do_field_validate(meta, value, [context: attrs, mode: :strict], module) do
+      {:ok, validated} -> {Map.put(ok, meta.name, validated), errs}
+      {:error, e} -> {ok, errs ++ List.wrap(e)}
+    end
   end
 
   defp do_field_validate(meta, value, opts, module) do
@@ -160,9 +166,8 @@ defmodule GuardedStruct.Validate do
       end
 
     with :ok <- cross_field_check,
-         {:ok, sanitized} <- run_pre_derive(meta, value),
-         {:ok, validated} <- run_field_validator(meta, sanitized, module) do
-      {:ok, validated}
+         {:ok, sanitized} <- run_pre_derive(meta, value) do
+      run_field_validator(meta, sanitized, module)
     end
   end
 

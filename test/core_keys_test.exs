@@ -34,7 +34,7 @@ defmodule GuardedStructTest.CoreKeysTest do
 
       conditional_field(:different_projects, any(), structs: true, on: "root::project::type") do
         sub_field(:different_projects, struct(),
-          validator: {VAL, :is_map_data},
+          validator: {VAL, :validate_map_data},
           hint: "different_projects1"
         ) do
           field(:action, String.t())
@@ -48,7 +48,7 @@ defmodule GuardedStructTest.CoreKeysTest do
 
         sub_field(:different_projects, struct(),
           structs: true,
-          validator: {VAL, :is_list_data},
+          validator: {VAL, :validate_list_data},
           hint: "different_projects2"
         ) do
           field(:action, String.t())
@@ -61,7 +61,7 @@ defmodule GuardedStructTest.CoreKeysTest do
         end
 
         field(:different_projects, String.t(),
-          validator: {VAL, :is_string_data},
+          validator: {VAL, :validate_string_data},
           hint: "different_projects3"
         )
       end
@@ -78,7 +78,7 @@ defmodule GuardedStructTest.CoreKeysTest do
 
       conditional_field(:different_code_bases, any(), on: "root::code_base::type") do
         sub_field(:different_code_bases, struct(),
-          validator: {VAL, :is_map_data},
+          validator: {VAL, :validate_map_data},
           hint: "different_code_bases1"
         ) do
           field(:action, String.t())
@@ -91,7 +91,7 @@ defmodule GuardedStructTest.CoreKeysTest do
         end
 
         field(:different_code_bases, String.t(),
-          validator: {VAL, :is_string_data},
+          validator: {VAL, :validate_string_data},
           hint: "different_code_bases2"
         )
       end
@@ -138,7 +138,7 @@ defmodule GuardedStructTest.CoreKeysTest do
 
     guardedstruct authorized_fields: true do
       field(:username, String.t(),
-        domain: "!auth.action=Custom[#{@module_path}, is_stuff?]",
+        domain: "!auth.action=Custom[#{@module_path}, stuff?]",
         derives: "validate(string)"
       )
 
@@ -159,8 +159,8 @@ defmodule GuardedStructTest.CoreKeysTest do
       end
     end
 
-    def is_stuff?(data) when data == "ok", do: true
-    def is_stuff?(_data), do: false
+    def stuff?("ok"), do: true
+    def stuff?(_data), do: false
   end
 
   defmodule FromStruct do
@@ -950,7 +950,6 @@ defmodule GuardedStructTest.CoreKeysTest do
     {:ok, _uuid} = assert GuardedStructTest.Support.UUID.cast(uuid)
     {:ok, _uuid} = assert GuardedStructTest.Support.UUID.cast(uuid1)
 
-    # TODO: check the error of :edit
     {:ok,
      %__MODULE__.AllowedParentCustomDomain{
        id: "https://github.com/mishka-group/guarded_struct",

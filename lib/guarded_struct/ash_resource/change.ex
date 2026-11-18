@@ -1,3 +1,7 @@
+# Ash is a dependency of the user's app, not of guarded_struct: every `Ash.*` call goes
+# through `apply/3` so this module compiles without undefined-module warnings when the
+# user's deps have no Ash.
+# credo:disable-for-this-file Credo.Check.Refactor.Apply
 defmodule GuardedStruct.AshResource.Change do
   @moduledoc """
   An `Ash.Resource.Change` module that plugs `__guarded_change__/1` into the
@@ -197,8 +201,6 @@ defmodule GuardedStruct.AshResource.Change do
 
   defp maybe_filter_required(errs, _), do: errs
 
-  # `apply/3` defers the Ash.* references to runtime so the module
-  # compiles without warnings when Ash isn't in the user's deps.
   defp force_change_attributes(changeset, attrs),
     do: apply(Ash.Changeset, :force_change_attributes, [changeset, attrs])
 

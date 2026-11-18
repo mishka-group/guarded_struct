@@ -8,11 +8,8 @@ defmodule GuardedStructTest.ValidateRunDeriveTest do
   alias GuardedStructTest.Fixtures.DeriveExtension.SlugDerives
 
   defmodule Positive do
-    def validate(:positive, input, field) do
-      if is_integer(input) and input > 0,
-        do: input,
-        else: {:error, field, :positive, "must be positive"}
-    end
+    def validate(:positive, input, _field) when is_integer(input) and input > 0, do: input
+    def validate(:positive, _input, field), do: {:error, field, :positive, "must be positive"}
   end
 
   @config_keys [:derive_extensions, :validate_derive, :sanitize_derive]
@@ -64,7 +61,9 @@ defmodule GuardedStructTest.ValidateRunDeriveTest do
         assert {:error, [%{field: :__value__, action: :bad_parameters, message: message}]} =
                  Validate.run(unquote(derive), unquote(Macro.escape(value)))
 
-        assert is_binary(message)
+        # The message says what is wrong with the derive string.
+        assert message =~
+                 ~r/^(invalid parameter for|could not parse the derive string|unknown (validate|sanitize) op)/
       end
     end
 

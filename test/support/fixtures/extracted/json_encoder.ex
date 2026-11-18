@@ -1,4 +1,5 @@
 defmodule GuardedStructTest.Fixtures.JsonEncoder.Plain do
+  @moduledoc false
   use GuardedStruct
 
   guardedstruct do
@@ -8,6 +9,7 @@ defmodule GuardedStructTest.Fixtures.JsonEncoder.Plain do
 end
 
 defmodule GuardedStructTest.Fixtures.JsonEncoder.WithJason do
+  @moduledoc false
   use GuardedStruct
 
   guardedstruct json: true do
@@ -17,6 +19,7 @@ defmodule GuardedStructTest.Fixtures.JsonEncoder.WithJason do
 end
 
 defmodule GuardedStructTest.Fixtures.JsonEncoder.Nested do
+  @moduledoc false
   use GuardedStruct
 
   guardedstruct json: true do

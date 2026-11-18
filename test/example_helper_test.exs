@@ -1,7 +1,7 @@
 defmodule GuardedStructTest.ExampleHelperTest do
   use ExUnit.Case, async: true
 
-  alias GuardedStructTest.Fixtures.ExampleHelper.{WithDefaults, TypeFallbacks, Nested}
+  alias GuardedStructTest.Fixtures.ExampleHelper.{Nested, TypeFallbacks, WithDefaults}
 
   test "example/0 uses declared defaults" do
     sample = WithDefaults.example()
@@ -21,11 +21,8 @@ defmodule GuardedStructTest.ExampleHelperTest do
   end
 
   test "nested sub_field example/0 recurses" do
-    sample = Nested.example()
-    assert sample.title == "the title"
-    assert is_struct(sample.meta)
-    assert sample.meta.author == "anon"
-    assert sample.meta.year == 2026
+    assert %Nested{title: "the title", meta: %Nested.Meta{author: "anon", year: 2026}} =
+             Nested.example()
   end
 
   test "example/0 returns a struct of the declaring module" do

@@ -1,6 +1,13 @@
 defmodule GuardedStruct.Dsl do
   @moduledoc false
 
+  @field_doc [
+    type: {:or, [:string, {:literal, false}]},
+    doc:
+      "What the field holds, in Markdown. It is the field's row text in the table of the " <>
+        "module's `t()` type docs. `false` leaves the field out of that table."
+  ]
+
   @field %Spark.Dsl.Entity{
     name: :field,
     target: GuardedStruct.Dsl.Field,
@@ -27,7 +34,8 @@ defmodule GuardedStruct.Dsl do
       struct: [type: :atom],
       structs: [type: {:or, [:atom, :boolean]}],
       hint: [type: :string],
-      priority: [type: :boolean]
+      priority: [type: :boolean],
+      doc: @field_doc
     ]
   }
 
@@ -54,7 +62,8 @@ defmodule GuardedStruct.Dsl do
       from: [type: :string],
       on: [type: :string],
       domain: [type: :string],
-      hint: [type: :string]
+      hint: [type: :string],
+      doc: @field_doc
     ]
   }
 
@@ -84,7 +93,8 @@ defmodule GuardedStruct.Dsl do
       from: [type: :string],
       on: [type: :string],
       domain: [type: :string],
-      hint: [type: :string]
+      hint: [type: :string],
+      doc: @field_doc
     ]
   }
 
@@ -123,6 +133,15 @@ defmodule GuardedStruct.Dsl do
           "A `{Module, :function}` called with the sub_field's validated attributes, " <>
             "like the section option. A `main_validator/1` defined in the parent module " <>
             "does not run for a sub_field."
+      ],
+      doc: [
+        type: {:or, [:string, {:literal, false}]},
+        doc:
+          "The `@moduledoc` of the module this sub_field generates, so the module has its own " <>
+            "page in the docs, and the field's row text in the parent's `t()` table. `false` " <>
+            "hides the module from the docs (`@moduledoc false`). When it is not set, the " <>
+            "module has no `@moduledoc`. A sub_field without a `do` block uses your own " <>
+            "module of that name, and `doc:` is only the row text."
       ]
     ],
     recursive_as: :sub_fields,
@@ -159,7 +178,8 @@ defmodule GuardedStruct.Dsl do
       struct: [type: :atom],
       structs: [type: {:or, [:atom, :boolean]}],
       hint: [type: :string],
-      priority: [type: :boolean]
+      priority: [type: :boolean],
+      doc: @field_doc
     ],
     recursive_as: :conditional_fields,
     entities: [
@@ -247,13 +267,13 @@ defmodule GuardedStruct.Dsl do
     transformers: [
       GuardedStruct.Transformers.ParseDerive,
       GuardedStruct.Transformers.ParseCoreKeys,
-      GuardedStruct.Transformers.ParseDomain,
       GuardedStruct.Transformers.GenerateSubFieldModules,
       GuardedStruct.Transformers.GenerateBuilder
     ],
     verifiers: [
       GuardedStruct.Verifiers.VerifyValidatorMFA,
       GuardedStruct.Verifiers.VerifyAutoMFA,
-      GuardedStruct.Verifiers.VerifyNoStructCycles
+      GuardedStruct.Verifiers.VerifyNoStructCycles,
+      GuardedStruct.Verifiers.VerifySubFieldModules
     ]
 end

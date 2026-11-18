@@ -6,25 +6,22 @@
 # fixture compilation (test_helper.exs hasn't run yet at that point).
 
 defmodule ConditionalFieldValidatorTestValidators do
-  def is_string_data(field, value) do
-    if is_binary(value), do: {:ok, field, value}, else: {:error, field, "It is not string"}
-  end
+  @moduledoc false
 
-  def is_map_data(field, value) do
-    if is_map(value), do: {:ok, field, value}, else: {:error, field, "It is not map"}
-  end
+  def validate_string_data(field, value) when is_binary(value), do: {:ok, field, value}
+  def validate_string_data(field, _value), do: {:error, field, "It is not string"}
 
-  def is_list_data(field, value) do
-    if is_list(value), do: {:ok, field, value}, else: {:error, field, "It is not list"}
-  end
+  def validate_map_data(field, value) when is_map(value), do: {:ok, field, value}
+  def validate_map_data(field, _value), do: {:error, field, "It is not map"}
 
-  def is_flat_list_data(field, value) do
-    if is_list(value),
-      do: {:ok, field, List.flatten(value)},
-      else: {:error, field, "It is not list"}
-  end
+  def validate_list_data(field, value) when is_list(value), do: {:ok, field, value}
+  def validate_list_data(field, _value), do: {:error, field, "It is not list"}
 
-  def is_int_data(field, value) do
-    if is_integer(value), do: {:ok, field, value}, else: {:error, field, "It is not integer"}
-  end
+  def validate_flat_list_data(field, value) when is_list(value),
+    do: {:ok, field, List.flatten(value)}
+
+  def validate_flat_list_data(field, _value), do: {:error, field, "It is not list"}
+
+  def validate_int_data(field, value) when is_integer(value), do: {:ok, field, value}
+  def validate_int_data(field, _value), do: {:error, field, "It is not integer"}
 end

@@ -12,6 +12,8 @@ defmodule GuardedStructTest.Property.AshAtomicTest do
 
   @moduletag capture_log: true
 
+  require Ash.Expr
+
   alias GuardedStruct.AshResource.Change
   alias GuardedStructTest.AshResources.{AtomicEligibleUser, AtomicWithCounter}
 
@@ -30,7 +32,8 @@ defmodule GuardedStructTest.Property.AshAtomicTest do
             end
 
           :ok ->
-            assert input == %{} or Enum.empty?(Map.from_struct(changeset).attributes || %{})
+            # atomic/3 passes through only when no attribute is being changed.
+            assert Enum.empty?(changeset.attributes || %{})
 
           {:ok, _cs} ->
             :ok
@@ -65,8 +68,6 @@ defmodule GuardedStructTest.Property.AshAtomicTest do
 
   describe "Ash.Expr in atomics" do
     property "an Ash.Expr value on an OWNED key bails to :not_atomic" do
-      require Ash.Expr
-
       owned_keys = [:email, :username, :age, :role, :status]
 
       check all(field <- StreamData.member_of(owned_keys)) do
@@ -90,8 +91,6 @@ defmodule GuardedStructTest.Property.AshAtomicTest do
     end
 
     property "an Ash.Expr value on a NON-owned key passes through (no bail)" do
-      require Ash.Expr
-
       check all(_ <- StreamData.integer(1..3)) do
         cs =
           AtomicWithCounter

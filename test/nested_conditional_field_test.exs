@@ -4,8 +4,7 @@ defmodule GuardedStructTest.NestedConditionalFieldTest do
   alias GuardedStructTest.Fixtures.NestedConditionalField.{Actor, Conditional, TripleNest}
 
   test "compiles without raising :unsupported_conditional_field" do
-    assert Code.ensure_loaded?(Conditional)
-    assert function_exported?(Conditional, :builder, 1)
+    assert {:builder, 1} in Conditional.__info__(:functions)
   end
 
   test "nested conditional resolves a single map → outer first child (Actor struct)" do
@@ -45,7 +44,12 @@ defmodule GuardedStructTest.NestedConditionalFieldTest do
              }
            ] = errors
 
-    assert length(child_errors) >= 1
+    # One error per branch: the map branch, the list branch and the string branch.
+    assert [
+             %{field: :actor, action: :validator},
+             %{field: :actor, action: :type},
+             %{field: :actor, action: :validator}
+           ] = child_errors
   end
 
   test "three-deep conditional: top-level string wins" do
