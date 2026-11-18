@@ -1,3 +1,7 @@
+# Changelog for GuardedStruct 0.1.9
+
+- Fix a `struct:`, `structs:` or `sub_field` field given a value of the wrong shape being kept in the struct unbuilt and unchecked (`lines: "garbage"`, `address: 5`, `rates: %{...}` all came back `{:ok, ...}`). A list field (`structs: Mod` or a `sub_field` with `structs: true`) now refuses anything but a list with `%{action: :type}`, and a one-struct field (`struct: Mod` or a `sub_field`) anything but a map with `%{action: :bad_parameters}`. A `sub_field` with `structs: true` given one map no longer builds a single struct
+
 # Changelog for GuardedStruct 0.1.8
 
 - Fix `validate(not_nil_value)` letting an explicit `nil` through: a field given as `nil` skipped every op, so the one op made to refuse `nil` never ran, and `enforce: true` only asks for the key. It now runs on a `nil` value and the field fails with `%{action: :not_nil_value}`. Every other op still skips a `nil` field, and `sanitize(default_when_nil=...)` still replaces it first

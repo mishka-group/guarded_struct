@@ -824,12 +824,28 @@ defmodule GuardedStruct.Runtime do
       meta.kind == :sub_field and Map.get(meta, :list?) == true and is_list(value) ->
         build_list(meta.child_module, meta.name, value, ok_acc, err_acc, full_attrs, parent_path)
 
-      meta.kind == :sub_field and is_map(value) ->
+      meta.kind == :sub_field and Map.get(meta, :list?) != true and is_map(value) ->
         meta.child_module
         |> build_single(meta.name, value, ok_acc, err_acc, full_attrs, parent_path)
 
       true ->
-        {:ok, ok_acc, err_acc}
+        {:ok, ok_acc, err_acc ++ shape_error(meta)}
+    end
+  end
+
+  # A `struct:`, `structs:` or `sub_field` value of the wrong shape is refused, instead of being
+  # kept in the struct unbuilt: a list where a list is built, a map where one struct is built.
+  defp shape_error(meta) do
+    cond do
+      Map.get(meta, :list?) == true or
+          (is_atom(meta.structs) and meta.structs not in [nil, true, false]) ->
+        [%{field: meta.name, action: :type, message: translated_message(:list_builder_type)}]
+
+      meta.kind == :sub_field or (is_atom(meta.struct) and not is_nil(meta.struct)) ->
+        [%{field: meta.name, action: :bad_parameters, message: translated_message(:builder)}]
+
+      true ->
+        []
     end
   end
 
