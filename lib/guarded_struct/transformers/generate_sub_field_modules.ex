@@ -101,12 +101,23 @@ defmodule GuardedStruct.Transformers.GenerateSubFieldModules do
         })
       )
 
+    body = with_moduledoc(body, sf.doc)
     file = file_for(sf)
     line = line_for(sf)
 
     Transformer.async_compile(dsl_state, fn ->
       Module.create(submodule, body, file: file, line: line)
     end)
+  end
+
+  # The `doc:` option is the generated module's @moduledoc; without it the module has none.
+  defp with_moduledoc(body, nil), do: body
+
+  defp with_moduledoc(body, doc) do
+    quote do
+      @moduledoc unquote(doc)
+      unquote(body)
+    end
   end
 
   defp info_path(submodule), do: Module.split(submodule) |> Enum.map(&String.to_atom/1)

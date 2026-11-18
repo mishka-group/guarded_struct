@@ -7,6 +7,7 @@ spark_locals_without_parens = [
   default: 1,
   derive: 1,
   derives: 1,
+  doc: 1,
   domain: 1,
   dynamic_field: 1,
   dynamic_field: 2,

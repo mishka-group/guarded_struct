@@ -219,6 +219,7 @@ sub_field name, type
 | [`error`](#guardedstruct-sub_field-error){: #guardedstruct-sub_field-error } | `boolean` |  |  |
 | [`authorized_fields`](#guardedstruct-sub_field-authorized_fields){: #guardedstruct-sub_field-authorized_fields } | `boolean` |  |  |
 | [`main_validator`](#guardedstruct-sub_field-main_validator){: #guardedstruct-sub_field-main_validator } | `{atom, atom}` |  | A `{Module, :function}` called with the sub_field's validated attributes, like the section option. A `main_validator/1` defined in the parent module does not run for a sub_field. |
+| [`doc`](#guardedstruct-sub_field-doc){: #guardedstruct-sub_field-doc } | `String.t \| false` |  | The `@moduledoc` of the module this sub_field generates, so the module has its own page in the docs. `false` hides the module from the docs (`@moduledoc false`). When it is not set, the module has no `@moduledoc`. |
 
 
 ### guardedstruct.sub_field.conditional_field
@@ -343,6 +344,7 @@ sub_field name, type
 | [`error`](#guardedstruct-sub_field-conditional_field-sub_field-error){: #guardedstruct-sub_field-conditional_field-sub_field-error } | `boolean` |  |  |
 | [`authorized_fields`](#guardedstruct-sub_field-conditional_field-sub_field-authorized_fields){: #guardedstruct-sub_field-conditional_field-sub_field-authorized_fields } | `boolean` |  |  |
 | [`main_validator`](#guardedstruct-sub_field-conditional_field-sub_field-main_validator){: #guardedstruct-sub_field-conditional_field-sub_field-main_validator } | `{atom, atom}` |  | A `{Module, :function}` called with the sub_field's validated attributes, like the section option. A `main_validator/1` defined in the parent module does not run for a sub_field. |
+| [`doc`](#guardedstruct-sub_field-conditional_field-sub_field-doc){: #guardedstruct-sub_field-conditional_field-sub_field-doc } | `String.t \| false` |  | The `@moduledoc` of the module this sub_field generates, so the module has its own page in the docs. `false` hides the module from the docs (`@moduledoc false`). When it is not set, the module has no `@moduledoc`. |
 
 
 ### guardedstruct.sub_field.conditional_field.sub_field.field
@@ -434,6 +436,7 @@ sub_field name, type
 | [`error`](#guardedstruct-sub_field-sub_field-error){: #guardedstruct-sub_field-sub_field-error } | `boolean` |  |  |
 | [`authorized_fields`](#guardedstruct-sub_field-sub_field-authorized_fields){: #guardedstruct-sub_field-sub_field-authorized_fields } | `boolean` |  |  |
 | [`main_validator`](#guardedstruct-sub_field-sub_field-main_validator){: #guardedstruct-sub_field-sub_field-main_validator } | `{atom, atom}` |  | A `{Module, :function}` called with the sub_field's validated attributes, like the section option. A `main_validator/1` defined in the parent module does not run for a sub_field. |
+| [`doc`](#guardedstruct-sub_field-sub_field-doc){: #guardedstruct-sub_field-sub_field-doc } | `String.t \| false` |  | The `@moduledoc` of the module this sub_field generates, so the module has its own page in the docs. `false` hides the module from the docs (`@moduledoc false`). When it is not set, the module has no `@moduledoc`. |
 
 
 ### guardedstruct.sub_field.sub_field.field
@@ -623,6 +626,7 @@ sub_field name, type
 | [`error`](#guardedstruct-conditional_field-sub_field-error){: #guardedstruct-conditional_field-sub_field-error } | `boolean` |  |  |
 | [`authorized_fields`](#guardedstruct-conditional_field-sub_field-authorized_fields){: #guardedstruct-conditional_field-sub_field-authorized_fields } | `boolean` |  |  |
 | [`main_validator`](#guardedstruct-conditional_field-sub_field-main_validator){: #guardedstruct-conditional_field-sub_field-main_validator } | `{atom, atom}` |  | A `{Module, :function}` called with the sub_field's validated attributes, like the section option. A `main_validator/1` defined in the parent module does not run for a sub_field. |
+| [`doc`](#guardedstruct-conditional_field-sub_field-doc){: #guardedstruct-conditional_field-sub_field-doc } | `String.t \| false` |  | The `@moduledoc` of the module this sub_field generates, so the module has its own page in the docs. `false` hides the module from the docs (`@moduledoc false`). When it is not set, the module has no `@moduledoc`. |
 
 
 ### guardedstruct.conditional_field.sub_field.conditional_field
@@ -747,6 +751,7 @@ sub_field name, type
 | [`error`](#guardedstruct-conditional_field-sub_field-conditional_field-sub_field-error){: #guardedstruct-conditional_field-sub_field-conditional_field-sub_field-error } | `boolean` |  |  |
 | [`authorized_fields`](#guardedstruct-conditional_field-sub_field-conditional_field-sub_field-authorized_fields){: #guardedstruct-conditional_field-sub_field-conditional_field-sub_field-authorized_fields } | `boolean` |  |  |
 | [`main_validator`](#guardedstruct-conditional_field-sub_field-conditional_field-sub_field-main_validator){: #guardedstruct-conditional_field-sub_field-conditional_field-sub_field-main_validator } | `{atom, atom}` |  | A `{Module, :function}` called with the sub_field's validated attributes, like the section option. A `main_validator/1` defined in the parent module does not run for a sub_field. |
+| [`doc`](#guardedstruct-conditional_field-sub_field-conditional_field-sub_field-doc){: #guardedstruct-conditional_field-sub_field-conditional_field-sub_field-doc } | `String.t \| false` |  | The `@moduledoc` of the module this sub_field generates, so the module has its own page in the docs. `false` hides the module from the docs (`@moduledoc false`). When it is not set, the module has no `@moduledoc`. |
 
 
 ### guardedstruct.conditional_field.sub_field.conditional_field.sub_field.field
@@ -838,6 +843,7 @@ sub_field name, type
 | [`error`](#guardedstruct-conditional_field-sub_field-sub_field-error){: #guardedstruct-conditional_field-sub_field-sub_field-error } | `boolean` |  |  |
 | [`authorized_fields`](#guardedstruct-conditional_field-sub_field-sub_field-authorized_fields){: #guardedstruct-conditional_field-sub_field-sub_field-authorized_fields } | `boolean` |  |  |
 | [`main_validator`](#guardedstruct-conditional_field-sub_field-sub_field-main_validator){: #guardedstruct-conditional_field-sub_field-sub_field-main_validator } | `{atom, atom}` |  | A `{Module, :function}` called with the sub_field's validated attributes, like the section option. A `main_validator/1` defined in the parent module does not run for a sub_field. |
+| [`doc`](#guardedstruct-conditional_field-sub_field-sub_field-doc){: #guardedstruct-conditional_field-sub_field-sub_field-doc } | `String.t \| false` |  | The `@moduledoc` of the module this sub_field generates, so the module has its own page in the docs. `false` hides the module from the docs (`@moduledoc false`). When it is not set, the module has no `@moduledoc`. |
 
 
 ### guardedstruct.conditional_field.sub_field.sub_field.field
@@ -1052,6 +1058,7 @@ sub_field name, type
 | [`error`](#guardedstruct-conditional_field-conditional_field-sub_field-error){: #guardedstruct-conditional_field-conditional_field-sub_field-error } | `boolean` |  |  |
 | [`authorized_fields`](#guardedstruct-conditional_field-conditional_field-sub_field-authorized_fields){: #guardedstruct-conditional_field-conditional_field-sub_field-authorized_fields } | `boolean` |  |  |
 | [`main_validator`](#guardedstruct-conditional_field-conditional_field-sub_field-main_validator){: #guardedstruct-conditional_field-conditional_field-sub_field-main_validator } | `{atom, atom}` |  | A `{Module, :function}` called with the sub_field's validated attributes, like the section option. A `main_validator/1` defined in the parent module does not run for a sub_field. |
+| [`doc`](#guardedstruct-conditional_field-conditional_field-sub_field-doc){: #guardedstruct-conditional_field-conditional_field-sub_field-doc } | `String.t \| false` |  | The `@moduledoc` of the module this sub_field generates, so the module has its own page in the docs. `false` hides the module from the docs (`@moduledoc false`). When it is not set, the module has no `@moduledoc`. |
 
 
 ### guardedstruct.conditional_field.conditional_field.sub_field.field

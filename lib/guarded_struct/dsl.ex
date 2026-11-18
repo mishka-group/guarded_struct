@@ -123,6 +123,13 @@ defmodule GuardedStruct.Dsl do
           "A `{Module, :function}` called with the sub_field's validated attributes, " <>
             "like the section option. A `main_validator/1` defined in the parent module " <>
             "does not run for a sub_field."
+      ],
+      doc: [
+        type: {:or, [:string, {:literal, false}]},
+        doc:
+          "The `@moduledoc` of the module this sub_field generates, so the module has its own " <>
+            "page in the docs. `false` hides the module from the docs (`@moduledoc false`). " <>
+            "When it is not set, the module has no `@moduledoc`."
       ]
     ],
     recursive_as: :sub_fields,
