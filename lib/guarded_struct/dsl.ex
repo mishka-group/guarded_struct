@@ -1,6 +1,13 @@
 defmodule GuardedStruct.Dsl do
   @moduledoc false
 
+  @field_doc [
+    type: {:or, [:string, {:literal, false}]},
+    doc:
+      "What the field holds, in Markdown. It is the field's row text in the table of the " <>
+        "module's `t()` type docs. `false` leaves the field out of that table."
+  ]
+
   @field %Spark.Dsl.Entity{
     name: :field,
     target: GuardedStruct.Dsl.Field,
@@ -27,7 +34,8 @@ defmodule GuardedStruct.Dsl do
       struct: [type: :atom],
       structs: [type: {:or, [:atom, :boolean]}],
       hint: [type: :string],
-      priority: [type: :boolean]
+      priority: [type: :boolean],
+      doc: @field_doc
     ]
   }
 
@@ -54,7 +62,8 @@ defmodule GuardedStruct.Dsl do
       from: [type: :string],
       on: [type: :string],
       domain: [type: :string],
-      hint: [type: :string]
+      hint: [type: :string],
+      doc: @field_doc
     ]
   }
 
@@ -84,7 +93,8 @@ defmodule GuardedStruct.Dsl do
       from: [type: :string],
       on: [type: :string],
       domain: [type: :string],
-      hint: [type: :string]
+      hint: [type: :string],
+      doc: @field_doc
     ]
   }
 
@@ -128,8 +138,10 @@ defmodule GuardedStruct.Dsl do
         type: {:or, [:string, {:literal, false}]},
         doc:
           "The `@moduledoc` of the module this sub_field generates, so the module has its own " <>
-            "page in the docs. `false` hides the module from the docs (`@moduledoc false`). " <>
-            "When it is not set, the module has no `@moduledoc`."
+            "page in the docs, and the field's row text in the parent's `t()` table. `false` " <>
+            "hides the module from the docs (`@moduledoc false`). When it is not set, the " <>
+            "module has no `@moduledoc`. A sub_field without a `do` block uses your own " <>
+            "module of that name, and `doc:` is only the row text."
       ]
     ],
     recursive_as: :sub_fields,
@@ -166,7 +178,8 @@ defmodule GuardedStruct.Dsl do
       struct: [type: :atom],
       structs: [type: {:or, [:atom, :boolean]}],
       hint: [type: :string],
-      priority: [type: :boolean]
+      priority: [type: :boolean],
+      doc: @field_doc
     ],
     recursive_as: :conditional_fields,
     entities: [

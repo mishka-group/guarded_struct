@@ -82,6 +82,8 @@ defmodule GuardedStruct.Transformers.Codegen do
     {keys, defstruct_kw, types, enforce_keys, fields_runtime} =
       build_struct_pieces(entities, block_enforce)
 
+    typedoc_rows = Macro.escape(GuardedStruct.Typedoc.rows(entities, enforce_keys))
+
     json? = Map.get(options, :json, false) == true
 
     # `json: true` opts into JSON encoding. Precedence:
@@ -160,6 +162,11 @@ defmodule GuardedStruct.Transformers.Codegen do
       unquote(derive_json_ast)
       @enforce_keys unquote(enforce_keys)
       defstruct unquote(escape_runtime(defstruct_kw))
+
+      # A @typedoc the user wrote above the guardedstruct block is still pending here; it wins.
+      unless Module.get_attribute(__MODULE__, :typedoc) do
+        @typedoc GuardedStruct.Typedoc.render(__ENV__, unquote(typedoc_rows))
+      end
 
       if unquote(opaque?) do
         @opaque t() :: %__MODULE__{unquote_splicing(types)}
@@ -257,6 +264,13 @@ defmodule GuardedStruct.Transformers.Codegen do
 
   defp build_pattern_map_body(entities, error?, _path, options) do
     patterns = Enum.map(entities, &pattern_regex(&1.name))
+    typedoc_rows = Macro.escape(GuardedStruct.Typedoc.pattern_rows(entities))
+
+    value_type =
+      entities
+      |> Enum.map(&GuardedStruct.Typedoc.type_of/1)
+      |> Enum.uniq_by(&Macro.to_string/1)
+      |> Enum.reduce(fn type, acc -> {:|, [], [acc, type]} end)
 
     fields_runtime =
       Enum.map(entities, fn %Field{} = f ->
@@ -288,6 +302,15 @@ defmodule GuardedStruct.Transformers.Codegen do
       })
 
     quote do
+      # A module that names its own `t` keeps it.
+      unless Module.defines_type?(__MODULE__, {:t, 0}) do
+        unless Module.get_attribute(__MODULE__, :typedoc) do
+          @typedoc GuardedStruct.Typedoc.render(__ENV__, unquote(typedoc_rows))
+        end
+
+        @type t() :: %{optional(String.t()) => unquote(value_type)}
+      end
+
       def keys, do: []
       def keys(_), do: false
       def enforce_keys, do: []
@@ -442,13 +465,7 @@ defmodule GuardedStruct.Transformers.Codegen do
       Enum.map(unique_entities, fn entity ->
         nullable? = entity.name not in enforce_keys
 
-        type_ast =
-          case entity do
-            %Field{type: t} -> t
-            %SubField{type: t} -> t
-            %ConditionalField{type: t} -> t
-            other -> Map.get(other, :type)
-          end
+        type_ast = GuardedStruct.Typedoc.type_of(entity)
 
         {entity.name, if(nullable?, do: nullable_type(type_ast), else: type_ast)}
       end)
@@ -558,6 +575,9 @@ defmodule GuardedStruct.Transformers.Codegen do
 
     {keys, defstruct_kw, types, enforce_keys, fields_runtime ++ virtual_runtime}
   end
+
+  @doc "The children of a conditional_field in the order they are written."
+  def conditional_children(%ConditionalField{} = cf), do: merge_children_in_source_order(cf)
 
   # Spark partitions conditional_field children into separate :fields,
   # :sub_fields, :conditional_fields lists; sort by `:type` AST line metadata

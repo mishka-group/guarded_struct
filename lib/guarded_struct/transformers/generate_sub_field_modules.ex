@@ -72,6 +72,65 @@ defmodule GuardedStruct.Transformers.GenerateSubFieldModules do
 
   defp generate_sub_field(%SubField{} = sf, parent_path, inherited, dsl_state) do
     submodule = Module.concat(parent_path ++ [Codegen.atom_to_module(sf.name)])
+
+    if GuardedStruct.Typedoc.generates_module?(sf) do
+      generate_module(sf, submodule, parent_path, inherited, dsl_state)
+    else
+      use_own_module!(sf, submodule, dsl_state)
+      dsl_state
+    end
+  end
+
+  # A sub_field without a `do` block uses the user's own module of the generated name, like
+  # `field name, struct(), struct: Module`. Its options that shape a generated module would
+  # be ignored, so they are refused.
+  defp use_own_module!(%SubField{} = sf, submodule, dsl_state) do
+    shaping =
+      Enum.filter([:authorized_fields, :main_validator, :error], &(Map.get(sf, &1) != nil))
+
+    cond do
+      shaping != [] ->
+        raise_dsl!(dsl_state, sf.name, own_module_options_message(submodule, sf.name, shaping))
+
+      not own_module?(submodule, dsl_state) ->
+        raise_dsl!(dsl_state, sf.name, missing_module_message(submodule, sf.name))
+
+      true ->
+        :ok
+    end
+  end
+
+  # A module nested in the parent is already compiled, and the env lists it. For any other,
+  # `Code.ensure_compiled/1` makes the compiler wait for the file that defines it.
+  defp own_module?(submodule, dsl_state) do
+    nested = dsl_state |> Transformer.get_persisted(:env) |> context_modules()
+
+    submodule in nested or
+      (match?({:module, _}, Code.ensure_compiled(submodule)) and
+         function_exported?(submodule, :builder, 1))
+  end
+
+  defp raise_dsl!(dsl_state, name, message) do
+    raise Spark.Error.DslError,
+      module: Transformer.get_persisted(dsl_state, :module),
+      path: [:guardedstruct, :sub_field, name],
+      message: message
+  end
+
+  @doc false
+  def missing_module_message(submodule, name) do
+    "sub_field #{inspect(name)} has no do block, so it uses the module #{inspect(submodule)}, " <>
+      "but there is no such module with a builder/1. Define #{inspect(submodule)} " <>
+      "(for example with use GuardedStruct), or give the sub_field a do block with its fields."
+  end
+
+  defp own_module_options_message(submodule, name, options) do
+    "sub_field #{inspect(name)} has no do block, so it uses your module " <>
+      "#{inspect(submodule)} as it is, and #{Enum.map_join(options, ", ", &inspect/1)} " <>
+      "would be ignored. Set them in the guardedstruct of #{inspect(submodule)}."
+  end
+
+  defp generate_module(%SubField{} = sf, submodule, parent_path, inherited, dsl_state) do
     new_path = parent_path ++ [Codegen.atom_to_module(sf.name)]
 
     # Recurse first so child submodule tasks are registered on dsl_state
@@ -143,8 +202,8 @@ defmodule GuardedStruct.Transformers.GenerateSubFieldModules do
   # The error shown when the module name a sub_field generates belongs to another module.
   def taken_name_message(submodule, name) do
     "sub_field #{inspect(name)} generates the module #{inspect(submodule)}, but another " <>
-      "module with that name is defined. Rename the sub_field, or keep your module and " <>
-      "point a field at it: field #{inspect(name)}, struct(), struct: #{inspect(submodule)}"
+      "module with that name is defined. Rename the sub_field, or drop its do block to use " <>
+      "your module as it is: sub_field #{inspect(name)}, struct()"
   end
 
   # Persists each generated module with its sub_field name for the post-compile check.
