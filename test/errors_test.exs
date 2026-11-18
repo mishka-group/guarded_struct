@@ -10,12 +10,13 @@ defmodule GuardedStructTest.ErrorsTest do
 
     class = Errors.from_tuple({:error, errors})
 
-    assert %Invalid{
-             errors: [
-               %Validation{field: :email, action: :email_r},
-               %Validation{field: :age, action: :max_len}
-             ]
-           } = class
+    # Errors follow the input map's order, which Erlang does not fix for atom keys.
+    assert %Invalid{errors: class_errors} = class
+
+    assert [
+             %Validation{field: :age, action: :max_len},
+             %Validation{field: :email, action: :email_r}
+           ] = Enum.sort_by(class_errors, & &1.field)
   end
 
   test "Validation exception carries field/action/message" do
@@ -38,9 +39,9 @@ defmodule GuardedStructTest.ErrorsTest do
     {:error, errors} = SampleStruct.builder(%{email: "x", age: -5})
     class = Errors.from_tuple(errors)
 
-    # Top-level fields share the root path `[]`.
-    assert %{[] => [email_message, age_message]} =
-             Errors.traverse_errors(class, &Exception.message/1)
+    # Top-level fields share the root path `[]`, in the input map's order (not fixed).
+    assert %{[] => messages} = Errors.traverse_errors(class, &Exception.message/1)
+    assert [email_message, age_message] = Enum.sort(messages)
 
     assert email_message =~ "Incorrect email"
     assert age_message =~ "minimum number the age field is 0"
