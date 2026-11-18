@@ -2,6 +2,28 @@ defmodule GuardedStructTest.SubFieldModuleNameTest do
   # async: false — `capture_io(:stderr, ...)` is process-global.
   use ExUnit.Case, async: false
 
+  # Compiles the source under a prefix unique to this run, then unloads every module the
+  # prefix defined, so the test repeats in one VM without clashing with its earlier runs.
+  defp compile(source) do
+    unique = "R#{System.unique_integer([:positive])}"
+    prefix = "Elixir.GuardedStructTest.SubFieldModuleNameTest.#{unique}."
+
+    on_exit(fn ->
+      for {module, _} <- :code.all_loaded(),
+          String.starts_with?(Atom.to_string(module), prefix) do
+        :code.purge(module)
+        :code.delete(module)
+      end
+    end)
+
+    source
+    |> String.replace(
+      "GuardedStructTest.SubFieldModuleNameTest.",
+      "GuardedStructTest.SubFieldModuleNameTest.#{unique}."
+    )
+    |> Code.compile_string()
+  end
+
   import ExUnit.CaptureIO
 
   @taken ~r/sub_field :address generates the module .*\.Address, but another module with that name is defined/
@@ -23,7 +45,7 @@ defmodule GuardedStructTest.SubFieldModuleNameTest do
     end
     """
 
-    assert_raise Spark.Error.DslError, @taken, fn -> Code.compile_string(source) end
+    assert_raise Spark.Error.DslError, @taken, fn -> compile(source) end
   end
 
   test "a module nested in the parent after guardedstruct is refused" do
@@ -43,7 +65,7 @@ defmodule GuardedStructTest.SubFieldModuleNameTest do
     end
     """
 
-    assert_raise Spark.Error.DslError, @taken, fn -> Code.compile_string(source) end
+    assert_raise Spark.Error.DslError, @taken, fn -> compile(source) end
   end
 
   test "a module with the generated name defined before the parent is refused" do
@@ -63,7 +85,7 @@ defmodule GuardedStructTest.SubFieldModuleNameTest do
     end
     """
 
-    assert_raise Spark.Error.DslError, @taken, fn -> Code.compile_string(source) end
+    assert_raise Spark.Error.DslError, @taken, fn -> compile(source) end
   end
 
   test "a module that replaces the generated one later is reported" do
@@ -83,7 +105,7 @@ defmodule GuardedStructTest.SubFieldModuleNameTest do
     end
     """
 
-    output = capture_io(:stderr, fn -> Code.compile_string(source) end)
+    output = capture_io(:stderr, fn -> compile(source) end)
 
     assert output =~ @taken
   end
@@ -103,8 +125,8 @@ defmodule GuardedStructTest.SubFieldModuleNameTest do
 
     output =
       capture_io(:stderr, fn ->
-        Code.compile_string(source)
-        send(self(), {:compiled, Code.compile_string(source)})
+        compile(source)
+        send(self(), {:compiled, compile(source)})
       end)
 
     refute output =~ "another module with that name"

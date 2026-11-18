@@ -3,6 +3,28 @@ defmodule GuardedStructTest.SubFieldOwnModuleTest do
   # async: false — Code.compile_string defines modules globally.
   use ExUnit.Case, async: false
 
+  # Compiles the source under a prefix unique to this run, then unloads every module the
+  # prefix defined, so the test repeats in one VM without clashing with its earlier runs.
+  defp compile(source) do
+    unique = "R#{System.unique_integer([:positive])}"
+    prefix = "Elixir.GuardedStructTest.SubFieldOwnModuleTest.#{unique}."
+
+    on_exit(fn ->
+      for {module, _} <- :code.all_loaded(),
+          String.starts_with?(Atom.to_string(module), prefix) do
+        :code.purge(module)
+        :code.delete(module)
+      end
+    end)
+
+    source
+    |> String.replace(
+      "GuardedStructTest.SubFieldOwnModuleTest.",
+      "GuardedStructTest.SubFieldOwnModuleTest.#{unique}."
+    )
+    |> Code.compile_string()
+  end
+
   alias GuardedStructTest.Fixtures.TypedocUses
 
   defp docs(module) do
@@ -78,12 +100,12 @@ defmodule GuardedStructTest.SubFieldOwnModuleTest do
       end
       """
 
-      [_, {parent, _}] = Code.compile_string(source)
+      [_, {parent, _}] = compile(source)
 
       assert {:ok, %{address: %{__struct__: address, city: "Rome"}}} =
                parent.builder(%{address: %{city: "Rome"}})
 
-      assert address == GuardedStructTest.SubFieldOwnModuleTest.Before.Address
+      assert address == Module.concat(parent, Address)
     end
   end
 
@@ -100,7 +122,7 @@ defmodule GuardedStructTest.SubFieldOwnModuleTest do
 
     assert_raise Spark.Error.DslError,
                  ~r/sub_field :address has no do block, so it uses the module .*Missing\.Address, but there is no such module with a builder\/1/,
-                 fn -> Code.compile_string(source) end
+                 fn -> compile(source) end
   end
 
   test "a module without builder/1 is a compile error" do
@@ -119,7 +141,7 @@ defmodule GuardedStructTest.SubFieldOwnModuleTest do
     """
 
     assert_raise Spark.Error.DslError, ~r/no such module with a builder\/1/, fn ->
-      Code.compile_string(source)
+      compile(source)
     end
   end
 
@@ -146,7 +168,7 @@ defmodule GuardedStructTest.SubFieldOwnModuleTest do
 
     assert_raise Spark.Error.DslError,
                  ~r/another module with that name is defined.*drop its do block/s,
-                 fn -> Code.compile_string(source) end
+                 fn -> compile(source) end
   end
 
   test "options that shape a generated module are refused without a do block" do
@@ -169,7 +191,7 @@ defmodule GuardedStructTest.SubFieldOwnModuleTest do
     """
 
     assert_raise Spark.Error.DslError, ~r/:authorized_fields would be ignored/, fn ->
-      Code.compile_string(source)
+      compile(source)
     end
   end
 end
