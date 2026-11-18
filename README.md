@@ -362,7 +362,7 @@ Account.builder(%{name: "Acme", owner: %{email: "z@a.io"},
 # => {:ok, %Account{plan: %Account.Plan1{tier: "custom", seats: 50}, ...}}
 ```
 
-Each `sub_field` is a real module (`Account.Owner`). Its `doc:` option becomes that module's `@moduledoc`, so ExDoc and `Code.fetch_docs/1` show it; `doc: false` hides the module from the docs, and with no `doc:` it has no `@moduledoc`.
+Each `sub_field` is a real module (`Account.Owner`). Its `doc:` option becomes that module's `@moduledoc`, so ExDoc and `Code.fetch_docs/1` show it; `doc: false` hides the module from the docs, and with no `doc:` it has no `@moduledoc`. The parent's own `@moduledoc` is never changed. The generated module name belongs to the `sub_field`: defining your own `Account.Owner` too fails to compile, so write it yourself and point a field at it (`field :owner, struct(), struct: Account.Owner`) when you want a hand-written module.
 
 ### 🪝 Custom validators / sanitizers
 

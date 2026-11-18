@@ -48,6 +48,14 @@ Same options as `field` plus:
   and ExDoc show it. `doc: false` hides the submodule (`@moduledoc false`); with no
   `doc:` it has no `@moduledoc`. Works on a list `sub_field` and on a
   `conditional_field`'s `sub_field` (its numbered module, e.g. `Plan1`).
+  Rules: `doc:` only sets the generated module's doc, never the parent's
+  `@moduledoc`, which stays exactly as written: your `@moduledoc` wins. There is no
+  `guardedstruct`-level doc option. Giving both `doc:` and the `doc "..."` setter in
+  the block fails with `Spark.Error.DslError` (multiple values for `:doc`). The
+  generated module name belongs to the sub_field: a module of your own with the same
+  name (nested in the parent, or one already compiled) fails to compile, and one
+  defined later is reported by a verifier. To write that module yourself, use
+  `field :address, struct(), struct: MyApp.Order.Address` instead of a `sub_field`.
 
 Children: nested `field`, `sub_field`, `conditional_field`.
 
