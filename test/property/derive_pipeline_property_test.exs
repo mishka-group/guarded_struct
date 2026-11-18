@@ -6,7 +6,7 @@ defmodule GuardedStructTest.Property.DerivePipelineTest do
   use ExUnit.Case, async: true
   use ExUnitProperties
 
-  alias GuardedStruct.Derive.{SanitizerDerive, ValidationDerive, Parser}
+  alias GuardedStruct.Derive.{Parser, SanitizerDerive, ValidationDerive}
 
   describe "sanitizer idempotence" do
     property "trim applied twice equals trim applied once (binary inputs)" do
@@ -86,12 +86,10 @@ defmodule GuardedStructTest.Property.DerivePipelineTest do
 
         actual_len = String.length(input)
 
-        cond do
-          actual_len >= min ->
-            assert errors == []
-
-          true ->
-            assert Enum.any?(errors, &match?(%{action: :min_len}, &1))
+        if actual_len >= min do
+          assert errors == []
+        else
+          assert Enum.any?(errors, &match?(%{action: :min_len}, &1))
         end
       end
     end
@@ -106,12 +104,10 @@ defmodule GuardedStructTest.Property.DerivePipelineTest do
 
         actual_len = String.length(input)
 
-        cond do
-          actual_len <= max ->
-            assert errors == []
-
-          true ->
-            assert Enum.any?(errors, &match?(%{action: :max_len}, &1))
+        if actual_len <= max do
+          assert errors == []
+        else
+          assert Enum.any?(errors, &match?(%{action: :max_len}, &1))
         end
       end
     end

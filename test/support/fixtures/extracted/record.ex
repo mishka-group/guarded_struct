@@ -1,4 +1,5 @@
 defmodule GuardedStructTest.Fixtures.Record.WithRecord do
+  @moduledoc false
   use GuardedStruct
 
   guardedstruct do

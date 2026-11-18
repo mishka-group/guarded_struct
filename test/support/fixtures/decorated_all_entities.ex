@@ -22,17 +22,18 @@ defmodule GuardedStructFixtures.DecoratedAllEntities do
 
   defmodule Validators do
     @moduledoc false
-    def is_string(field, v) when is_binary(v), do: {:ok, field, v}
-    def is_string(field, _), do: {:error, field, "not a string"}
+    def validate_string(field, v) when is_binary(v), do: {:ok, field, v}
+    def validate_string(field, _), do: {:error, field, "not a string"}
 
-    def is_map(field, v) when is_map(v) and not is_struct(v), do: {:ok, field, v}
-    def is_map(field, _), do: {:error, field, "not a map"}
+    def validate_map(field, v) when is_map(v) and not is_struct(v), do: {:ok, field, v}
+    def validate_map(field, _), do: {:error, field, "not a map"}
   end
 
   # ----------------------------------------------------------------
   # 1. @derives on `field` — the baseline case
   # ----------------------------------------------------------------
   defmodule OnField do
+    @moduledoc "`@derives` on a `field`, the baseline case."
     use GuardedStruct
 
     guardedstruct do
@@ -45,6 +46,7 @@ defmodule GuardedStructFixtures.DecoratedAllEntities do
   # 2. @derives on `virtual_field` — validated but not in struct
   # ----------------------------------------------------------------
   defmodule OnVirtualField do
+    @moduledoc "`@derives` on a `virtual_field`: validated but not in the struct."
     use GuardedStruct
 
     guardedstruct do
@@ -68,6 +70,7 @@ defmodule GuardedStructFixtures.DecoratedAllEntities do
   # 3. @derives on `dynamic_field` — overrides default `validate(map)`
   # ----------------------------------------------------------------
   defmodule OnDynamicField do
+    @moduledoc "`@derives` on a `dynamic_field`, overriding its default `validate(map)`."
     use GuardedStruct
 
     guardedstruct do
@@ -82,6 +85,7 @@ defmodule GuardedStructFixtures.DecoratedAllEntities do
   # 4. @derives on `sub_field` itself (the OUTER decorator)
   # ----------------------------------------------------------------
   defmodule OnSubField do
+    @moduledoc "`@derives` on a `sub_field` itself."
     use GuardedStruct
 
     guardedstruct do
@@ -100,6 +104,7 @@ defmodule GuardedStructFixtures.DecoratedAllEntities do
   # both branches accept maps, but with different inner shapes.
   # ----------------------------------------------------------------
   defmodule OnConditionalField do
+    @moduledoc "`@derives` on a `conditional_field`, checked before a branch is chosen."
     use GuardedStruct
 
     guardedstruct do
@@ -107,14 +112,14 @@ defmodule GuardedStructFixtures.DecoratedAllEntities do
       conditional_field(:detail, any()) do
         sub_field(:detail, struct(),
           hint: "minimal",
-          validator: {Validators, :is_map}
+          validator: {Validators, :validate_map}
         ) do
           field(:tag, String.t())
         end
 
         sub_field(:detail, struct(),
           hint: "full",
-          validator: {Validators, :is_map}
+          validator: {Validators, :validate_map}
         ) do
           field(:tag, String.t(), enforce: true)
           field(:extra, String.t())
@@ -127,6 +132,7 @@ defmodule GuardedStructFixtures.DecoratedAllEntities do
   # 6. @derives on a `field` INSIDE a sub_field body (level 2)
   # ----------------------------------------------------------------
   defmodule InsideSubField do
+    @moduledoc "`@derives` on a field inside a sub_field body."
     use GuardedStruct
 
     guardedstruct do
@@ -141,6 +147,7 @@ defmodule GuardedStructFixtures.DecoratedAllEntities do
   # 7. @derives on a `field` inside a `conditional_field` BRANCH
   # ----------------------------------------------------------------
   defmodule InsideConditional do
+    @moduledoc "`@derives` on a field inside a conditional_field branch."
     use GuardedStruct
 
     guardedstruct do
@@ -148,13 +155,13 @@ defmodule GuardedStructFixtures.DecoratedAllEntities do
         @derives "validate(string, max_len=10)"
         field(:body, String.t(),
           hint: "short_string",
-          validator: {Validators, :is_string}
+          validator: {Validators, :validate_string}
         )
 
         # No decorator on this branch — uses inline rules
         sub_field(:body, struct(),
           hint: "map_form",
-          validator: {Validators, :is_map}
+          validator: {Validators, :validate_map}
         ) do
           @derives "validate(string)"
           field(:kind, String.t())
@@ -167,6 +174,7 @@ defmodule GuardedStructFixtures.DecoratedAllEntities do
   # 8. DEEP nesting — @derives at every level (1 → 2 → 3 → 4)
   # ----------------------------------------------------------------
   defmodule DeepNested do
+    @moduledoc "`@derives` at every level of a four-level nesting."
     use GuardedStruct
 
     guardedstruct do
@@ -200,6 +208,7 @@ defmodule GuardedStructFixtures.DecoratedAllEntities do
   # 9. Mixed-entity module — every entity type in one module
   # ----------------------------------------------------------------
   defmodule MixedAll do
+    @moduledoc "Every entity type in one module, each ruled by `@derives`."
     use GuardedStruct
 
     guardedstruct do
@@ -225,12 +234,12 @@ defmodule GuardedStructFixtures.DecoratedAllEntities do
       conditional_field(:variant, any()) do
         field(:variant, String.t(),
           hint: "string",
-          validator: {Validators, :is_string}
+          validator: {Validators, :validate_string}
         )
 
         sub_field(:variant, struct(),
           hint: "map",
-          validator: {Validators, :is_map}
+          validator: {Validators, :validate_map}
         ) do
           @derives "validate(string)"
           field(:value, String.t())

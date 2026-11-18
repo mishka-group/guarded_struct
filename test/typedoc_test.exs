@@ -17,6 +17,14 @@ defmodule GuardedStructTest.TypedocTest do
     moduledoc
   end
 
+  # The one type `module` declares, as text.
+  defp only_type(module) do
+    {:ok, [{:type, spec}]} = Code.Typespec.fetch_types(module)
+    Macro.to_string(Code.Typespec.type_to_quoted(spec))
+  end
+
+  defp compile(source), do: Code.compile_string(source)
+
   # The type of each field of `t()`, as text.
   defp field_types(module) do
     {:ok, types} = Code.Typespec.fetch_types(module)
@@ -58,11 +66,7 @@ defmodule GuardedStructTest.TypedocTest do
     end
 
     test "a pattern-keyed map has a t() too" do
-      {:ok, types} = Code.Typespec.fetch_types(TypedocPattern)
-      [{:type, spec}] = types
-
-      assert Macro.to_string(Code.Typespec.type_to_quoted(spec)) ==
-               "t() :: %{optional(String.t()) => String.t()}"
+      assert only_type(TypedocPattern) == "t() :: %{optional(String.t()) => String.t()}"
     end
   end
 
@@ -168,7 +172,7 @@ defmodule GuardedStructTest.TypedocTest do
         end
         """
 
-        assert_raise Spark.Error.DslError, ~r/doc/, fn -> Code.compile_string(source) end
+        assert_raise Spark.Error.DslError, ~r/doc/, fn -> compile(source) end
       end
     end
   end

@@ -28,15 +28,13 @@ defmodule GuardedStructTest.Support.TestAuthStruct do
     )
   end
 
-  def test_validator(:changed, value) do
-    if is_binary(value),
-      do: {:ok, :changed, value <> "::Changed"},
-      else: {:error, :changed, "No, never"}
-  end
+  def test_validator(:changed, value) when is_binary(value),
+    do: {:ok, :changed, value <> "::Changed"}
 
-  def validator(:role, value) do
-    if is_binary(value), do: {:ok, :role, value}, else: {:error, :role, "No, never"}
-  end
+  def test_validator(:changed, _value), do: {:error, :changed, "No, never"}
+
+  def validator(:role, value) when is_binary(value), do: {:ok, :role, value}
+  def validator(:role, _value), do: {:error, :role, "No, never"}
 
   def validator(field, value) do
     {:ok, field, value}

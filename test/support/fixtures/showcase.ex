@@ -23,17 +23,18 @@ defmodule GuardedStructFixtures.Showcase do
 
   defmodule Validators do
     @moduledoc false
-    def is_string(field, v) when is_binary(v), do: {:ok, field, v}
-    def is_string(field, _), do: {:error, field, "not a string"}
+    def validate_string(field, v) when is_binary(v), do: {:ok, field, v}
+    def validate_string(field, _), do: {:error, field, "not a string"}
 
-    def is_map(field, v) when is_map(v) and not is_struct(v), do: {:ok, field, v}
-    def is_map(field, _), do: {:error, field, "not a map"}
+    def validate_map(field, v) when is_map(v) and not is_struct(v), do: {:ok, field, v}
+    def validate_map(field, _), do: {:error, field, "not a map"}
 
-    def is_list(field, v) when is_list(v), do: {:ok, field, v}
-    def is_list(field, _), do: {:error, field, "not a list"}
+    def validate_list(field, v) when is_list(v), do: {:ok, field, v}
+    def validate_list(field, _), do: {:error, field, "not a list"}
   end
 
   defmodule Member do
+    @moduledoc "A team member of the `EnterpriseAccount`: uuid id, normalised email and a role from a fixed list."
     use GuardedStruct
 
     guardedstruct do
@@ -49,6 +50,7 @@ defmodule GuardedStructFixtures.Showcase do
   end
 
   defmodule EnterpriseAccount do
+    @moduledoc "The full showcase account: JSON, decorators, virtual, auto, from, dynamic, list sub_field and nested conditionals together."
     use GuardedStruct
 
     guardedstruct json: true do
@@ -86,13 +88,13 @@ defmodule GuardedStructFixtures.Showcase do
       conditional_field(:plan, any()) do
         field(:plan, String.t(),
           hint: "preset",
-          validator: {Validators, :is_string},
+          validator: {Validators, :validate_string},
           derives: "validate(enum=String[free::pro::enterprise])"
         )
 
         sub_field(:plan, struct(),
           hint: "detailed",
-          validator: {Validators, :is_map}
+          validator: {Validators, :validate_map}
         ) do
           field(:tier, String.t(),
             enforce: true,
@@ -105,13 +107,13 @@ defmodule GuardedStructFixtures.Showcase do
           conditional_field(:notes, any()) do
             field(:notes, String.t(),
               hint: "single",
-              validator: {Validators, :is_string},
+              validator: {Validators, :validate_string},
               derives: "validate(string, max_len=500)"
             )
 
             field(:notes, list(),
               hint: "many",
-              validator: {Validators, :is_list},
+              validator: {Validators, :validate_list},
               derives: "validate(list)"
             )
           end

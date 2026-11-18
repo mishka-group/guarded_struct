@@ -81,7 +81,7 @@ defmodule GuardedStructTest.SubFieldDocTest do
     """
 
     assert_raise Spark.Error.DslError, ~r/Multiple values for key `:doc`/, fn ->
-      Code.compile_string(source)
+      compile(source)
     end
   end
 
@@ -99,7 +99,9 @@ defmodule GuardedStructTest.SubFieldDocTest do
     """
 
     assert_raise Spark.Error.DslError, ~r/expected :doc option/, fn ->
-      Code.compile_string(source)
+      compile(source)
     end
   end
+
+  defp compile(source), do: Code.compile_string(source)
 end

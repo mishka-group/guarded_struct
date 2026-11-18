@@ -12,6 +12,7 @@ defmodule GuardedStructFixtures.Decorated do
   """
 
   defmodule BlogPost do
+    @moduledoc "A blog post whose rules are written with the `@derives` and `@derive_rules` decorators."
     use GuardedStruct
 
     guardedstruct do

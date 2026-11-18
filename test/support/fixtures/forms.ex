@@ -28,6 +28,7 @@ defmodule GuardedStructFixtures.Forms do
   end
 
   defmodule Signup do
+    @moduledoc "A signup form: email, hashed password and a virtual password confirmation."
     use GuardedStruct
 
     guardedstruct json: true do
@@ -66,6 +67,7 @@ defmodule GuardedStructFixtures.Forms do
   end
 
   defmodule Login do
+    @moduledoc "A login form: email and password."
     use GuardedStruct
 
     guardedstruct do

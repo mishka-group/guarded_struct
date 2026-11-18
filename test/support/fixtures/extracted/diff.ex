@@ -1,4 +1,5 @@
 defmodule GuardedStructTest.Fixtures.Diff.User do
+  @moduledoc false
   use GuardedStruct
 
   guardedstruct do
@@ -14,9 +15,11 @@ defmodule GuardedStructTest.Fixtures.Diff.User do
 end
 
 defmodule GuardedStructTest.Fixtures.Diff.Other do
+  @moduledoc false
   defstruct [:x]
 end
 
 defmodule GuardedStructTest.Fixtures.Diff.Other2 do
+  @moduledoc false
   defstruct [:x]
 end

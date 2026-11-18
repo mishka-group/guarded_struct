@@ -13,6 +13,7 @@ defmodule GuardedStructFixtures.CustomDerives do
   """
 
   defmodule MyDerives do
+    @moduledoc "Custom `my_slug` and `positive_int` validators and a `slugify` sanitizer."
     use GuardedStruct.Derive.Extension
 
     derives do
@@ -32,6 +33,7 @@ defmodule GuardedStructFixtures.CustomDerives do
   end
 
   defmodule Article do
+    @moduledoc "An article that uses the custom derives from `MyDerives`."
     use GuardedStruct
 
     guardedstruct do

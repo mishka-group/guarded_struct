@@ -6,22 +6,26 @@ defmodule GuardedStructTest.AsyncCompileSubFieldsTest do
 
   use ExUnit.Case, async: true
 
+  require GuardedStructFixtures.Records
+
+  alias GuardedStructFixtures.{Conditionals, Decorated, Dynamic, Forms, Records, Showcase}
+
   alias GuardedStructTest.Fixtures.AsyncCompile.{
+    DeepParent,
+    OrderedDeep,
     SimpleParent,
     WideParent,
-    DeepParent,
-    WithConditional,
-    OrderedDeep
+    WithConditional
   }
 
   describe "simple sub_field — flat submodule generation" do
     test "the Profile submodule exists and is fully compiled" do
-      assert Code.ensure_loaded?(SimpleParent.Profile)
-      assert function_exported?(SimpleParent.Profile, :builder, 1)
-      assert function_exported?(SimpleParent.Profile, :keys, 0)
-      assert function_exported?(SimpleParent.Profile, :__fields__, 0)
-      assert function_exported?(SimpleParent.Profile, :__information__, 0)
-      assert function_exported?(SimpleParent.Profile, :example, 0)
+      # `__info__/1` loads the module, so the check doesn't depend on test order.
+      functions = SimpleParent.Profile.__info__(:functions)
+
+      for fun <- [builder: 1, keys: 0, __fields__: 0, __information__: 0, example: 0] do
+        assert fun in functions, "expected Profile to export #{inspect(fun)}"
+      end
     end
 
     test "Profile.keys/0 reports the declared inner fields" do
@@ -42,8 +46,7 @@ defmodule GuardedStructTest.AsyncCompileSubFieldsTest do
     test "every sibling submodule compiles independently" do
       for letter <- [:A, :B, :C, :D] do
         mod = Module.concat(WideParent, letter)
-        assert Code.ensure_loaded?(mod), "expected #{inspect(mod)} to exist"
-        assert function_exported?(mod, :builder, 1)
+        assert {:builder, 1} in mod.__info__(:functions), "expected #{inspect(mod)} to exist"
       end
     end
 
@@ -73,9 +76,9 @@ defmodule GuardedStructTest.AsyncCompileSubFieldsTest do
       ]
 
       for mod <- mods do
-        assert Code.ensure_loaded?(mod), "missing #{inspect(mod)}"
-        assert function_exported?(mod, :builder, 1)
-        assert function_exported?(mod, :keys, 0)
+        functions = mod.__info__(:functions)
+        assert {:builder, 1} in functions, "missing #{inspect(mod)}"
+        assert {:keys, 0} in functions
       end
     end
 
@@ -114,7 +117,7 @@ defmodule GuardedStructTest.AsyncCompileSubFieldsTest do
 
   describe "conditional sub_fields — auto-numbered submodule names" do
     test "the auto-numbered Payload1 submodule exists" do
-      assert Code.ensure_loaded?(WithConditional.Payload1)
+      assert {:builder, 1} in WithConditional.Payload1.__info__(:functions)
       refute Code.ensure_loaded?(WithConditional.Payload)
     end
 
@@ -145,8 +148,6 @@ defmodule GuardedStructTest.AsyncCompileSubFieldsTest do
   end
 
   describe "regression: the full existing fixture set still passes end-to-end" do
-    alias GuardedStructFixtures.{Conditionals, Decorated, Dynamic, Forms, Records, Showcase}
-
     test "Forms.Signup builds" do
       assert {:ok, _} =
                Forms.Signup.builder(%{
@@ -196,8 +197,7 @@ defmodule GuardedStructTest.AsyncCompileSubFieldsTest do
     end
 
     test "Records.UserEvent accepts a record" do
-      require GuardedStructFixtures.Records
-      rec = GuardedStructFixtures.Records.user(name: "A", age: 1)
+      rec = Records.user(name: "A", age: 1)
       assert {:ok, _} = Records.UserEvent.builder(%{event_kind: :created, user: rec})
     end
 

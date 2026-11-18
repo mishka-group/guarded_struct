@@ -57,8 +57,9 @@ defmodule GuardedStructTest.Fixtures.SubFieldDocParent do
   end
 end
 
+# No @moduledoc here on purpose: sub_field_doc_test checks guardedstruct does not invent one.
+# credo:disable-for-next-line Credo.Check.Readability.ModuleDoc
 defmodule GuardedStructTest.Fixtures.SubFieldDocNoParentDoc do
-  # No @moduledoc here: guardedstruct must not invent one.
   use GuardedStruct
 
   guardedstruct do

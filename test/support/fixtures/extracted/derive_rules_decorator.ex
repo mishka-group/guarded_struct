@@ -1,4 +1,5 @@
 defmodule GuardedStructTest.Fixtures.DeriveRulesDecorator.Decorated do
+  @moduledoc false
   use GuardedStruct
 
   guardedstruct do
@@ -13,6 +14,7 @@ defmodule GuardedStructTest.Fixtures.DeriveRulesDecorator.Decorated do
 end
 
 defmodule GuardedStructTest.Fixtures.DeriveRulesDecorator.Inline do
+  @moduledoc false
   use GuardedStruct
 
   guardedstruct do
@@ -23,6 +25,7 @@ defmodule GuardedStructTest.Fixtures.DeriveRulesDecorator.Inline do
 end
 
 defmodule GuardedStructTest.Fixtures.DeriveRulesDecorator.WithAlias do
+  @moduledoc false
   use GuardedStruct
 
   guardedstruct do
@@ -32,6 +35,7 @@ defmodule GuardedStructTest.Fixtures.DeriveRulesDecorator.WithAlias do
 end
 
 defmodule GuardedStructTest.Fixtures.DeriveRulesDecorator.WithBoth do
+  @moduledoc false
   use GuardedStruct
 
   guardedstruct do
@@ -41,6 +45,7 @@ defmodule GuardedStructTest.Fixtures.DeriveRulesDecorator.WithBoth do
 end
 
 defmodule GuardedStructTest.Fixtures.DeriveRulesDecorator.WithSub do
+  @moduledoc false
   use GuardedStruct
 
   guardedstruct do

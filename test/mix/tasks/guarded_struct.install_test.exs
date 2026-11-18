@@ -36,8 +36,7 @@ defmodule Mix.Tasks.GuardedStruct.InstallTest do
       test_project()
       |> Igniter.compose_task("guarded_struct.install", [])
 
-    config = igniter.rewrite.sources["config/config.exs"]
-    assert config
+    assert %Rewrite.Source{} = config = igniter.rewrite.sources["config/config.exs"]
 
     content = Rewrite.Source.get(config, :content)
     assert content =~ ":guarded_struct"

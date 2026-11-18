@@ -241,17 +241,17 @@ defmodule GuardedStructFixtures.ShowcaseTest do
       # Builder returns raw error maps; from_tuple/1 wraps them in a
       # Splode error class for traversal/serialization downstream.
       {:error, errs} = Showcase.EnterpriseAccount.builder(%{name: "x"})
-      class = errs |> List.wrap() |> Errors.from_tuple()
-      assert is_exception(class)
+
+      assert %Errors.Invalid{
+               errors: [%Errors.Validation{field: :owner, action: :required_fields}]
+             } = errs |> List.wrap() |> Errors.from_tuple()
     end
 
     test "Info.fields/1 lists top-level field names" do
       # Info.fields/1 returns ATOM NAMES (not entity structs) — locks
       # the actual top-level surface of the EnterpriseAccount module.
-      names = Info.fields(Showcase.EnterpriseAccount)
-      assert :name in names
-      assert :owner in names
-      assert :settings in names
+      assert Info.fields(Showcase.EnterpriseAccount) ==
+               [:id, :name, :owner, :owner_email, :members, :plan, :settings, :invitation_token]
     end
 
     test "Info.field?/2 introspects the schema" do
@@ -264,9 +264,7 @@ defmodule GuardedStructFixtures.ShowcaseTest do
     test "__information__/0 includes the conditional_keys list" do
       # `:plan` is a `conditional_field` → must appear in
       # `__information__/0.conditional_keys` (was always [] in 0.0.x).
-      info = Showcase.EnterpriseAccount.__information__()
-      assert is_list(info.conditional_keys)
-      assert :plan in info.conditional_keys
+      assert Showcase.EnterpriseAccount.__information__().conditional_keys == [:plan]
     end
 
     test "example/0 produces a buildable starting struct" do

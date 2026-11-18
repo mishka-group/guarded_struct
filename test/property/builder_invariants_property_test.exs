@@ -86,9 +86,10 @@ defmodule GuardedStructTest.Property.BuilderInvariantsTest do
         in_keys? = name in Account.keys()
         meta = Account.__field_meta__(name)
 
-        cond do
-          in_keys? -> assert is_map(meta), "expected meta for known field #{inspect(name)}"
-          true -> assert is_nil(meta), "expected nil for unknown field #{inspect(name)}"
+        if in_keys? do
+          assert %{name: ^name} = meta
+        else
+          assert meta == nil, "expected nil for unknown field #{inspect(name)}"
         end
       end
     end

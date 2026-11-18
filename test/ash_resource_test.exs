@@ -137,14 +137,17 @@ defmodule GuardedStructTest.AshResourceTest do
 
     test "__guarded_fields__/0 returns runtime field metadata" do
       meta = FakeAshResource.__guarded_fields__()
-      assert is_list(meta)
-      assert Enum.any?(meta, &(&1.name == :email))
+      assert Enum.map(meta, & &1.name) == [:email, :nickname, :preferences]
     end
 
     test "does NOT generate __struct__/builder/2 (Ash owns those)" do
-      refute function_exported?(FakeAshResource, :builder, 1)
-      refute function_exported?(FakeAshResource, :builder, 2)
-      refute function_exported?(FakeAshResource, :__struct__, 0)
+      # `__info__/1` loads the module, so the check doesn't depend on test order.
+      functions = FakeAshResource.__info__(:functions)
+
+      refute {:builder, 1} in functions
+      refute {:builder, 2} in functions
+      refute {:__struct__, 0} in functions
+      assert {:__guarded_change__, 1} in functions
     end
   end
 

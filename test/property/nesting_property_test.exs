@@ -8,8 +8,8 @@ defmodule GuardedStructTest.Property.NestingTest do
   use ExUnit.Case, async: true
   use ExUnitProperties
 
-  alias GuardedStructTest.PropertyFixtures.Deeply
   alias GuardedStructTest.AshResources.WithSubField
+  alias GuardedStructTest.PropertyFixtures.Deeply
 
   describe "Deeply.builder/1 — five-level sub_field chain" do
     property "valid input at every depth round-trips through the struct cascade" do

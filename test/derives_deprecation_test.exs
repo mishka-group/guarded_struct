@@ -42,7 +42,7 @@ defmodule GuardedStructTest.DerivesDeprecationTest do
   end
 
   test "legacy derive: still works but emits a deprecation warning at compile time" do
-    {output, _} =
+    {output, {{:module, mod, _binary, _result}, _binding}} =
       eval_with_stderr("""
       defmodule LegacyDeriveStillWorks do
         use GuardedStruct
@@ -57,16 +57,15 @@ defmodule GuardedStructTest.DerivesDeprecationTest do
     assert output =~ "derive:"
     assert output =~ "Use `derives:`"
 
-    # `apply/3` with an atom avoids the static-analysis "undefined module" warning.
-    mod = :"Elixir.LegacyDeriveStillWorks"
-    assert {:ok, %{name: "ok"}} = apply(mod, :builder, [%{name: "ok"}])
+    # `mod` comes from the compile result, so no static "undefined module" warning.
+    assert {:ok, %{name: "ok"}} = mod.builder(%{name: "ok"})
 
-    {:error, errs} = apply(mod, :builder, [%{name: "this is way too long"}])
+    {:error, errs} = mod.builder(%{name: "this is way too long"})
     assert Enum.any?(errs, &(&1[:action] == :max_len))
   end
 
   test "when both derives: and derive: are set, derives: wins (no warning emitted)" do
-    {output, _} =
+    {output, {{:module, mod, _binary, _result}, _binding}} =
       eval_with_stderr("""
       defmodule BothSet do
         use GuardedStruct
@@ -84,8 +83,7 @@ defmodule GuardedStructTest.DerivesDeprecationTest do
     refute output =~ "deprecated"
 
     # derives: wins → 100-char limit applies, not the 5-char one.
-    mod = :"Elixir.BothSet"
-    assert {:ok, _} = apply(mod, :builder, [%{name: "longer than five chars"}])
+    assert {:ok, _} = mod.builder(%{name: "longer than five chars"})
   end
 
   test "deprecation warning mentions the field name and module" do

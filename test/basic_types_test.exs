@@ -1,12 +1,14 @@
 defmodule GuardedStructTest.BasicTypesTest do
   use ExUnit.Case, async: true
 
+  alias GuardedStructTest.Fixtures.BasicTypes.NonAstDefaults
+
   alias GuardedStructTest.BasicTypesTest.{
-    TestStruct,
     OpaqueTestStruct,
-    TestStructNoAlias,
-    TestStruct3,
+    TestStruct,
     TestStruct2,
+    TestStruct3,
+    TestStructNoAlias,
     TestStructWithAlias
   }
 
@@ -71,8 +73,6 @@ defmodule GuardedStructTest.BasicTypesTest do
     # list to be valid AST. Map and 3+-tuple defaults are NOT valid AST
     # literals on their own — codegen must escape them. Covers both the
     # top-level builder and the sub_field submodule path.
-    alias GuardedStructTest.Fixtures.BasicTypes.NonAstDefaults
-
     assert %NonAstDefaults{helpers: %{}, coords: {:x, :y, :z}, inner: %{}} =
              NonAstDefaults.__struct__()
 
@@ -150,19 +150,14 @@ defmodule GuardedStructTest.BasicTypesTest do
 
     assert Enum.any?(errs, &match?(%{field: :name, action: :required_fields}, &1))
 
-    {:ok, data} = assert TestStructBuilder.builder(%{name: "shahryar", title: "user"})
+    assert {:ok, %TestStructBuilder{name: "shahryar", title: "user"}} =
+             TestStructBuilder.builder(%{name: "shahryar", title: "user"})
 
-    assert is_struct(data)
-
-    enforce_keys = TestStructBuilder.enforce_keys()
-    enforce_keys_by_field = TestStructBuilder.enforce_keys(:name)
-    keys = TestStructBuilder.keys()
-    keys_by_field = TestStructBuilder.keys(:name)
-
-    [:name] = assert enforce_keys
-    assert enforce_keys_by_field
-    [:name, :title] = assert keys
-    assert keys_by_field
+    assert TestStructBuilder.enforce_keys() == [:name]
+    assert TestStructBuilder.enforce_keys(:name) == true
+    assert TestStructBuilder.enforce_keys(:title) == false
+    assert TestStructBuilder.keys() == [:name, :title]
+    assert TestStructBuilder.keys(:name) == true
   end
 
   ############## (▰˘◡˘▰) GuardedStructTest Tests helper functions (▰˘◡˘▰) ##############

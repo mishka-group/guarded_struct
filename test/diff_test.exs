@@ -2,7 +2,10 @@ defmodule GuardedStructTest.DiffTest do
   use ExUnit.Case, async: true
 
   alias GuardedStruct.Diff
-  alias GuardedStructTest.Fixtures.Diff.{User, Other, Other2}
+  alias GuardedStructTest.Fixtures.Diff.{Other, Other2, User}
+
+  # The examples build `%User{}`, the fixture aliased above.
+  doctest GuardedStruct.Diff
 
   describe "diff/2" do
     test "two equal structs return %{}" do

@@ -1,4 +1,5 @@
 defmodule GuardedStructTest.BasicTypesTest.TestStructNoAlias do
+  @moduledoc false
   use GuardedStruct
 
   guardedstruct do
@@ -7,6 +8,7 @@ defmodule GuardedStructTest.BasicTypesTest.TestStructNoAlias do
 end
 
 defmodule GuardedStructTest.BasicTypesTest.OpaqueTestStruct do
+  @moduledoc false
   use GuardedStruct
 
   guardedstruct opaque: true do
@@ -15,6 +17,7 @@ defmodule GuardedStructTest.BasicTypesTest.OpaqueTestStruct do
 end
 
 defmodule GuardedStructTest.BasicTypesTest.TestStruct do
+  @moduledoc false
   use GuardedStruct
 
   guardedstruct do
@@ -28,12 +31,14 @@ defmodule GuardedStructTest.BasicTypesTest.TestStruct do
 end
 
 defmodule GuardedStructTest.BasicTypesTest.TestStruct3 do
+  @moduledoc false
   defstruct [:int]
 
   @opaque t() :: %__MODULE__{int: integer() | nil}
 end
 
 defmodule GuardedStructTest.BasicTypesTest.TestStruct2 do
+  @moduledoc false
   defstruct [:int, :string, :string_with_default, :mandatory_int]
 
   @type t() :: %__MODULE__{
@@ -45,6 +50,7 @@ defmodule GuardedStructTest.BasicTypesTest.TestStruct2 do
 end
 
 defmodule TestModule do
+  @moduledoc false
   use GuardedStruct
 
   guardedstruct module: Struct do
@@ -53,6 +59,7 @@ defmodule TestModule do
 end
 
 defmodule TestModule.TestSubModule do
+  @moduledoc false
   use GuardedStruct
 
   guardedstruct do
@@ -61,6 +68,7 @@ defmodule TestModule.TestSubModule do
 end
 
 defmodule GuardedStructTest.BasicTypesTest.TestStructWithAlias do
+  @moduledoc false
   use GuardedStruct
 
   guardedstruct do

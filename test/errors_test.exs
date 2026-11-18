@@ -2,7 +2,7 @@ defmodule GuardedStructTest.ErrorsTest do
   use ExUnit.Case, async: true
 
   alias GuardedStruct.Errors
-  alias GuardedStruct.Errors.{Invalid, Validation, Unknown}
+  alias GuardedStruct.Errors.{Invalid, Unknown, Validation}
   alias GuardedStructTest.Fixtures.Errors.SampleStruct
 
   test "wraps {:error, errors} into a Splode class" do
@@ -10,9 +10,12 @@ defmodule GuardedStructTest.ErrorsTest do
 
     class = Errors.from_tuple({:error, errors})
 
-    assert %Invalid{} = class
-    assert is_list(class.errors)
-    assert Enum.all?(class.errors, &match?(%Validation{}, &1))
+    assert %Invalid{
+             errors: [
+               %Validation{field: :email, action: :email_r},
+               %Validation{field: :age, action: :max_len}
+             ]
+           } = class
   end
 
   test "Validation exception carries field/action/message" do
@@ -27,16 +30,20 @@ defmodule GuardedStructTest.ErrorsTest do
     {:error, errors} = SampleStruct.builder(%{email: "x", age: 1})
     class = Errors.from_tuple(errors)
 
-    messages = Enum.map(class.errors, & &1.message)
-    assert Enum.any?(messages, &(&1 =~ "Incorrect email" or &1 =~ "Invalid"))
+    assert [%Validation{field: :email, message: message}] = class.errors
+    assert message =~ "Incorrect email"
   end
 
   test "traverse_errors yields per-field error lists" do
     {:error, errors} = SampleStruct.builder(%{email: "x", age: -5})
     class = Errors.from_tuple(errors)
 
-    grouped = Errors.traverse_errors(class, &Exception.message/1)
-    assert is_map(grouped)
+    # Top-level fields share the root path `[]`.
+    assert %{[] => [email_message, age_message]} =
+             Errors.traverse_errors(class, &Exception.message/1)
+
+    assert email_message =~ "Incorrect email"
+    assert age_message =~ "minimum number the age field is 0"
   end
 
   test "Unknown error wraps free-form payloads" do

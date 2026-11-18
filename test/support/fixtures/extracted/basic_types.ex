@@ -1,4 +1,5 @@
 defmodule GuardedStructTest.Fixtures.BasicTypes.EnforcedGuardedStruct do
+  @moduledoc false
   use GuardedStruct
 
   guardedstruct enforce: true do
@@ -13,6 +14,7 @@ defmodule GuardedStructTest.Fixtures.BasicTypes.EnforcedGuardedStruct do
 end
 
 defmodule GuardedStructTest.Fixtures.BasicTypes.NonAstDefaults do
+  @moduledoc false
   # Defaults that are NOT valid AST literals (maps, 3+-tuples) must still
   # survive the `defstruct unquote(...)` codegen path — both at the top
   # level and inside a sub_field submodule.

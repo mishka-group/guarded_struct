@@ -187,10 +187,7 @@ defmodule GuardedStructFixtures.DecoratedTest do
     test "summary helper — name → derive op-string for every decorated field" do
       # This shape is what a user would build in iex/livebook to quickly
       # audit "what rule does each field actually enforce?".
-      summary =
-        Decorated.BlogPost.__fields__()
-        |> Enum.map(fn f -> {f.name, f.derive} end)
-        |> Enum.into(%{})
+      summary = Map.new(Decorated.BlogPost.__fields__(), fn f -> {f.name, f.derive} end)
 
       assert summary == %{
                title: "sanitize(strip_tags, trim) validate(string, not_empty, max_len=200)",

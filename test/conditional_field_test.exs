@@ -1,8 +1,9 @@
 defmodule GuardedStructTest.ConditionalFieldTest do
   use ExUnit.Case, async: true
 
+  alias GuardedStructTest.Support.UUID
+
   ############# (▰˘◡˘▰) ConditionalFieldTest GuardedStructTest Data (▰˘◡˘▰) ##############
-  # TODO: We need to support derive and validator on conditional field macro, as like children
   defmodule ExtrenalConditional do
     use GuardedStruct
 
@@ -26,16 +27,16 @@ defmodule GuardedStructTest.ConditionalFieldTest do
       end
 
       conditional_field(:social, any()) do
-        sub_field(:social, struct(), hint: "social1", validator: {VAL, :is_map_data}) do
+        sub_field(:social, struct(), hint: "social1", validator: {VAL, :validate_map_data}) do
           field(:address, String.t(), enforce: true)
           field(:provider, String.t(), enforce: true)
         end
 
-        field(:social, String.t(), hint: "social2", validator: {VAL, :is_string_data})
+        field(:social, String.t(), hint: "social2", validator: {VAL, :validate_string_data})
       end
 
       conditional_field(:location, any()) do
-        sub_field(:location, struct(), validator: {VAL, :is_map_data}, hint: "location1") do
+        sub_field(:location, struct(), validator: {VAL, :validate_map_data}, hint: "location1") do
           field(:address, String.t())
 
           field(:city, String.t(),
@@ -45,7 +46,7 @@ defmodule GuardedStructTest.ConditionalFieldTest do
         end
 
         field(:location, String.t(),
-          validator: {VAL, :is_string_data},
+          validator: {VAL, :validate_string_data},
           derives: "sanitize(trim) validate(string, location)",
           hint: "location2"
         )
@@ -55,7 +56,7 @@ defmodule GuardedStructTest.ConditionalFieldTest do
         sub_field(:auth, struct(),
           hint: "auth1",
           structs: true,
-          validator: {VAL, :is_list_data}
+          validator: {VAL, :validate_list_data}
         ) do
           field(:username, String.t(), enforce: true)
           field(:provider, String.t(), enforce: true)
@@ -66,21 +67,21 @@ defmodule GuardedStructTest.ConditionalFieldTest do
           field(:provider, String.t(), enforce: true)
         end
 
-        field(:auth, String.t(), hint: "auth3", validator: {VAL, :is_string_data})
+        field(:auth, String.t(), hint: "auth3", validator: {VAL, :validate_string_data})
       end
 
       conditional_field(:auth2, any()) do
         sub_field(:auth2, struct(),
           hint: "auth1",
           structs: true,
-          validator: {VAL, :is_list_data},
+          validator: {VAL, :validate_list_data},
           derives: "validate(not_flatten_empty_item)"
         ) do
           field(:username, String.t(), enforce: true)
           field(:provider, String.t(), enforce: true)
         end
 
-        field(:auth2, String.t(), hint: "auth3", validator: {VAL, :is_string_data})
+        field(:auth2, String.t(), hint: "auth3", validator: {VAL, :validate_string_data})
       end
 
       conditional_field(:post_activity, any()) do
@@ -88,7 +89,7 @@ defmodule GuardedStructTest.ConditionalFieldTest do
 
         field(:post_activity, String.t(),
           hint: "post_activity2",
-          validator: {VAL, :is_string_data}
+          validator: {VAL, :validate_string_data}
         )
       end
 
@@ -97,27 +98,27 @@ defmodule GuardedStructTest.ConditionalFieldTest do
 
         field(:post_activities, String.t(),
           hint: "post_activities2",
-          validator: {VAL, :is_list_data}
+          validator: {VAL, :validate_list_data}
         )
       end
 
       conditional_field(:author, any()) do
-        sub_field(:author, struct(), enforce: true, validator: {VAL, :is_map_data}) do
+        sub_field(:author, struct(), enforce: true, validator: {VAL, :validate_map_data}) do
           field(:name, String.t())
           field(:family, String.t())
         end
 
-        field(:author, String.t(), validator: {VAL, :is_string_data})
+        field(:author, String.t(), validator: {VAL, :validate_string_data})
       end
 
       conditional_field(:information, any(), domain: "?identity.type=Atom[female]") do
-        sub_field(:information, struct(), validator: {VAL, :is_map_data}) do
+        sub_field(:information, struct(), validator: {VAL, :validate_map_data}) do
           field(:name, String.t())
 
           field(:gender, String.t(), domain: "!identity.action=String[admin, user]")
         end
 
-        field(:information, String.t(), validator: {VAL, :is_string_data})
+        field(:information, String.t(), validator: {VAL, :validate_string_data})
       end
 
       # On core key has strict error, it should support !, ? as optional stuff
@@ -128,9 +129,9 @@ defmodule GuardedStructTest.ConditionalFieldTest do
       field(:record_id, String.t(), auto: {GuardedStructTest.Support.UUID, :generate})
 
       conditional_field(:profile, any(), priority: true) do
-        field(:profile, String.t(), hint: "profile1", validator: {VAL, :is_string_data})
+        field(:profile, String.t(), hint: "profile1", validator: {VAL, :validate_string_data})
 
-        sub_field(:profile, struct(), hint: "profile2", validator: {VAL, :is_map_data}) do
+        sub_field(:profile, struct(), hint: "profile2", validator: {VAL, :validate_map_data}) do
           field(:name, String.t(), enforce: true, derives: "validate(not_empty)")
           field(:family, String.t(), enforce: true, derives: "validate(not_empty)")
         end
@@ -140,19 +141,19 @@ defmodule GuardedStructTest.ConditionalFieldTest do
         field(:activity, struct(),
           structs: ExtrenalConditional,
           hint: "activity1",
-          validator: {VAL, :is_list_data}
+          validator: {VAL, :validate_list_data}
         )
 
         field(:activity, String.t(),
           hint: "activity2",
-          validator: {VAL, :is_string_data}
+          validator: {VAL, :validate_string_data}
         )
       end
 
       conditional_field(:address, any(), structs: true) do
         sub_field(:address, struct(),
           derives: "sanitize(trim, upcase)",
-          validator: {VAL, :is_map_data},
+          validator: {VAL, :validate_map_data},
           hint: "address1"
         ) do
           field(:lat, String.t(), enforce: true)
@@ -162,15 +163,15 @@ defmodule GuardedStructTest.ConditionalFieldTest do
         field(:address, String.t(),
           derives: "sanitize(trim) validate(not_empty)",
           hint: "address2",
-          validator: {VAL, :is_string_data}
+          validator: {VAL, :validate_string_data}
         )
       end
 
       conditional_field(:extera_auth, any(), structs: true) do
-        sub_field(:extera_auth, struct(), validator: {VAL, :is_map_data}) do
+        sub_field(:extera_auth, struct(), validator: {VAL, :validate_map_data}) do
           field(:username, String.t(),
             enforce: true,
-            validator: {VAL, :is_string_data},
+            validator: {VAL, :validate_string_data},
             derives: "sanitize(trim) validate(string)"
           )
 
@@ -182,12 +183,12 @@ defmodule GuardedStructTest.ConditionalFieldTest do
 
       conditional_field(:extera_auth2, any(), structs: true) do
         sub_field(:extera_auth2, struct(),
-          validator: {VAL, :is_map_data},
+          validator: {VAL, :validate_map_data},
           hint: "extera_auth1"
         ) do
           field(:username, String.t(),
             enforce: true,
-            validator: {VAL, :is_string_data},
+            validator: {VAL, :validate_string_data},
             derives: "sanitize(trim) validate(string)"
           )
 
@@ -197,39 +198,39 @@ defmodule GuardedStructTest.ConditionalFieldTest do
         field(:extera_auth2, String.t(),
           derives: "sanitize(trim) validate(string, not_empty)",
           hint: "extera_auth2",
-          validator: {VAL, :is_string_data}
+          validator: {VAL, :validate_string_data}
         )
       end
 
       conditional_field(:activities, any(), structs: true) do
         field(:activities, struct(),
           struct: ExtrenalConditional,
-          validator: {VAL, :is_map_data},
+          validator: {VAL, :validate_map_data},
           hint: "activities1"
         )
 
         field(:activities, struct(),
           structs: ExtrenalConditional,
-          validator: {VAL, :is_list_data},
+          validator: {VAL, :validate_list_data},
           hint: "activities2"
         )
 
         field(:activities, String.t(),
           hint: "activities3",
-          validator: {VAL, :is_string_data}
+          validator: {VAL, :validate_string_data}
         )
       end
 
       conditional_field(:activities2, any(), structs: true) do
         field(:activities2, struct(),
           struct: ExtrenalConditional,
-          validator: {VAL, :is_map_data},
+          validator: {VAL, :validate_map_data},
           hint: "activities1"
         )
 
         sub_field(:activities2, struct(),
           structs: true,
-          validator: {VAL, :is_list_data},
+          validator: {VAL, :validate_list_data},
           hint: "activities2"
         ) do
           field(:role, String.t(),
@@ -242,20 +243,20 @@ defmodule GuardedStructTest.ConditionalFieldTest do
 
         field(:activities2, String.t(),
           hint: "activities3",
-          validator: {VAL, :is_string_data}
+          validator: {VAL, :validate_string_data}
         )
       end
 
       conditional_field(:activities3, any(), structs: true, priority: true) do
         field(:activities3, struct(),
           struct: ExtrenalConditional,
-          validator: {VAL, :is_map_data},
+          validator: {VAL, :validate_map_data},
           hint: "activities1"
         )
 
         sub_field(:activities3, struct(),
           structs: true,
-          validator: {VAL, :is_flat_list_data},
+          validator: {VAL, :validate_flat_list_data},
           hint: "activities2",
           derives: "validate(not_flatten_empty_item)"
         ) do
@@ -269,21 +270,21 @@ defmodule GuardedStructTest.ConditionalFieldTest do
 
         field(:activities3, String.t(),
           hint: "activities3",
-          validator: {VAL, :is_string_data}
+          validator: {VAL, :validate_string_data}
         )
       end
 
       conditional_field(:author2, any(), structs: true) do
-        sub_field(:author2, struct(), enforce: true, validator: {VAL, :is_map_data}) do
+        sub_field(:author2, struct(), enforce: true, validator: {VAL, :validate_map_data}) do
           field(:name, String.t())
           field(:family, String.t())
         end
 
-        field(:author2, String.t(), validator: {VAL, :is_string_data})
+        field(:author2, String.t(), validator: {VAL, :validate_string_data})
       end
 
       conditional_field(:author3, any(), structs: true) do
-        sub_field(:author3, struct(), validator: {VAL, :is_map_data}, hint: "author1") do
+        sub_field(:author3, struct(), validator: {VAL, :validate_map_data}, hint: "author1") do
           field(:name, String.t())
           field(:family, String.t(), enforce: true)
         end
@@ -291,7 +292,7 @@ defmodule GuardedStructTest.ConditionalFieldTest do
         sub_field(:author3, struct(),
           structs: true,
           enforce: true,
-          validator: {VAL, :is_flat_list_data},
+          validator: {VAL, :validate_flat_list_data},
           derives: "validate(not_flatten_empty_item)",
           hint: "author2"
         ) do
@@ -299,7 +300,7 @@ defmodule GuardedStructTest.ConditionalFieldTest do
           field(:family, String.t())
         end
 
-        field(:author3, String.t(), validator: {VAL, :is_string_data}, hint: "author3")
+        field(:author3, String.t(), validator: {VAL, :validate_string_data}, hint: "author3")
       end
 
       conditional_field(:information2, any(),
@@ -307,7 +308,7 @@ defmodule GuardedStructTest.ConditionalFieldTest do
         domain: "?identity.type=Atom[female]"
       ) do
         sub_field(:information2, struct(),
-          validator: {VAL, :is_map_data},
+          validator: {VAL, :validate_map_data},
           hint: "information1"
         ) do
           field(:name, String.t())
@@ -315,14 +316,17 @@ defmodule GuardedStructTest.ConditionalFieldTest do
         end
 
         sub_field(:information2, struct(),
-          validator: {VAL, :is_flat_list_data},
+          validator: {VAL, :validate_flat_list_data},
           hint: "information2"
         ) do
           field(:name, String.t())
           field(:gender, String.t(), domain: "!identity.action=String[admin, user]")
         end
 
-        field(:information2, String.t(), validator: {VAL, :is_string_data}, hint: "information3")
+        field(:information2, String.t(),
+          validator: {VAL, :validate_string_data},
+          hint: "information3"
+        )
       end
 
       field(:sub_field_on_header, String.t())
@@ -330,7 +334,7 @@ defmodule GuardedStructTest.ConditionalFieldTest do
       conditional_field(:activity3, any()) do
         sub_field(:activity3, struct(),
           on: "root::nickname",
-          validator: {VAL, :is_map_data},
+          validator: {VAL, :validate_map_data},
           hint: "activity3"
         ) do
           field(:action, String.t())
@@ -338,7 +342,7 @@ defmodule GuardedStructTest.ConditionalFieldTest do
         end
 
         field(:activity3, String.t(),
-          validator: {VAL, :is_string_data},
+          validator: {VAL, :validate_string_data},
           hint: "activity2"
         )
       end
@@ -348,7 +352,7 @@ defmodule GuardedStructTest.ConditionalFieldTest do
       conditional_field(:activity4, any(), structs: true, on: "root::list_sub_field_on_header") do
         sub_field(:activity4, struct(),
           on: "root::nickname",
-          validator: {VAL, :is_map_data},
+          validator: {VAL, :validate_map_data},
           hint: "activity3"
         ) do
           field(:action, String.t())
@@ -358,7 +362,7 @@ defmodule GuardedStructTest.ConditionalFieldTest do
         end
 
         field(:activity4, String.t(),
-          validator: {VAL, :is_string_data},
+          validator: {VAL, :validate_string_data},
           hint: "activity2"
         )
       end
@@ -368,14 +372,14 @@ defmodule GuardedStructTest.ConditionalFieldTest do
         derives: "validate(not_flatten_empty_item)"
       ) do
         field(:activity5, String.t(),
-          validator: {VAL, :is_string_data},
+          validator: {VAL, :validate_string_data},
           hint: "activity1"
         )
       end
 
       conditional_field(:activity6, any(), derives: "validate(map)") do
         field(:activity6, String.t(),
-          validator: {VAL, :is_string_data},
+          validator: {VAL, :validate_string_data},
           hint: "activity1"
         )
       end
@@ -384,7 +388,7 @@ defmodule GuardedStructTest.ConditionalFieldTest do
         derives: "sanitize(tag=strip_tags) validate(not_empty_string)"
       ) do
         field(:activity7, String.t(),
-          validator: {VAL, :is_string_data},
+          validator: {VAL, :validate_string_data},
           hint: "activity1"
         )
       end
@@ -1012,7 +1016,7 @@ defmodule GuardedStructTest.ConditionalFieldTest do
         second_username: "mishka2"
       })
 
-    assert !is_nil(record_id)
+    assert {:ok, ^record_id} = UUID.cast(record_id)
   end
 
   test "Conditional field as a map level/priority" do
@@ -2318,8 +2322,9 @@ defmodule GuardedStructTest.ConditionalFieldTest do
                ]
              })
 
-    uuid = auto_test != auto_test1
-    assert uuid
+    assert {:ok, ^auto_test} = UUID.cast(auto_test)
+    assert {:ok, ^auto_test1} = UUID.cast(auto_test1)
+    refute auto_test == auto_test1
 
     {:error,
      [

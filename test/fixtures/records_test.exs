@@ -395,7 +395,6 @@ defmodule GuardedStructFixtures.RecordsTest do
                  trace: "also bad"
                })
 
-      assert is_list(errs)
       # Three distinct errors aggregated:
       actions = Enum.map(errs, & &1.action) |> Enum.sort()
       assert actions == [:enum, :record, :record]

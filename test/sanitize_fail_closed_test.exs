@@ -8,7 +8,9 @@ defmodule GuardedStructTest.SanitizeFailClosedTest do
   import ExUnit.CaptureLog
 
   alias Ash.Error.Changes.InvalidAttribute
-  alias GuardedStruct.Derive.{Registry, SanitizerDerive}
+  # One alias per line: `Registry` must read as the library's module, not Elixir's.
+  alias GuardedStruct.Derive.Registry
+  alias GuardedStruct.Derive.SanitizerDerive
 
   # Invalid UTF-8 makes the unicode regex of `no_zero_width` (and so
   # `rich_text_safe`) raise inside the built-in op.

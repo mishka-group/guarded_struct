@@ -20,6 +20,8 @@ defmodule GuardedStructTest.DeriveExtensionsPerModuleTest do
   # async: false — we mutate Application env, which is process-global.
   use ExUnit.Case, async: false
 
+  alias GuardedStruct.Derive.Extension
+
   # Two extension modules with a deliberately overlapping op name `:my_slug`
   # so we can prove who wins on collisions.
 
@@ -33,7 +35,7 @@ defmodule GuardedStructTest.DeriveExtensionsPerModuleTest do
       end
 
       # Only here
-      validator :uuid7, fn input -> is_binary(input) end
+      validator :uuid7, &is_binary/1
     end
   end
 
@@ -47,7 +49,7 @@ defmodule GuardedStructTest.DeriveExtensionsPerModuleTest do
       end
 
       # Only here
-      validator :ksuid, fn input -> is_binary(input) end
+      validator :ksuid, &is_binary/1
     end
   end
 
@@ -55,7 +57,7 @@ defmodule GuardedStructTest.DeriveExtensionsPerModuleTest do
     use GuardedStruct.Derive.Extension
 
     derives do
-      validator :phone, fn input -> is_binary(input) end
+      validator :phone, &is_binary/1
     end
   end
 
@@ -233,65 +235,42 @@ defmodule GuardedStructTest.DeriveExtensionsPerModuleTest do
 
   describe "compile-time validation of the opt" do
     test ":config more than once → ArgumentError" do
-      msg =
-        try do
-          Code.eval_string("""
-          defmodule DoubleConfig do
-            use GuardedStruct, derive_extensions: [:config, :config]
-          end
-          """)
-
-          :no_raise
-        rescue
-          e -> Exception.message(e)
+      message =
+        argument_error("""
+        defmodule DoubleConfig do
+          use GuardedStruct, derive_extensions: [:config, :config]
         end
+        """)
 
-      assert is_binary(msg), "expected an ArgumentError, got no raise"
-      assert msg =~ ":config more than once"
+      assert message =~ ":config more than once"
     end
 
     test "non-atom entry → ArgumentError" do
-      msg =
-        try do
-          Code.eval_string("""
-          defmodule BadEntry do
-            use GuardedStruct, derive_extensions: [:config, "not a module"]
-          end
-          """)
-
-          :no_raise
-        rescue
-          e -> Exception.message(e)
+      message =
+        argument_error("""
+        defmodule BadEntry do
+          use GuardedStruct, derive_extensions: [:config, "not a module"]
         end
+        """)
 
-      assert is_binary(msg)
-      assert msg =~ "must be modules or :config"
+      assert message =~ "must be modules or :config"
     end
 
     test "non-list opt → ArgumentError" do
-      msg =
-        try do
-          Code.eval_string("""
-          defmodule NotAList do
-            use GuardedStruct, derive_extensions: GlobalDerives
-          end
-          """)
-
-          :no_raise
-        rescue
-          e -> Exception.message(e)
+      message =
+        argument_error("""
+        defmodule NotAList do
+          use GuardedStruct, derive_extensions: GlobalDerives
         end
+        """)
 
-      assert is_binary(msg)
-      assert msg =~ "expected a list"
+      assert message =~ "expected a list"
     end
   end
 
   # ---------------- 8. Resolver function — direct unit tests ----------------
 
   describe "Extension.resolve_opt/1 unit tests" do
-    alias GuardedStruct.Derive.Extension
-
     test "nil → falls back to global" do
       # Global is set to [GlobalDerives] by setup
       assert Extension.resolve_opt(nil) == [GlobalDerives]
@@ -731,5 +710,11 @@ defmodule GuardedStructTest.DeriveExtensionsPerModuleTest do
 
       assert GuardedStruct.Derive.Extension.current_module() == nil
     end
+  end
+
+  # Compiles `source` and returns the message of the ArgumentError it raises.
+  defp argument_error(source) do
+    error = assert_raise ArgumentError, fn -> Code.eval_string(source) end
+    Exception.message(error)
   end
 end

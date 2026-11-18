@@ -1,4 +1,5 @@
 defmodule GuardedStructTest.Fixtures.Telemetry.Sample do
+  @moduledoc false
   use GuardedStruct
 
   guardedstruct do
@@ -8,6 +9,7 @@ defmodule GuardedStructTest.Fixtures.Telemetry.Sample do
 end
 
 defmodule GuardedStructTest.Fixtures.Telemetry.WithBoom do
+  @moduledoc false
   use GuardedStruct
 
   guardedstruct error: true do
@@ -16,6 +18,7 @@ defmodule GuardedStructTest.Fixtures.Telemetry.WithBoom do
 end
 
 defmodule GuardedStructTest.Fixtures.Telemetry.WithNested do
+  @moduledoc false
   use GuardedStruct
 
   guardedstruct do

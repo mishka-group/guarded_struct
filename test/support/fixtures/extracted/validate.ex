@@ -1,4 +1,5 @@
 defmodule GuardedStructTest.Fixtures.Validate.Person do
+  @moduledoc false
   use GuardedStruct
 
   guardedstruct do
@@ -28,6 +29,7 @@ defmodule GuardedStructTest.Fixtures.Validate.Person do
 end
 
 defmodule GuardedStructTest.Fixtures.Validate.WithAuth do
+  @moduledoc false
   use GuardedStruct
 
   guardedstruct do

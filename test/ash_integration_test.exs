@@ -3,17 +3,22 @@ defmodule GuardedStructTest.AshIntegrationTest do
 
   @moduletag capture_log: true
 
+  import ExUnit.CaptureIO
+
+  require Ash.Expr
+  require Ash.Query
+
   alias GuardedStructTest.AshResources.{
-    UserManual,
-    UserAuto,
-    WithSubField,
-    WithListSubField,
-    WithAshChange,
     AtomicEligibleUser,
     AtomicWithCounter,
+    UserAuto,
+    UserManual,
+    WithAshChange,
     WithDomainRule,
+    WithListSubField,
+    WithNestedDefaults,
     WithSectionRules,
-    WithNestedDefaults
+    WithSubField
   }
 
   alias Ash.Error.Changes.InvalidAttribute
@@ -97,18 +102,11 @@ defmodule GuardedStructTest.AshIntegrationTest do
     end
 
     test "both register the GuardedStruct change in Ash.Resource.Info.changes/1" do
-      manual_has =
-        UserManual
-        |> Ash.Resource.Info.changes()
-        |> Enum.any?(fn c -> c.change == {GuardedStruct.AshResource.Change, []} end)
+      assert [{GuardedStruct.AshResource.Change, []}] =
+               UserManual |> Ash.Resource.Info.changes() |> Enum.map(& &1.change)
 
-      auto_has =
-        UserAuto
-        |> Ash.Resource.Info.changes()
-        |> Enum.any?(fn c -> c.change == {GuardedStruct.AshResource.Change, []} end)
-
-      assert manual_has
-      assert auto_has
+      assert [{GuardedStruct.AshResource.Change, []}] =
+               UserAuto |> Ash.Resource.Info.changes() |> Enum.map(& &1.change)
     end
   end
 
@@ -122,9 +120,8 @@ defmodule GuardedStructTest.AshIntegrationTest do
         })
         |> Ash.create()
 
-      assert is_map(user.profile)
-      refute is_struct(user.profile)
-      assert user.profile[:name] == "Alice" or user.profile["name"] == "Alice"
+      # A plain map with atom keys: a struct would not be equal to it.
+      assert user.profile == %{name: "Alice", bio: "Hi", address: nil}
     end
 
     test "3-deep nested sub_field returns maps at every level" do
@@ -142,14 +139,12 @@ defmodule GuardedStructTest.AshIntegrationTest do
         })
         |> Ash.create()
 
-      profile = user.profile
-      address = profile[:address] || profile["address"]
-      geo = address[:geo] || address["geo"]
-
-      refute is_struct(profile)
-      refute is_struct(address)
-      refute is_struct(geo)
-      assert (geo[:lat] || geo["lat"]) == 52.5
+      # Plain maps at every level: a struct would not be equal to them.
+      assert user.profile == %{
+               name: "Alice",
+               bio: nil,
+               address: %{city: "Berlin", geo: %{lat: 52.5, lng: 13.4}}
+             }
     end
 
     test "list-of-sub_field stored as list of maps" do
@@ -164,13 +159,8 @@ defmodule GuardedStructTest.AshIntegrationTest do
         })
         |> Ash.create()
 
-      assert is_list(post.tags)
-      assert length(post.tags) == 2
-      refute Enum.any?(post.tags, &is_struct/1)
-
-      labels = Enum.map(post.tags, fn t -> t[:label] || t["label"] end)
-      assert "elixir" in labels
-      assert "phoenix" in labels
+      # A list of plain maps, each sanitized: a struct would not be equal to them.
+      assert post.tags == [%{label: "elixir", score: 10}, %{label: "phoenix", score: 8}]
     end
   end
 
@@ -223,19 +213,21 @@ defmodule GuardedStructTest.AshIntegrationTest do
     end
 
     test "returns plain map (no struct wrapper) on real Ash resource" do
-      {:ok, result} =
-        WithSubField.__guarded_change__(%{
-          email: "a@b.com",
-          profile: %{name: "Z", address: %{city: "Paris"}}
-        })
-
-      refute is_struct(result)
-      refute is_struct(result.profile)
-      refute is_struct(result.profile.address)
+      # Plain maps at every level: a struct would not be equal to them.
+      assert WithSubField.__guarded_change__(%{
+               email: "a@b.com",
+               profile: %{name: "Z", address: %{city: "Paris"}}
+             }) ==
+               {:ok,
+                %{
+                  email: "a@b.com",
+                  profile: %{name: "Z", bio: nil, address: %{city: "Paris", geo: nil}}
+                }}
     end
 
     test "errors surface as the same shape as standalone" do
-      assert {:error, _errs} = UserManual.__guarded_change__(%{email: "bad"})
+      assert {:error, [%{field: :email, action: :email_r}]} =
+               UserManual.__guarded_change__(%{email: "bad"})
     end
   end
 
@@ -245,17 +237,17 @@ defmodule GuardedStructTest.AshIntegrationTest do
         Ash.Changeset.for_create(UserManual, :create, %{email: "definitely-not-an-email"})
 
       refute changeset.valid?
-      assert length(changeset.errors) > 0
+      assert [%InvalidAttribute{field: :email, vars: [validation: :email_r]}] = changeset.errors
     end
 
     test "Ash.create on invalid changeset returns Ash.Error.Invalid" do
-      assert {:error, %Ash.Error.Invalid{errors: errs}} =
+      assert {:error,
+              %Ash.Error.Invalid{
+                errors: [%InvalidAttribute{field: :email, vars: [validation: :email_r]}]
+              }} =
                UserManual
                |> Ash.Changeset.for_create(:create, %{email: "bad"})
                |> Ash.create()
-
-      assert is_list(errs)
-      assert length(errs) > 0
     end
 
     test "successful Ash.create returns a struct of the resource type" do
@@ -264,7 +256,7 @@ defmodule GuardedStructTest.AshIntegrationTest do
         |> Ash.Changeset.for_create(:create, %{email: "ok@x.com"})
         |> Ash.create()
 
-      assert is_struct(user, UserManual)
+      assert %UserManual{email: "ok@x.com"} = user
     end
   end
 
@@ -371,10 +363,8 @@ defmodule GuardedStructTest.AshIntegrationTest do
     end
 
     test "Change exports atomic/3" do
-      # `function_exported?/3` only inspects already-loaded modules; ensure it
-      # is loaded first so the check doesn't depend on test order/seed.
-      Code.ensure_loaded!(GuardedStruct.AshResource.Change)
-      assert function_exported?(GuardedStruct.AshResource.Change, :atomic, 3)
+      # `__info__/1` loads the module, so the check doesn't depend on test order/seed.
+      assert {:atomic, 3} in GuardedStruct.AshResource.Change.__info__(:functions)
     end
 
     test "atomic/3 with a plain attribute value: returns {:atomic, sanitized_map}" do
@@ -388,8 +378,6 @@ defmodule GuardedStructTest.AshIntegrationTest do
     end
 
     test "atomic/3 with an Ash.Expr in changeset.atomics: bails with :not_atomic" do
-      require Ash.Expr
-
       changeset =
         UserAuto
         |> Ash.Changeset.for_create(:create, %{email: "x@y.com"})
@@ -412,7 +400,6 @@ defmodule GuardedStructTest.AshIntegrationTest do
     end
 
     test "an action with require_atomic? true + our Change now compiles cleanly" do
-      import ExUnit.CaptureIO
       suffix = :erlang.unique_integer([:positive])
 
       src = """
@@ -483,7 +470,8 @@ defmodule GuardedStructTest.AshIntegrationTest do
 
   describe "real Ash resource — validation surface end-to-end" do
     test "resource compiles cleanly" do
-      assert Code.ensure_loaded?(AtomicEligibleUser)
+      assert AtomicEligibleUser.__guarded_information__().keys ==
+               [:email, :username, :age, :role, :tenant_id, :country_code, :status]
     end
 
     test "sanitize runs end-to-end through create" do
@@ -594,7 +582,8 @@ defmodule GuardedStructTest.AshIntegrationTest do
         |> Ash.Changeset.for_create(:create, valid_atomic_input(%{status: nil}))
         |> Ash.create()
 
-      refute is_nil(user.id)
+      assert %AtomicEligibleUser{email: "default@x.com", status: nil} = user
+      assert {:ok, %AtomicEligibleUser{status: nil}} = Ash.get(AtomicEligibleUser, user.id)
     end
 
     test "multiple errors are aggregated, not short-circuited" do
@@ -611,7 +600,8 @@ defmodule GuardedStructTest.AshIntegrationTest do
                )
                |> Ash.create()
 
-      assert length(errs) >= 2
+      assert errs |> Enum.map(& &1.field) |> Enum.sort() ==
+               [:age, :country_code, :email, :role, :tenant_id, :username]
     end
 
     test "direct __guarded_change__/1 still works" do
@@ -631,9 +621,8 @@ defmodule GuardedStructTest.AshIntegrationTest do
     end
 
     test "auto-wire injected the GuardedStruct change" do
-      assert Enum.any?(Ash.Resource.Info.changes(AtomicEligibleUser), fn c ->
-               c.change == {GuardedStruct.AshResource.Change, []}
-             end)
+      assert [{GuardedStruct.AshResource.Change, []}] =
+               AtomicEligibleUser |> Ash.Resource.Info.changes() |> Enum.map(& &1.change)
     end
 
     test "update action sanitizes the new value" do
@@ -653,8 +642,6 @@ defmodule GuardedStructTest.AshIntegrationTest do
 
   describe "atomic mode — Ash.Expr handling (the 3 options)" do
     test "Option A — expr on a guardedstruct field via require_atomic? false action: falls back, succeeds" do
-      require Ash.Expr
-
       {:ok, user} =
         AtomicWithCounter
         |> Ash.Changeset.for_create(:create, %{email: "a@x.io", login_count: 5})
@@ -672,8 +659,6 @@ defmodule GuardedStructTest.AshIntegrationTest do
     end
 
     test "Option A (negative) — expr on a guardedstruct field via require_atomic? true action: Ash refuses" do
-      require Ash.Expr
-
       {:ok, user} =
         AtomicWithCounter
         |> Ash.Changeset.for_create(:create, %{email: "a2@x.io", login_count: 0})
@@ -709,8 +694,6 @@ defmodule GuardedStructTest.AshIntegrationTest do
     end
 
     test "Option C — atomic_update + expr on a NON-guardedstruct field stays atomic, no bail" do
-      require Ash.Expr
-
       {:ok, user} =
         AtomicWithCounter
         |> Ash.Changeset.for_create(:create, %{email: "c@x.io"})
@@ -724,12 +707,10 @@ defmodule GuardedStructTest.AshIntegrationTest do
         |> Ash.Changeset.atomic_update(:last_seen_at, Ash.Expr.expr(now()))
         |> Ash.update()
 
-      refute is_nil(updated.last_seen_at)
+      assert %DateTime{} = updated.last_seen_at
     end
 
     test "mixed: owned plain literal + non-owned expr in same changeset — stays atomic" do
-      require Ash.Expr
-
       {:ok, user} =
         AtomicWithCounter
         |> Ash.Changeset.for_create(:create, %{email: "d@x.io"})
@@ -742,7 +723,7 @@ defmodule GuardedStructTest.AshIntegrationTest do
         |> Ash.update()
 
       assert updated.email == "dean@x.io"
-      refute is_nil(updated.last_seen_at)
+      assert %DateTime{} = updated.last_seen_at
     end
   end
 
@@ -957,8 +938,8 @@ defmodule GuardedStructTest.AshIntegrationTest do
 
     test "a sub_field inside a sub_field gets its defaults too" do
       assert {:ok, %{options: options}} = create_nested(%{options: %{schedule: %{hour: 5}}})
+      # A plain map: a struct would not be equal to it.
       assert options.schedule == %{every: "day", hour: 5}
-      refute is_struct(options.schedule)
     end
 
     test "every item of a list sub_field gets its defaults" do
@@ -1037,8 +1018,6 @@ defmodule GuardedStructTest.AshIntegrationTest do
     end
 
     test "bulk_update stores the defaults and places a bad nested value, atomic or streamed" do
-      require Ash.Query
-
       # Ash puts the row's index first on a streamed update.
       for {strategy, path} <- [atomic: [:options, :schedule], stream: [0, :options, :schedule]] do
         assert {:ok, record} = create_nested(%{})

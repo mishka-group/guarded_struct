@@ -1,4 +1,5 @@
 defmodule GuardedStructTest.Fixtures.VirtualField.Signup do
+  @moduledoc false
   use GuardedStruct
 
   guardedstruct do
@@ -19,6 +20,7 @@ defmodule GuardedStructTest.Fixtures.VirtualField.Signup do
 end
 
 defmodule GuardedStructTest.Fixtures.VirtualField.WithDynamic do
+  @moduledoc false
   use GuardedStruct
 
   guardedstruct do

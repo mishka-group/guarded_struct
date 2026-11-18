@@ -15,6 +15,7 @@ defmodule GuardedStructFixtures.Records do
   Record.defrecord(:address, :address, street: nil, city: nil, zip: nil)
 
   defmodule UserEvent do
+    @moduledoc "A user event whose `:user` and `:trace` fields must be Erlang records."
     use GuardedStruct
 
     guardedstruct do

@@ -262,10 +262,16 @@ defmodule GuardedStructFixtures.DynamicFieldFullOptsTest do
     end
 
     test "WithDomain: :metadata's meta carries __domain_ops__" do
-      # ParseDomain transformer compiles the domain string into an op list.
+      # The ParseCoreKeys transformer compiles the domain string into an op list.
       meta = Enum.find(T.WithDomain.__fields__(), &(&1.name == :metadata))
-      assert is_list(meta.__domain_ops__)
-      assert length(meta.__domain_ops__) > 0
+
+      assert meta.__domain_ops__ == [
+               %{
+                 field_path: "account_type",
+                 required?: true,
+                 validator: {:enum, ["pro", "enterprise"]}
+               }
+             ]
     end
   end
 end

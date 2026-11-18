@@ -2,6 +2,8 @@ defmodule GuardedStructTest.ValidateTest do
   use ExUnit.Case, async: true
 
   alias GuardedStruct.Validate
+
+  doctest GuardedStruct.Validate
   alias GuardedStructTest.Fixtures.Validate.{Person, WithAuth}
 
   describe "Validate.run/2 — op string against value" do
@@ -185,7 +187,8 @@ defmodule GuardedStructTest.ValidateTest do
       {:error, errs} =
         Validate.partial(Person, %{name: "x", age: -10, email: "bad"})
 
-      assert length(errs) >= 2
+      assert errs |> Enum.map(&{&1.field, &1.action}) |> Enum.sort() ==
+               [age: :min_len, email: :email_r]
     end
 
     test "empty input returns empty map" do

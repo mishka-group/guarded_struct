@@ -40,9 +40,8 @@ defmodule GuardedStructTest.ConvertToAtomMapTest do
     test "converts a struct by taking its map representation" do
       uri = URI.parse("https://example.com")
       result = Parser.convert_to_atom_map(uri)
-      assert is_map(result)
+      assert %{scheme: "https", host: "example.com", port: 443} = result
       refute Map.has_key?(result, :__struct__)
-      assert result.host == "example.com"
     end
   end
 

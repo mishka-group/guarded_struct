@@ -122,7 +122,7 @@ defmodule GuardedStructFixtures.InlineAllEntitiesTest do
 
       # Maps pass the pre-branch :map check, then branch resolution picks
       # whichever sub_field branch's `validator:` matches (both branches
-      # are :is_map here so the first matches; second works the same way).
+      # are :validate_map here so the first matches; second works the same way).
       assert {:ok, _} = I.OnConditionalField.builder(%{detail: %{tag: "x"}})
       assert {:ok, _} = I.OnConditionalField.builder(%{detail: %{tag: "x", extra: "y"}})
     end

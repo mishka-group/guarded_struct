@@ -23,8 +23,7 @@ defmodule GuardedStructFixtures.CrossFieldTest do
                })
 
       assert ev.event.actor_id == ev.actor_id
-      assert is_binary(ev.event.event_id)
-      assert String.length(ev.event.event_id) > 10
+      assert {:ok, _uuid} = GuardedStructTest.Support.UUID.cast(ev.event.event_id)
     end
 
     test "on: blocks build when the depended-on path is missing" do

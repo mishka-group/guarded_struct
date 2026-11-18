@@ -1,4 +1,5 @@
 defmodule GuardedStructTest.Fixtures.NestedSubField.NestedSubFieldListStructs do
+  @moduledoc false
   use GuardedStruct
 
   guardedstruct do
