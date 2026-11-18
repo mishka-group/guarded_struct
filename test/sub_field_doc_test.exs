@@ -47,6 +47,44 @@ defmodule GuardedStructTest.SubFieldDocTest do
              SubFieldDoc.Transaction.builder(%{id: "t1", fee: %{amount: 5}})
   end
 
+  test "the parent's own @moduledoc stays exactly as written" do
+    assert moduledoc(GuardedStructTest.Fixtures.SubFieldDocParent) == %{
+             "en" => "The parent's own doc."
+           }
+
+    assert moduledoc(GuardedStructTest.Fixtures.SubFieldDocParent.Child) == %{
+             "en" => "The child's **own** doc."
+           }
+  end
+
+  test "a parent without @moduledoc gets no doc text" do
+    # Spark sets an empty @moduledoc on a DSL module that has none; no text is added.
+    assert moduledoc(GuardedStructTest.Fixtures.SubFieldDocNoParentDoc) in [:none, %{"en" => ""}]
+  end
+
+  test "a parent with @moduledoc false stays hidden" do
+    assert moduledoc(SubFieldDoc) == :hidden
+  end
+
+  test "doc: and the doc setter in the same sub_field are refused" do
+    source = """
+    defmodule GuardedStructTest.SubFieldDocTest.BothDocs do
+      use GuardedStruct
+
+      guardedstruct do
+        sub_field :profile, struct(), doc: "B" do
+          doc "C"
+          field :id, String.t()
+        end
+      end
+    end
+    """
+
+    assert_raise Spark.Error.DslError, ~r/Multiple values for key `:doc`/, fn ->
+      Code.compile_string(source)
+    end
+  end
+
   test "a doc: that is not a string or false is refused when the module compiles" do
     source = """
     defmodule GuardedStructTest.SubFieldDocTest.BadDoc do

@@ -110,7 +110,9 @@ defmodule GuardedStruct do
     derive_extensions_ast = Macro.escape(derive_extensions_opt)
 
     quote do
+      @before_compile {GuardedStruct.Moduledoc, :capture}
       unquote(super_ast)
+      @before_compile {GuardedStruct.Moduledoc, :restore}
       import GuardedStruct.Dsl, only: []
       import GuardedStruct, only: [guardedstruct: 1, guardedstruct: 2]
 

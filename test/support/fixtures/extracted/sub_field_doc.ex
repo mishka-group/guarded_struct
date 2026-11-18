@@ -44,3 +44,24 @@ defmodule GuardedStructTest.Fixtures.SubFieldDoc do
     end
   end
 end
+
+defmodule GuardedStructTest.Fixtures.SubFieldDocParent do
+  @moduledoc "The parent's own doc."
+  # The parent writes its own @moduledoc; guardedstruct and doc: must leave it as it is.
+  use GuardedStruct
+
+  guardedstruct do
+    sub_field :child, struct(), doc: "The child's **own** doc." do
+      field :id, String.t()
+    end
+  end
+end
+
+defmodule GuardedStructTest.Fixtures.SubFieldDocNoParentDoc do
+  # No @moduledoc here: guardedstruct must not invent one.
+  use GuardedStruct
+
+  guardedstruct do
+    field :id, String.t()
+  end
+end
