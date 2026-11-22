@@ -1,3 +1,7 @@
+# Changelog for GuardedStruct 0.1.11
+
+- The lock is on the newest Hex releases: `ex_doc` 0.40.5 and `rewrite` 1.3.1 (dev and test only)
+
 # Changelog for GuardedStruct 0.1.10
 
 - `GuardedStruct.Validate.run/2` says in its docs that the derive string is code (its `Map::`, `Tuple::` and `Atom[...]` operands are evaluated): write it yourself and never build it from user input
